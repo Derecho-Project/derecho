@@ -1,8 +1,9 @@
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <vector>
 
-#include <derecho/core/detail/derecho_internal.hpp>
 #include "subgroup_function_tester.hpp"
+#include <derecho/core/detail/derecho_internal.hpp>
 
 derecho::IpAndPorts ip_and_ports_generator() {
     static int invocation_count = 0;
@@ -12,6 +13,7 @@ derecho::IpAndPorts ip_and_ports_generator() {
     return {string_generator.str(), 35465, 35465, 35465, 35465, 35465};
 }
 
+//We're really just testing the allocation functions, so each "subgroup" will be a dummy Replicated type
 struct TestType1 {};
 struct TestType2 {};
 struct TestType3 {};
@@ -19,41 +21,27 @@ struct TestType4 {};
 struct TestType5 {};
 struct TestType6 {};
 
-int main(int argc, char* argv[]) {
+void test_fixed_allocation_functions() {
     using derecho::CrossProductPolicy;
     using derecho::DefaultSubgroupAllocator;
     using derecho::SubgroupAllocationPolicy;
-
     //Reduce the verbosity of specifying "ordered" for three custom subgroups
     std::vector<derecho::Mode> three_ordered(3, derecho::Mode::ORDERED);
     std::vector<std::string> three_default_profiles(3, "default");
+
     SubgroupAllocationPolicy sharded_policy = derecho::one_subgroup_policy(derecho::fixed_even_shards(5, 3));
     SubgroupAllocationPolicy unsharded_policy = derecho::one_subgroup_policy(derecho::fixed_even_shards(1, 5));
     SubgroupAllocationPolicy uneven_sharded_policy = derecho::one_subgroup_policy(
-            derecho::custom_shards_policy({2, 5, 3}, {2, 5, 3}, three_ordered,three_default_profiles));
+            derecho::custom_shards_policy({2, 5, 3}, {2, 5, 3}, three_ordered, three_default_profiles));
     SubgroupAllocationPolicy multiple_copies_policy = derecho::identical_subgroups_policy(
             2, derecho::fixed_even_shards(3, 4));
-    SubgroupAllocationPolicy multiple_subgroups_policy{3, false, {derecho::fixed_even_shards(3, 3),
-            derecho::custom_shards_policy({4, 3, 4}, {4, 3, 4}, three_ordered, three_default_profiles),
-            derecho::fixed_even_shards(2, 2)}};
-
-    SubgroupAllocationPolicy flexible_shards_policy = derecho::one_subgroup_policy(
-            derecho::flexible_even_shards(5, 2, 3));
-    SubgroupAllocationPolicy uneven_flexible_shards = derecho::one_subgroup_policy(
-            derecho::custom_shards_policy({2, 5, 3}, {3, 6, 5}, three_ordered, three_default_profiles));
-    SubgroupAllocationPolicy multiple_copies_flexible = derecho::identical_subgroups_policy(
-            2, derecho::flexible_even_shards(3, 4, 5));
-    SubgroupAllocationPolicy multiple_fault_tolerant_subgroups{3, false,
-            {derecho::flexible_even_shards(3, 2, 4),
-             derecho::custom_shards_policy({4, 3, 4}, {5, 4, 5}, three_ordered, three_default_profiles),
-             derecho::flexible_even_shards(2, 2, 4)}};
+    SubgroupAllocationPolicy multiple_subgroups_policy{3, false, {derecho::fixed_even_shards(3, 3), derecho::custom_shards_policy({4, 3, 4}, {4, 3, 4}, three_ordered, three_default_profiles), derecho::fixed_even_shards(2, 2)}};
 
     //This will create subgroups that are the cross product of the "uneven_sharded_policy" and "sharded_policy" groups
     CrossProductPolicy uneven_to_even_cp{
             {std::type_index(typeid(TestType3)), 0},
             {std::type_index(typeid(TestType1)), 0}};
 
-    //We're really just testing the allocation functions, so assign each one to a dummy Replicated type
     derecho::SubgroupInfo test_fixed_subgroups(
             DefaultSubgroupAllocator({{std::type_index(typeid(TestType1)), sharded_policy},
                                       {std::type_index(typeid(TestType2)), unsharded_policy},
@@ -70,25 +58,25 @@ int main(int argc, char* argv[]) {
                                                         std::type_index(typeid(TestType6))};
     std::vector<node_id_t> members(100);
     std::iota(members.begin(), members.end(), 0);
-    std::vector<derecho::IpAndPorts> member_ips_and_ports(100);
+    std::vector<derecho::IpAndPorts> member_ips_and_ports(members.size());
     std::generate(member_ips_and_ports.begin(), member_ips_and_ports.end(), ip_and_ports_generator);
-    std::vector<char> none_failed(100, 0);
+    std::vector<char> none_failed(members.size(), 0);
     auto curr_view = std::make_unique<derecho::View>(0, members, member_ips_and_ports, none_failed,
                                                      std::vector<node_id_t>{}, std::vector<node_id_t>{},
                                                      0, 0, subgroup_type_order);
 
-    std::cout << "TEST 1: Initial allocation" << std::endl;
+    rls_default_info("TEST 1: Initial allocation");
     derecho::test_provision_subgroups(test_fixed_subgroups, nullptr, *curr_view);
 
     std::set<int> ranks_to_fail{1, 3, 17, 38, 40};
-    std::cout << "TEST 2: Failing some nodes that are in subgroups: " << ranks_to_fail << std::endl;
+    rls_default_info("TEST 2: Failing some nodes that are in subgroups: {}", ranks_to_fail);
     std::unique_ptr<derecho::View> prev_view(std::move(curr_view));
     curr_view = derecho::make_next_view(*prev_view, ranks_to_fail, {}, {});
 
     derecho::test_provision_subgroups(test_fixed_subgroups, prev_view, *curr_view);
 
     std::set<int> more_ranks_to_fail{13, 20, 59, 78, 89};
-    std::cout << "TEST 3: Failing nodes both before and after the pointer. Ranks are " << more_ranks_to_fail << std::endl;
+    rls_default_info("TEST 3: Failing nodes both before and after the pointer. Ranks are {}", more_ranks_to_fail);
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, more_ranks_to_fail, {}, {});
 
@@ -98,7 +86,7 @@ int main(int argc, char* argv[]) {
     std::vector<int> range_39_to_89(50);
     std::iota(range_39_to_89.begin(), range_39_to_89.end(), 39);
     std::set<int> lots_of_members_to_fail(range_39_to_89.begin(), range_39_to_89.end());
-    std::cout << "TEST 4: Failing 50 nodes so the next view is inadequate" << std::endl;
+    rls_default_info("TEST 4: Failing 50 nodes so the next view is inadequate");
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, lots_of_members_to_fail, {}, {});
 
@@ -106,47 +94,162 @@ int main(int argc, char* argv[]) {
 
     std::vector<node_id_t> new_members(40);
     std::iota(new_members.begin(), new_members.end(), 100);
-    std::vector<derecho::IpAndPorts> new_member_ips_and_ports(40);
+    std::vector<derecho::IpAndPorts> new_member_ips_and_ports(new_members.size());
     std::generate(new_member_ips_and_ports.begin(), new_member_ips_and_ports.end(), ip_and_ports_generator);
-    std::cout << "TEST 5: Adding new members 100-140" << std::endl;
+    rls_default_info("TEST 5: Adding new members 100-140");
     //Since an inadequate view will never be installed, keep the same prev_view from before the failures
     curr_view = derecho::make_next_view(*prev_view, lots_of_members_to_fail, new_members, new_member_ips_and_ports);
 
     derecho::test_provision_subgroups(test_fixed_subgroups, prev_view, *curr_view);
+}
 
-    //Now test the flexible allocation functions
+void test_flexible_allocation_functions() {
+    using derecho::DefaultSubgroupAllocator;
+    using derecho::SubgroupAllocationPolicy;
+
+    //Reduce the verbosity of specifying "ordered" for three custom subgroups
+    std::vector<derecho::Mode> three_ordered(3, derecho::Mode::ORDERED);
+    std::vector<std::string> three_default_profiles(3, "default");
+
+    SubgroupAllocationPolicy flexible_shards_policy = derecho::one_subgroup_policy(
+            derecho::flexible_even_shards(5, 2, 3));
+    SubgroupAllocationPolicy uneven_flexible_shards = derecho::one_subgroup_policy(
+            derecho::custom_shards_policy({2, 5, 3}, {3, 6, 5}, three_ordered, three_default_profiles));
+    SubgroupAllocationPolicy multiple_copies_flexible = derecho::identical_subgroups_policy(
+            2, derecho::flexible_even_shards(3, 4, 5));
+    SubgroupAllocationPolicy multiple_fault_tolerant_subgroups{3, false, {derecho::flexible_even_shards(3, 2, 4), derecho::custom_shards_policy({4, 3, 4}, {5, 4, 5}, three_ordered, three_default_profiles), derecho::flexible_even_shards(2, 2, 4)}};
+
     derecho::SubgroupInfo test_flexible_subgroups(
             DefaultSubgroupAllocator({{std::type_index(typeid(TestType1)), flexible_shards_policy},
                                       {std::type_index(typeid(TestType2)), uneven_flexible_shards},
                                       {std::type_index(typeid(TestType3)), multiple_copies_flexible},
                                       {std::type_index(typeid(TestType4)), multiple_fault_tolerant_subgroups}}));
 
-    std::vector<std::type_index> flexible_subgroup_type_order = {
-            std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)),
-            std::type_index(typeid(TestType3)), std::type_index(typeid(TestType4))};
-    curr_view = std::make_unique<derecho::View>(0, members, member_ips_and_ports, none_failed,
-                                                std::vector<node_id_t>{}, std::vector<node_id_t>{},
-                                                0, 0, flexible_subgroup_type_order);
-    std::cout << "Now testing flexible subgroup allocation" << std::endl;
-    std::cout << "TEST 6: Initial allocation" << std::endl;
+    std::vector<std::type_index> subgroup_type_order = {std::type_index(typeid(TestType1)),
+                                                        std::type_index(typeid(TestType2)),
+                                                        std::type_index(typeid(TestType3)),
+                                                        std::type_index(typeid(TestType4))};
+    std::vector<node_id_t> members(100);
+    std::iota(members.begin(), members.end(), 0);
+    std::vector<derecho::IpAndPorts> member_ips_and_ports(members.size());
+    std::generate(member_ips_and_ports.begin(), member_ips_and_ports.end(), ip_and_ports_generator);
+    std::vector<char> none_failed(members.size(), 0);
+    auto curr_view = std::make_unique<derecho::View>(0, members, member_ips_and_ports, none_failed,
+                                                     std::vector<node_id_t>{}, std::vector<node_id_t>{},
+                                                     0, 0, subgroup_type_order);
+    rls_default_info("Now testing flexible subgroup allocation");
+    rls_default_info("TEST 6: Initial allocation");
     derecho::test_provision_subgroups(test_flexible_subgroups, nullptr, *curr_view);
 
     std::set<int> flexible_ranks_to_fail{3, 6, 31, 45, 57};
-    std::cout << "TEST 7: Failing some nodes that are in subgroups: " << flexible_ranks_to_fail << std::endl;
-    prev_view = std::move(curr_view);
+    rls_default_info("TEST 7: Failing some nodes that are in subgroups: {}", flexible_ranks_to_fail);
+    std::unique_ptr<derecho::View> prev_view(std::move(curr_view));
     curr_view = derecho::make_next_view(*prev_view, flexible_ranks_to_fail, {}, {});
     derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
 
     std::set<int> flexible_ranks_to_fail_2{7, 8, 17, 18, 40, 41, 51, 61, 62};
-    std::cout << "TEST 8: Failing more nodes so that shards must shrink. Ranks are: " << flexible_ranks_to_fail_2 << std::endl;
+    rls_default_info("TEST 8: Failing more nodes so that shards must shrink. Ranks are: {}", flexible_ranks_to_fail_2);
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, flexible_ranks_to_fail_2, {}, {});
     derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
 
-    std::cout << "TEST 9: Adding new members 100-140 so shards can re-expand." << std::endl;
+    std::vector<node_id_t> new_members(40);
+    std::iota(new_members.begin(), new_members.end(), 100);
+    std::vector<derecho::IpAndPorts> new_member_ips_and_ports(new_members.size());
+    std::generate(new_member_ips_and_ports.begin(), new_member_ips_and_ports.end(), ip_and_ports_generator);
+    rls_default_info("TEST 9: Adding new members 100-140 so shards can re-expand.");
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, {}, new_members, new_member_ips_and_ports);
     derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
+}
+
+void test_json_layout() {
+    const char* json_layout_string =
+            R"|([
+    {
+        "type_alias":   "TestType1",
+        "layout":       [
+                            {
+                                "min_nodes_by_shard": [2],
+                                "max_nodes_by_shard": [3],
+                                "reserved_node_id_by_shard":[[1, 2, 3]],
+                                "delivery_modes_by_shard": ["Ordered"],
+                                "profiles_by_shard": ["Default"]
+                            }
+                        ]
+    },
+    {
+        "type_alias":   "TestType2",
+        "layout":       [
+                            {
+                                "min_nodes_by_shard": [2],
+                                "max_nodes_by_shard": [3],
+                                "reserved_node_id_by_shard":[[2, 3, 4]],
+                                "delivery_modes_by_shard": ["Ordered"],
+                                "profiles_by_shard": ["Default"]
+                            }
+                        ]
+    }
+])|";
+
+    derecho::SubgroupInfo test_json_overlapping(
+            derecho::make_subgroup_allocator<TestType1, TestType2>(nlohmann::json::parse(json_layout_string)));
+
+    std::vector<std::type_index> subgroup_type_order = {std::type_index(typeid(TestType1)),
+                                                        std::type_index(typeid(TestType2))};
+
+    std::vector<node_id_t> members(3);
+    std::iota(members.begin(), members.end(), 0);
+    std::vector<derecho::IpAndPorts> ips_and_ports(3);
+    std::generate(ips_and_ports.begin(), ips_and_ports.end(), ip_and_ports_generator);
+    std::vector<char> none_failed(3, 0);
+    auto curr_view = std::make_unique<derecho::View>(0, members, ips_and_ports, none_failed,
+                                                     std::vector<node_id_t>{}, std::vector<node_id_t>{},
+                                                     0, 0, subgroup_type_order);
+
+    rls_default_info("Now testing JSON-based allocation with overlapping reserved nodes");
+    rls_default_info("TEST 10: Initial allocation");
+    derecho::test_provision_subgroups(test_json_overlapping, nullptr, *curr_view);
+
+    std::vector<node_id_t> new_members_in_reservation{3, 4};
+    std::vector<derecho::IpAndPorts> new_member_ips_and_ports(new_members_in_reservation.size());
+    std::generate(new_member_ips_and_ports.begin(), new_member_ips_and_ports.end(), ip_and_ports_generator);
+    rls_default_info("TEST 11: Nodes 3 and 4 join, which are in a reserved node list");
+    std::unique_ptr<derecho::View> prev_view(std::move(curr_view));
+    curr_view = derecho::make_next_view(*prev_view, {}, new_members_in_reservation, new_member_ips_and_ports);
+    derecho::test_provision_subgroups(test_json_overlapping, prev_view, *curr_view);
+
+    std::set<int> ranks_to_fail{0, 2};
+    rls_default_info("TEST 12: Nodes 0 and 2 fail; 2 is in both reserved node lists");
+    prev_view.swap(curr_view);
+    curr_view = derecho::make_next_view(*prev_view, ranks_to_fail, {}, {});
+    dbg_default_debug("New view has members: {}", curr_view->members);
+    derecho::test_provision_subgroups(test_json_overlapping, prev_view, *curr_view);
+
+    std::vector<node_id_t> new_members_outside_reservation{5, 6};
+    std::vector<derecho::IpAndPorts> ips_and_ports_2(new_members_outside_reservation.size());
+    std::generate(ips_and_ports_2.begin(), ips_and_ports_2.end(), ip_and_ports_generator);
+    rls_default_info("TEST 13: Nodes 5 and 6 join");
+    prev_view.swap(curr_view);
+    curr_view = derecho::make_next_view(*prev_view, {}, new_members_outside_reservation, ips_and_ports_2);
+    dbg_default_debug("New view has members: {}", curr_view->members);
+    derecho::test_provision_subgroups(test_json_overlapping, prev_view, *curr_view);
+
+    std::set<int> ranks_to_fail_2{1, 3};
+    std::vector<node_id_t> node_rejoined{2};
+    std::vector<derecho::IpAndPorts> node_2_ip{ips_and_ports[2]};
+    rls_default_info("TEST 14: Nodes 3 and 5 fail, node 2 rejoins");
+    prev_view.swap(curr_view);
+    curr_view = derecho::make_next_view(*prev_view, ranks_to_fail_2, node_rejoined, node_2_ip);
+    dbg_default_debug("New view has members: {}", curr_view->members);
+    derecho::test_provision_subgroups(test_json_overlapping, prev_view, *curr_view);
+}
+
+int main(int argc, char* argv[]) {
+
+    test_fixed_allocation_functions();
+    test_flexible_allocation_functions();
+    test_json_layout();
 
     return 0;
 }
@@ -154,13 +257,21 @@ int main(int argc, char* argv[]) {
 namespace derecho {
 
 void print_subgroup_layout(const subgroup_shard_layout_t& layout) {
-    using std::cout;
+    std::stringstream string_builder;
     for(std::size_t subgroup_num = 0; subgroup_num < layout.size(); ++subgroup_num) {
-        cout << "Subgroup " << subgroup_num << ": ";
+        string_builder << "Subgroup " << subgroup_num << ": ";
         for(std::size_t shard_num = 0; shard_num < layout[subgroup_num].size(); ++shard_num) {
-            cout << layout[subgroup_num][shard_num].members << ", ";
+            string_builder << layout[subgroup_num][shard_num].members << ", ";
         }
-        cout << "\b\b" << std::endl;
+        string_builder << "\b\b";
+        rls_default_info(string_builder.str());
+    }
+}
+
+void print_allocations(const std::map<std::type_index, subgroup_shard_layout_t>& subgroup_allocations) {
+    for(const auto& subgroup_type_allocation : subgroup_allocations) {
+        rls_default_info("Subgroup type {} got assignment: ", subgroup_type_allocation.first.name());
+        print_subgroup_layout(subgroup_type_allocation.second);
     }
 }
 
@@ -187,14 +298,13 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
                   << std::endl;
         return;
     }
+    print_allocations(subgroup_allocations);
     //Go through subgroup_allocations and initialize curr_view
     for(subgroup_type_id_t subgroup_type_id = 0;
         subgroup_type_id < curr_view.subgroup_type_order.size();
         ++subgroup_type_id) {
         const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
         subgroup_shard_layout_t& curr_type_subviews = subgroup_allocations[subgroup_type];
-        std::cout << "Subgroup type " << subgroup_type.name() << " got assignment: " << std::endl;
-        print_subgroup_layout(curr_type_subviews);
         std::size_t num_subgroups = curr_type_subviews.size();
         curr_view.subgroup_ids_by_type_id.emplace(subgroup_type_id, std::vector<subgroup_id_t>(num_subgroups));
         for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
@@ -250,14 +360,14 @@ std::unique_ptr<View> make_next_view(const View& curr_view,
         }
     }
     //Copy member information, excluding the members that have failed
-    int m = 0;
-    for(int n = 0; n < curr_view.num_members; n++) {
+    int new_rank = 0;
+    for(int old_rank = 0; old_rank < curr_view.num_members; old_rank++) {
         //This is why leave_ranks needs to be a set
-        if(leave_ranks.find(n) == leave_ranks.end()) {
-            members[m] = curr_view.members[n];
-            member_ips_and_ports[m] = curr_view.member_ips_and_ports[n];
-            failed[m] = curr_view.failed[n];
-            ++m;
+        if(leave_ranks.find(old_rank) == leave_ranks.end()) {
+            members[new_rank] = curr_view.members[old_rank];
+            member_ips_and_ports[new_rank] = curr_view.member_ips_and_ports[old_rank];
+            failed[new_rank] = curr_view.failed[old_rank];
+            ++new_rank;
         }
     }
 
