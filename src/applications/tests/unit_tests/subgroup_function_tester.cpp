@@ -172,7 +172,7 @@ void test_json_layout() {
                             {
                                 "min_nodes_by_shard": [2],
                                 "max_nodes_by_shard": [3],
-                                "reserved_node_id_by_shard":[[1, 2, 3]],
+                                "reserved_node_ids_by_shard": [[1, 2, 3]],
                                 "delivery_modes_by_shard": ["Ordered"],
                                 "profiles_by_shard": ["Default"]
                             }
@@ -184,7 +184,7 @@ void test_json_layout() {
                             {
                                 "min_nodes_by_shard": [2],
                                 "max_nodes_by_shard": [3],
-                                "reserved_node_id_by_shard":[[2, 3, 4]],
+                                "reserved_node_ids_by_shard": [[2, 3, 4]],
                                 "delivery_modes_by_shard": ["Ordered"],
                                 "profiles_by_shard": ["Default"]
                             }
