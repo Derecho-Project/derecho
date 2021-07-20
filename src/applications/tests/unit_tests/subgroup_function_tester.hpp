@@ -18,20 +18,7 @@
 #include <derecho/core/subgroup_functions.hpp>
 #include <derecho/core/subgroup_info.hpp>
 #include <derecho/core/view.hpp>
-
-namespace std {
-
-//This allows std::sets to be printed out in the obvious way
-template <typename T>
-std::ostream& operator<<(std::ostream& out, const std::set<T>& s) {
-    if(!s.empty()) {
-        out << '{';
-        std::copy(s.begin(), s.end(), std::ostream_iterator<T>(out, ", "));
-        out << "\b\b}";
-    }
-    return out;
-}
-}  // namespace std
+#include <derecho/utils/container_template_functions.hpp>
 
 namespace derecho {
 //Functions that assist with testing subgroup layout allocation

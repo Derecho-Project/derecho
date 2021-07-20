@@ -4,6 +4,7 @@
 #include <string>
 #include <atomic>
 #include <spdlog/spdlog.h>
+#include <spdlog/fmt/ostr.h>
 
 #ifndef NDEBUG
 #undef NOLOG
@@ -21,7 +22,7 @@ private:
 public:
     // create the logger
     // @PARAM logger_name
-    //     Name of the logger. The log file would be created as 
+    //     Name of the logger. The log file would be created as
     //     "<logger_name>.log"
     // @PARAM log_level
     //     The level of the logger.

@@ -13,8 +13,8 @@ namespace derecho {
 const int MAJOR_VERSION = 2;
 const int MINOR_VERSION = 1;
 const int PATCH_VERSION = 0;
-const int COMMITS_AHEAD_OF_VERSION = 132;
+const int COMMITS_AHEAD_OF_VERSION = 138;
 const char* VERSION_STRING = "2.1.0";
-const char* VERSION_STRING_PLUS_COMMITS = "2.1.0+132";
+const char* VERSION_STRING_PLUS_COMMITS = "2.1.0+138";
 
 }

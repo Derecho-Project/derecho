@@ -60,6 +60,9 @@ find_package(spdlog 1.3.1 REQUIRED)
 # find openssl
 find_package(OpenSSL 1.1.1 REQUIRED)
 
+# json
+find_package(nlohmann_json 3.9.0 REQUIRED)
+
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
 add_subdirectory(src/utils)
@@ -87,7 +90,8 @@ target_link_libraries(derecho
     ${mutils_LIBRARIES}
     ${mutils-containers_LIBRARIES}
     ${mutils-tasks_LIBRARIES}
-    ${OPENSSL_LIBRARIES})
+    ${OPENSSL_LIBRARIES}
+    nlohmann_json::nlohmann_json)
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}
     VERSION ${derecho_build_VERSION}
