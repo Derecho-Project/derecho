@@ -54,7 +54,7 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 * [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.3.1 or newer. On Ubuntu 19.04 and later this can be installed with the package `libspdlog-dev`. The version of spdlog in Ubuntu 18.04's repositories is too old, but if you are running Ubuntu 18.04 you can download the `libspdlog-dev` package [here](http://old-releases.ubuntu.com/ubuntu/pool/universe/s/spdlog/libspdlog-dev_1.3.1-1_amd64.deb) and install it manually with no other dependencies needed.
 * The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). Since this library's interface changes significantly between versions, please install `v1.12.1` from source rather than any packaged version. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
 * Lohmann's [JSON for Modern C++](https://github.com/nlohmann/json) library, v3.9 or newer. This library is not packaged for Ubuntu, but can easily be installed with our [installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-json.sh).
-* Matthew Milano's C++ utilities, which are all CMake libraries that can be installed with "make install":
+* @mpmilano's C++ utilities, which are all CMake libraries that can be installed with "make install":
   - [`mutils`](https://github.com/mpmilano/mutils) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils.sh))
   - [`mutils-containers`](https://github.com/mpmilano/mutils-containers) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-containers.sh))
   - [`mutils-tasks`](https://github.com/mpmilano/mutils-tasks) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-tasks.sh))
@@ -247,9 +247,9 @@ std::unique_ptr<derecho::Group<LoadBalancer, Cache, Storage>> group;
 
 In order to start or join a Group, all members (including processes that join later) must define a function that provides the membership (as a subset of the current View) for each subgroup. The membership function's input is the list of Replicated Object types, the current View, and the previous View if there was one. Its return type is a `std::map` mapping each Replicated Object type to a vector representing all the subgroups of that type (since there can be more than one subgroup that implements the same Replicated Object type). Each entry in this vector is another vector, whose size indicates the number of shards the subgroup should be divided into, and whose entries are SubViews describing the membership of each shard. For example, if the membership function's return value is named `members`, then `members[std::type_index(typeid(Cache))][0][2]` is a SubView identifying the members of the third shard of the first subgroup of type "Cache."
 
-Derecho provides a default subgroup membership function that automatically assigns nodes from the Group into disjoint subgroups and shards, given a policy that describes the desired number of nodes in each subgroup/shard. It assigns nodes in ascending rank order, and leaves any "extra" nodes (not needed to fully populate all subgroups) at the end (highest rank) of the membership list. During a View change, this function attempts to preserve the correct number of nodes in each shard without re-assigning any nodes to new roles. It does this by copying the subgroup membership from the previous View as much as possible, and assigning idle nodes from the end of the Group's membership list to replace failed members of subgroups.
+**The default membership function:** Derecho provides a default subgroup membership function that automatically assigns nodes from the Group into disjoint subgroups and shards, given a policy (an instance of SubgroupAllocationPolicy or ShardAllocationPolicy) that describes the desired number of nodes in each subgroup/shard. The function assigns nodes in ascending rank order, and leaves any "extra" nodes (not needed to fully populate all subgroups) at the end (highest rank) of the membership list. During a View change, it attempts to preserve the correct number of nodes in each shard without re-assigning any nodes to new roles. It does this by copying the subgroup membership from the previous View as much as possible, and assigning idle nodes from the end of the Group's membership list to replace failed members of subgroups.
 
-There are several helper functions in `subgroup_functions.hpp` that construct AllocationPolicy objects for different scenarios, to make it easier to set up the default subgroup membership function. Here is an example of how the default membership function could be configured for two types of Replicated Objects using these functions:
+There are several helper functions in `subgroup_functions.hpp` that construct SubgroupAllocationPolicy objects for different scenarios, to make it easier to set up the default subgroup membership function. Here is an example of how the default membership function could be configured for two types of Replicated Objects using these functions:
 
 ```cpp
 derecho::SubgroupInfo subgroup_function {derecho::DefaultSubgroupAllocator({
@@ -260,7 +260,87 @@ derecho::SubgroupInfo subgroup_function {derecho::DefaultSubgroupAllocator({
 ```
 Based on the policies constructed for the constructor argument of DefaultSubgroupAllocator, the function will create one subgroup of type Foo, with two shards of 3 members each. Next, it will create two subgroups of type Bar, each of which has only one shard of size 3. Note that the order in which subgroups are allocated is the order in which their Replicated Object types are listed in the Group's template parameters, so this instance of the default subgroup allocator will assign the first 6 nodes to the Foo subgroup and the second 6 nodes to the Bar subgroups the first time it runs.
 
-More advanced users may, of course, want to define their own subgroup membership functions. The demo program `overlapping_replicated_objects.cpp` shows a relatively simple example of a user-defined membership function. In this program, the SubgroupInfo contains a C++ lambda function that implements the `shard_view_generator_t` type signature and handles subgroup assignment for Replicated Objects of type Foo, Bar, and Cache:
+The subgroup membership function's SubgroupAllocationPolicy objects can also be constructed from JSON strings, which allows you to change the allocation policy without recompiling code. To use this feature, add the option **json_layout_path** to the Derecho config file, specifying the (relative or absolute) path to a JSON file, and construct the DefaultSubgroupAllocator using the templated `make_subgroup_allocator` function. The template parameters to this function must be the same Replicated Objects as the template parameters for the Group object, in the same order; for example, this subgroup function would be used for `derecho::Group<Foo, Bar>`:
+
+```cpp
+derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<Foo, Bar>()};
+```
+
+The JSON file specified with the **json_layout_path** option should contain an array with one entry per Replicated Object type, in the same order as these types are listed in the template parameters. Each array entry should be an (JSON) object with a property named "layout", whose value is an array of one or more objects describing allocation policies for each subgroup of this type. An allocation policy object in JSON has fields very similar to the fields of ShardAllocationPolicy object: `min_nodes_by_shard`, `max_nodes_by_shard`, `delivery_modes_by_shard`, and `profiles_by_shard`. Unlike a ShardAllocationPolicy object, however, identical_subgroups and even_shards cannot be used; each of these fields must be an array of length equal to the number of shards desired. Here is an example of a JSON file that creates the same allocation policies as the arguments to the DefaultSubgroupAllocator constructor above:
+
+```json
+[
+    {
+        "type_alias": "Foo",
+        "layout": [
+            {
+                "min_nodes_by_shard": [2, 2],
+                "max_nodes_by_shard": [3, 3],
+                "delivery_modes_by_shard": ["Ordered", "Ordered"],
+                "profiles_by_shard": ["DEFAULT", "DEFAULT"]
+            }
+        ]
+    },
+    {
+        "type_alias": "Bar",
+        "layout": [
+            {
+                "min_nodes_by_shard": [1],
+                "max_nodes_by_shard": [3],
+                "delivery_modes_by_shard": ["Ordered"],
+                "profiles_by_shard": ["DEFAULT"]
+            },
+            {
+                "min_nodes_by_shard": [1],
+                "max_nodes_by_shard": [3],
+                "delivery_modes_by_shard": ["Ordered"],
+                "profiles_by_shard": ["DEFAULT"]
+            }
+        ]
+    }
+]
+
+```
+
+The field "type_alias" is optional for Derecho (it is only used by Cascade), but it is useful to help keep track of which array entry corresponds to which subgroup type. The layout policies will actually be applied to Replicated Object types in the order they appear in the template parameters for Group and `make_subgroup_allocator`, regardless of what name is used in "type_alias."
+
+Instead of using a separate JSON file, the same JSON layout policy can be embedded directly in the Derecho config file using the option **json_layout**, whose value will be interpreted as a JSON string. It is an error to use both **json_layout** and **json_layout_path** in the same config file.
+
+**Reserved node IDs**: The default subgroup allocation function's behavior can be significantly changed by using the optional field `reserved_node_ids_by_shard` in ShardAllocationPolicy, which has an equivalent optional field "reserved_node_ids_by_shard" in the JSON layout syntax. This field specifies a set of node IDs that should always be assigned to each shard (if they exist in the current View), regardless of where those nodes appear in the rank order. If shards have reserved node IDs, the allocation function will always assign those node IDs to the shards that reserved them, and then assign any remaining nodes in the default fashion (round robin in ascending rank order). If multiple shards from different subgroups reserve the same node IDs, those nodes will be assigned to all of the shards that reserved them, and thus be members of more than one subgroup. However, multiple shards in the same subgroup cannot reserve the same node ID (this will result in a configuration error), since shards by definition must be disjoint.
+
+Here is an example of a JSON layout string that uses "reserved_node_ids_by_shard" to make the Bar subgroup's (only) shard co-resident with members of both shards of the Foo subgroup:
+
+```json
+[
+    {
+        "type_alias": "Foo",
+        "layout": [
+            {
+                "min_nodes_by_shard": [2, 2],
+                "max_nodes_by_shard": [3, 3],
+                "reserved_nodes_by_shard": [[1, 2, 3], [4, 5, 6]],
+                "delivery_modes_by_shard": ["Ordered", "Ordered"],
+                "profiles_by_shard": ["DEFAULT", "DEFAULT"]
+            }
+        ]
+    },
+    {
+        "type_alias": "Bar",
+        "layout": [
+            {
+                "min_nodes_by_shard": [1],
+                "max_nodes_by_shard": [3],
+                "reserved_nodes_by_shard": [[3, 4, 5]],
+                "delivery_modes_by_shard": ["Ordered"],
+                "profiles_by_shard": ["DEFAULT"]
+            }
+        ]
+    }
+]
+
+```
+
+**Defining a custom membership function:** If the default membership function's node-allocation algorithm doesn't fit your needs, you can define own subgroup membership function. The demo program `overlapping_replicated_objects.cpp` shows a relatively simple example of a user-defined membership function. In this program, the SubgroupInfo contains a C++ lambda function that implements the `shard_view_generator_t` type signature and handles subgroup assignment for Replicated Objects of type Foo, Bar, and Cache:
 
 ```cpp
 [](const std::vector<std::type_index>& subgroup_type_order,

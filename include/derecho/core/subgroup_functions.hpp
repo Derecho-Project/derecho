@@ -484,7 +484,7 @@ public:
  */
 template <typename... ReplicatedTypes>
 DefaultSubgroupAllocator make_subgroup_allocator() {
-    return DefaultSubgroupAllocator({std::type_index(typeid(ReplicatedTypes))...});
+    return DefaultSubgroupAllocator(std::vector<std::type_index>{std::type_index(typeid(ReplicatedTypes))...});
 }
 
 /**

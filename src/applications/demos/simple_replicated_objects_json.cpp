@@ -32,15 +32,10 @@ int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
 
     //Define subgroup membership using the default subgroup allocator function
-    //Each Replicated type will have one subgroup and one shard, with three members in the shard
-
-    json json_layout = json::parse(derecho::getConfString(CONF_DERECHO_JSON_LAYOUT));
-    cout << "json_layout parsed\n";
-    auto dsa_object = derecho::make_subgroup_allocator<Foo, Bar>(json_layout);
-    cout << "dsa_object constructed\n";
-    derecho::SubgroupInfo subgroup_function{dsa_object};
-
-    // derecho::SubgroupInfo subgroup_function{derecho::construct_DSA_with_layout<Foo, Bar>(json::parse(derecho::getConfString(CONF_DERECHO_JSON_LAYOUT)))};
+    //When constructed using make_subgroup_allocator with no arguments, this will check the config file
+    //for either the json_layout or json_layout_path options, and use whichever one is present to define
+    //the mapping from types to subgroup allocation parameters.
+    derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<Foo, Bar>()};
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state. These must take a PersistentRegistry* argument, but
