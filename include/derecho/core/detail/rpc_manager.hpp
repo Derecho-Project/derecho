@@ -39,8 +39,6 @@ using DeserializationContext = mutils::RemoteDeserializationContext;
 
 namespace rpc {
 
-using PendingBase_ref = std::reference_wrapper<PendingBase>;
-
 /**
  * Given a subgroup ID and a list of functions, constructs a
  * RemoteInvokerForClass for the type of object given by the template
@@ -114,21 +112,21 @@ class RPCManager {
      * one to be received in rpc_message_handler()). Note that the PendingResults
      * objects themselves live in the RemoteInvocableClass that sent the message.
      */
-    std::map<subgroup_id_t, std::queue<PendingBase_ref>> pending_results_to_fulfill;
+    std::map<subgroup_id_t, std::queue<std::weak_ptr<AbstractPendingResults>>> pending_results_to_fulfill;
     /**
      * For each subgroup, contains a map from version number to the PendingResults
      * for that version's RPC call (i.e., a set of PendingResults indexed by
      * version number). These RPC messages have been delivered locally but RPCManager
      * still needs to use the PendingResults to report that persistence has finished.
      */
-    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_local_persistence;
+    std::map<subgroup_id_t, std::map<persistent::version_t, std::weak_ptr<AbstractPendingResults>>> results_awaiting_local_persistence;
     /**
      * For each subgroup, contains a map from version number to the PendingResults
      * for that version's RPC call (i.e., a set of PendingResults indexed by
      * version number). These RPC messages have been persisted locally but RPCManager
      * still needs to use the PendingResults to report that global persistence has finished.
      */
-    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_global_persistence;
+    std::map<subgroup_id_t, std::map<persistent::version_t, std::weak_ptr<AbstractPendingResults>>> results_awaiting_global_persistence;
     /**
      * For each subgroup, contains a map from version number to the PendingResults
      * for that version's RPC call (i.e., a set of PendingResults indexed by
@@ -137,7 +135,7 @@ class RPCManager {
      * needs to use the PendingResults to report that the signature
      * verification has finished.
      */
-    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_signature;
+    std::map<subgroup_id_t, std::map<persistent::version_t, std::weak_ptr<AbstractPendingResults>>> results_awaiting_signature;
     /**
      * For each subgroup, contains a list of PendingResults references for RPC
      * messages that have completed all of their promise events (fulfilling
@@ -147,7 +145,7 @@ class RPCManager {
      * PendingResults, since an ordered message that reaches global persistence
      * can't possibly get a removed_node_exception)
      */
-    std::map<subgroup_id_t, std::list<PendingBase_ref>> completed_pending_results;
+    std::map<subgroup_id_t, std::list<std::weak_ptr<AbstractPendingResults>>> completed_pending_results;
 
     bool thread_start = false;
     /** Mutex for thread_start_cv. */
@@ -342,11 +340,11 @@ public:
      * assumed to be an RPC message prepared by earlier functions) and registers
      * the "promise object" in pending_results_handle to await replies.
      * @param subgroup_id The subgroup in which this message is being sent
-     * @param pending_results_handle A reference to the "promise object" in the
-     * send_return for this send.
+     * @param pending_results_handle A non-owning pointer to the "promise object"
+     * created by RemoteInvoker for this send.
      * @return True if the send was successful, false if the current view is wedged
      */
-    bool finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending_results_handle);
+    bool finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
 
     /**
      * Retrieves a buffer for sending P2P messages from the RPCManager's pool of
@@ -362,10 +360,10 @@ public:
      * and registers the "promise object" in pending_results_handle to await its reply.
      * @param dest_node The node to send the message to
      * @param dest_subgroup_id The subgroup ID of the subgroup that node is in
-     * @param pending_results_handle A reference to the "promise object" in the
-     * send_return for this send.
+     * @param pending_results_handle A non-owning pointer to the "promise object"
+     * created by RemoteInvoker for this send.
      */
-    void finish_p2p_send(node_id_t dest_node, subgroup_id_t dest_subgroup_id, PendingBase& pending_results_handle);
+    void finish_p2p_send(node_id_t dest_node, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types

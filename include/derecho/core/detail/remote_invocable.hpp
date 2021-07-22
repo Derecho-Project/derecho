@@ -54,21 +54,6 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         return nullptr;
     }
 
-    /* Maps invocation-instance IDs to results sets
-       Weijia: Although the maximum pending RPC is controlled by the window
-       size option in the configuration, the user application may not retrieve
-       the results on time. Therefore, the results may piled up and we need more
-       slots for the results than window size. We hardwired this to 4K here.
-       TODO: Obviously, this is not space efficient. Let's find a better RPC
-       return value mechanism.
-     */
-
-#define MAX_CONCURRENT_RPCS_PER_INVOKER (4096)
-    PendingResults<Ret> results_vector[MAX_CONCURRENT_RPCS_PER_INVOKER];
-    std::atomic<unsigned short> invocation_id_sequencer;
-    // std::mutex map_lock; - we don't need a lock on the result map anymore.
-    using lock_t = std::unique_lock<std::mutex>;
-
     /* use this from within a derived class to retrieve precisely this RemoteInvoker
      * (this way, all the inherited RemoteInvoker methods in the subclass do not need
      * to worry about type collisions)*/
@@ -94,15 +79,16 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     }
 
     /**
-     * Return type for the send function. Contains the RPC-invoking message
-     * (in a buffer of size "size"), a set of futures for the results, and
-     * a set of promises for the results.
+     * Return type for the send function. Contains a pointer to the
+     * RPC-invoking message (in the buffer allocated by the out_alloc
+     * function), a set of futures for the results, and a set of promises
+     * for the results.
      */
     struct send_return {
-        std::size_t size;
-        char* buf;
-        QueryResults<Ret> results;
-        PendingResults<Ret>& pending;
+        std::size_t size;                            //The size of the message in bytes
+        char* buf;                                   //A pointer to the beginning of the message in its buffer
+        std::unique_ptr<QueryResults<Ret>> results;  //The QueryResults (futures) object for this RPC call
+        std::weak_ptr<PendingResults<Ret>> pending;  //A non-owning pointer to the PendingResults (promises) object for this RPC call
     };
 
     /**
@@ -114,26 +100,34 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     send_return send(const std::function<char*(int)>& out_alloc,
                      const std::decay_t<Args>&... remote_args) {
-        // auto invocation_id = mutils::long_rand();
-        std::size_t invocation_id = invocation_id_sequencer++;
-        invocation_id %= MAX_CONCURRENT_RPCS_PER_INVOKER;
-        std::size_t size = mutils::bytes_size(invocation_id);
+        //Create a new PendingResults/QueryResults pair for this RPC
+        std::shared_ptr<PendingResults<Ret>> pending_results = std::make_shared<PendingResults<Ret>>();
+        std::unique_ptr<QueryResults<Ret>> query_results = pending_results->get_future();
+        //Create a weak_ptr to the pending_results, but store it on the heap manually
+        std::weak_ptr<PendingResults<Ret>>* results_heap_ptr = new std::weak_ptr<PendingResults<Ret>>(pending_results);
+        //Compute the size of the message, including the results pointer
+        std::size_t size = mutils::bytes_size(results_heap_ptr);
         size += (mutils::bytes_size(remote_args) + ... + 0);
 
+        /*
+         * Request message format:
+         * ----------------------------------------------------------------------------
+         * | RPC header (added by   | address of a             | serialized function  |
+         * | RemoteInvokerForClass) | weak_ptr<PendingResults> | arguments            |
+         * ----------------------------------------------------------------------------
+         */
         char* serialized_args = out_alloc(size);
         {
-            auto v = serialized_args + mutils::to_bytes(invocation_id, serialized_args);
-            auto check_size = mutils::bytes_size(invocation_id) + serialize_all(v, remote_args...);
+            auto buf_ptr = serialized_args + mutils::to_bytes(results_heap_ptr, serialized_args);
+            auto check_size = mutils::bytes_size(results_heap_ptr) + serialize_all(buf_ptr, remote_args...);
             assert_always(check_size == size);
         }
 
-        // lock_t l{map_lock};
-        results_vector[invocation_id].reset();
-        PendingResults<Ret>& pending_results = results_vector[invocation_id];
-
-        dbg_default_trace("Ready to send an RPC call message with invocation ID {}", invocation_id);
-        return send_return{size, serialized_args, pending_results.get_future(),
-                           pending_results};
+        dbg_default_trace("Ready to send an RPC call message with invocation ID {}", fmt::ptr(results_heap_ptr));
+        //The return struct can get a new weak_ptr, different from the one stored on the heap,
+        //since it will only be used by RPCManager (not the response message)
+        return send_return{size, serialized_args, std::move(query_results),
+                           std::weak_ptr<PendingResults<Ret>>(pending_results)};
     }
 
     /**
@@ -149,44 +143,26 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             const node_id_t& nid, const char* response,
             const std::function<definitely_char*(int)>&) {
         bool is_exception = response[0];
-        long int invocation_id = ((long int*)(response + 1))[0];
-        // lock_t l{map_lock};
-        // we unlock the map here to avoid the deadlock:
-        // The p2p handler thread, on receiving an RPC REPLY may get this lock
-        // before sst_detect thread finish handling the corresponding ordered
-        // send locally. However, sst_detect thread may be so slow that it
-        // hasn't finish deliverying of a previous ordered send, therefore waits
-        // for the map_lock in the following call stack:
-        // - RPCManager::rpc_message_handler() ->
-        // - RPCManager::parse_and_receive() ->
-        // - RPCManager::receive_message()->
-        // - receivers->at(indx)->
-        // - RemoteInvoker::receive_response().
-        // therefore, the promise for the next ordered_send, on which the
-        // p2p handler thread is waiting for, cannot be fulfilled.
-        // dead lock!!!
-        // We use this workaround by just release the results_map lock as early
-        // because we have 64K slots and we assume after 64K messages, this
-        // corresponding ordered_send has been finished already.
-        // TODO: make a better plan along with garbage collection.
-        // l.unlock();
-        // TODO: garbage collection for the responses.
-        // More on May-7th (Weijia):
-        // We don't need to lock the results container (now results_vector)
-        // anymore. The vector is initialized at the beginning. The p2p rpc
-        // reuse the slot by reseting it. No deleting, insertion, or
-        // replacement operations at all. But we still need a better garbage
-        // collection mechanism.
-        if(is_exception) {
-            //If the exception bit is set, the response contains a serialized remote_exception_info
-            auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(invocation_id));
-            dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, invocation_id);
-            rls_default_error("Received an exception from node {}. Exception message: {}", nid, exception_info->exception_what);
-            results_vector[invocation_id].set_exception(nid, std::make_exception_ptr(
-                                                                     remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
-        } else {
-            dbg_default_trace("Received an RPC response for invocation ID {} from node {}", invocation_id, nid);
-            results_vector[invocation_id].set_value(nid, *mutils::from_bytes<Ret>(dsm, response + 1 + sizeof(invocation_id)));
+        // std::weak_ptr<PendingResults<Ret>>* results_heap_ptr = (std::weak_ptr<PendingResults<Ret>>*)(response + 1)[0];
+        // Is the above "array" syntax the same as this version with memcpy?
+        std::weak_ptr<PendingResults<Ret>>* results_heap_ptr;
+        std::memcpy(&results_heap_ptr, (response + 1), sizeof(results_heap_ptr));
+        std::shared_ptr<PendingResults<Ret>> results = results_heap_ptr->lock();
+        if(results) {
+            if(is_exception) {
+                auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(results_heap_ptr));
+                dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, fmt::ptr(results_heap_ptr));
+                rls_default_error("Received an exception from node {}. Exception message: {}", nid, exception_info->exception_what);
+                results->set_exception(nid, std::make_exception_ptr(
+                                                    remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
+            } else {
+                dbg_default_trace("Received an RPC response for invocation ID {} from node {}", fmt::ptr(results_heap_ptr), nid);
+                results->set_value(nid, *mutils::from_bytes<Ret>(dsm, response + 1 + sizeof(results_heap_ptr)));
+            }
+            //If this was the last RPC reponse, the heap-allocated weak_ptr will not be used again
+            if(results->all_responded()) {
+                delete results_heap_ptr;
+            }
         }
         return recv_ret{Opcode(), 0, nullptr, nullptr};
     }
@@ -223,18 +199,6 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     }
 
     /**
-     * Populates the pending-results map of a particular invocation of the remote-invocable
-     * function, given the list of nodes that will be contacted to call the function.
-     * @param invocation_id The ID referring to a particular invocation of the function
-     * @param who The list of nodes that will service this RPC call
-     */
-    inline void fulfill_pending_results_vector(long int invocation_id, const node_list_t& who) {
-        // I think this function is never called
-        assert_always(false);
-        results_vector[invocation_id].fulfill_map(who);
-    }
-
-    /**
      * Constructs a RemoteInvoker that provides RPC call marshalling and
      * response-handling for a specific function tag and function type (the one
      * specified in the class's template parameters). Registers a function
@@ -248,8 +212,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     RemoteInvoker(uint32_t class_id, uint32_t instance_id,
                   std::map<Opcode, receive_fun_t>& receivers)
             : invoke_opcode{class_id, instance_id, Tag, false},
-              reply_opcode{class_id, instance_id, Tag, true},
-              invocation_id_sequencer(0) {
+              reply_opcode{class_id, instance_id, Tag, true} {
         receivers.emplace(reply_opcode, [this](auto... a) {
             return this->receive_response(a...);
         });
@@ -293,16 +256,27 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
                                  mutils::DeserializationManager* dsm,
                                  const node_id_t& caller, const char* _recv_buf,
                                  const std::function<char*(int)>& out_alloc) {
-        long int invocation_id = ((long int*)_recv_buf)[0];
-        auto recv_buf = _recv_buf + sizeof(long int);
+        //The first sizeof(void*) bytes of the request message is the "invocation ID,"
+        //which is actually a pointer to memory on the sender's machine. This should
+        //just be copied unchanged to the reply message.
+        void* invocation_id;
+        std::memcpy(&invocation_id, _recv_buf, sizeof(void*));
+        auto recv_buf = _recv_buf + sizeof(invocation_id);
+        /*
+         * Response message format:
+         * ------------------------------------------------------------------------------------
+         * | is_exception | address of a                   | serialized response value OR     |
+         * |              | std::weak_ptr<PendingResults>  | serialized remote_exception_info |
+         * ------------------------------------------------------------------------------------
+         */
         try {
             const auto result = mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
             const auto result_size = mutils::bytes_size(result) + sizeof(invocation_id) + 1;
             auto out = out_alloc(result_size);
             out[0] = false;
-            ((long int*)(out + 1))[0] = invocation_id;
+            std::memcpy(out + 1, &invocation_id, sizeof(invocation_id));
             mutils::to_bytes(result, out + sizeof(invocation_id) + 1);
-            dbg_default_trace("Ready to send an RPC reply for invocation ID {} to node {}", invocation_id, caller);
+            dbg_default_trace("Ready to send an RPC reply for invocation ID {} to node {}", fmt::ptr(invocation_id), caller);
             return recv_ret{reply_opcode, result_size, out, nullptr};
         } catch(std::exception& ex) {
             rls_default_error("An exception occurred while attempting to execute an RPC function. Exception message: {}", ex.what());
@@ -318,9 +292,9 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             }
             char* out = out_alloc(result_size);
             out[0] = true;
-            ((long int*)(out + 1))[0] = invocation_id;
+            std::memcpy(out + 1, &invocation_id, sizeof(invocation_id));
             mutils::to_bytes(exception_info, out + sizeof(invocation_id) + 1);
-            dbg_default_trace("Ready to send remote exception info for invocation ID {} to node {}. Exception info is: ({}, {}), with size ", invocation_id, caller, exception_info.exception_name, exception_info.exception_what, result_size);
+            dbg_default_trace("Ready to send remote exception info for invocation ID {} to node {}. Exception info is: ({}, {}), with size ", fmt::ptr(invocation_id), caller, exception_info.exception_name, exception_info.exception_what, result_size);
             return recv_ret{reply_opcode, result_size, out,
                             std::make_exception_ptr(ex)};
         } catch(...) {
@@ -329,7 +303,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             const std::size_t result_size = mutils::bytes_size(exception_info) + sizeof(invocation_id) + 1;
             char* out = out_alloc(result_size);
             out[0] = true;
-            ((long int*)(out + 1))[0] = invocation_id;
+            std::memcpy(out + 1, &invocation_id, sizeof(invocation_id));
             mutils::to_bytes(exception_info, out + sizeof(invocation_id) + 1);
             return recv_ret{reply_opcode, result_size, out,
                             std::current_exception()};
@@ -345,7 +319,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
                                  const node_id_t&, const char* _recv_buf,
                                  const std::function<char*(int)>&) {
         //TODO: Need to catch exceptions here, and possibly send them back, since void functions can still throw exceptions!
-        auto recv_buf = _recv_buf + sizeof(long int);
+        auto recv_buf = _recv_buf + sizeof(void*);
         mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
         return recv_ret{reply_opcode, 0, nullptr};
     }
@@ -734,25 +708,15 @@ public:
         */
         populate_header(buf, payload_size, invoker.invoke_opcode, nid, flags);
 
-        using Ret = typename decltype(sent_return.results)::type;
+        //sent_return.results is a unique_ptr<QueryResults<Ret>>
+        using Ret = typename decltype(sent_return.results)::element_type::type;
         /*
           much like previous definition, except with
           two fewer fields
         */
         struct send_return {
-            QueryResults<Ret> results;
-            PendingResults<Ret>& pending;
-            //LifeTracker
-            /*
-class LifeTracker {
-std::function<void () > deleter;
-~LifeTraker(){
-deleter();
-}
-};
-
-LifeTracker{[invocation_id, &map](){map.erase(invocation_id);}};
-	   */
+            std::unique_ptr<QueryResults<Ret>> results;
+            std::weak_ptr<PendingResults<Ret>> pending;
         };
         return send_return{std::move(sent_return.results),
                            sent_return.pending};
@@ -778,7 +742,7 @@ public:
 
     template <FunctionTag Tag, typename... Args>
     std::size_t get_size(Args&&... a) {
-        auto invocation_id = mutils::long_rand();
+        std::weak_ptr<PendingResults<void>>* invocation_id = nullptr;
         std::size_t size = mutils::bytes_size(invocation_id);
         {
             auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
@@ -865,14 +829,15 @@ public:
         }
         populate_header(buf, payload_size, invoker.invoke_opcode, nid, flags);
 
-        using Ret = typename decltype(sent_return.results)::type;
+        //sent_return.results is a unique_ptr<QueryResults<Ret>>
+        using Ret = typename decltype(sent_return.results)::element_type::type;
         /*
           much like previous definition, except with
           two fewer fields
         */
         struct send_return {
-            QueryResults<Ret> results;
-            PendingResults<Ret>& pending;
+            std::unique_ptr<QueryResults<Ret>> results;
+            std::weak_ptr<PendingResults<Ret>> pending;
         };
         return send_return{std::move(sent_return.results),
                            sent_return.pending};

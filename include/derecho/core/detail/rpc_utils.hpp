@@ -208,6 +208,10 @@ using receive_fun_t = std::function<recv_ret(
         mutils::RemoteDeserialization_v* rdv, const node_id_t&, const char* recv_buf,
         const std::function<char*(int)>& out_alloc)>;
 
+//Forward declaration of PendingResults, to be used by QueryResults
+template <typename Ret>
+class PendingResults;
+
 /**
  * The type of map contained in a QueryResults::ReplyMap. The template parameter
  * should be the return type of the query.
@@ -293,22 +297,31 @@ private:
     std::future<void> global_persistence_done;
     /** This signals that the signature has been verified at all replicas on the version assigned to this RPC function call */
     std::future<void> signature_done;
+    /**
+     * An owning pointer to the PendingResults that is paired with this QueryResults
+     * (i.e. the one that constructed this QueryResults). It ensures that the
+     * PendingResults has the same lifetime as the QueryResults.
+     */
+    std::shared_ptr<PendingResults<Ret>> paired_pending_results;
 
 public:
     /**
      * Constructs a QueryResults from a future for a reply-map (which is itself
      * a map of futures), and the futures for the persistent events it will also
      * track. The promise ends of these futures should reside in a corresponding
-     * PendingResults that constructed this QueryResults.
+     * PendingResults that constructed this QueryResults, and the first parameter
+     * should be a shared_ptr to that PendingResults.
      */
-    QueryResults(map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
+    QueryResults(std::shared_ptr<PendingResults<Ret>> paired_pending_results,
+                 map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
                  std::future<void> local_persistence_done, std::future<void> global_persistence_done,
                  std::future<void> signature_done)
             : pending_rmap(std::move(reply_map_future)),
               persistent_version(std::move(persistent_version)),
               local_persistence_done(std::move(local_persistence_done)),
               global_persistence_done(std::move(global_persistence_done)),
-              signature_done(std::move(signature_done)) {}
+              signature_done(std::move(signature_done)),
+              paired_pending_results(paired_pending_results) {}
     /** Move constructor for QueryResults. */
     QueryResults(QueryResults&& o)
             : pending_rmap{std::move(o.pending_rmap)},
@@ -316,7 +329,8 @@ public:
               persistent_version{std::move(o.persistent_version)},
               local_persistence_done{std::move(o.local_persistence_done)},
               global_persistence_done{std::move(o.global_persistence_done)},
-              signature_done{std::move(o.signature_done)} {}
+              signature_done{std::move(o.signature_done)},
+              paired_pending_results{std::move(o.paired_pending_results)} {}
     /** QueryResults, like std::future, is not copyable. */
     QueryResults(const QueryResults&) = delete;
 
@@ -458,23 +472,32 @@ private:
     std::future<void> global_persistence_done;
     /** This signals that the signature has been verified at all replicas on the version assigned to this RPC function call */
     std::future<void> signature_done;
+    /**
+     * An owning pointer to the PendingResults that is paired with this QueryResults
+     * (i.e. the one that constructed this QueryResults). It ensures that the
+     * PendingResults has the same lifetime as the QueryResults.
+     */
+    std::shared_ptr<PendingResults<void>> paired_pending_results;
 
 public:
-    QueryResults(map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
+    QueryResults(std::shared_ptr<PendingResults<void>> paired_pending_results,
+                 map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
                  std::future<void> local_persistence_done, std::future<void> global_persistence_done,
                  std::future<void> signature_done)
             : pending_rmap(std::move(reply_map_future)),
               persistent_version(std::move(persistent_version)),
               local_persistence_done(std::move(local_persistence_done)),
               global_persistence_done(std::move(global_persistence_done)),
-              signature_done(std::move(signature_done)) {}
+              signature_done(std::move(signature_done)),
+              paired_pending_results(paired_pending_results) {}
     QueryResults(QueryResults&& o)
             : pending_rmap{std::move(o.pending_rmap)},
               replies{std::move(o.replies)},
               persistent_version{std::move(o.persistent_version)},
               local_persistence_done{std::move(o.local_persistence_done)},
               global_persistence_done{std::move(o.global_persistence_done)},
-              signature_done{std::move(o.signature_done)} {}
+              signature_done{std::move(o.signature_done)},
+              paired_pending_results{std::move(o.paired_pending_results)} {}
     QueryResults(const QueryResults&) = delete;
 
     /**
@@ -564,7 +587,7 @@ public:
  * any template specialization of PendingResults without knowing the template
  * parameter.
  */
-class PendingBase {
+class AbstractPendingResults {
 public:
     virtual void fulfill_map(const node_list_t&) = 0;
     virtual void set_persistent_version(persistent::version_t, uint64_t) = 0;
@@ -575,7 +598,7 @@ public:
     virtual void set_exception_for_caller_removed() = 0;
     virtual bool all_responded() const = 0;
     virtual void reset() = 0;
-    virtual ~PendingBase() {}
+    virtual ~AbstractPendingResults() {}
 };
 
 /**
@@ -587,7 +610,7 @@ public:
  * response's value.
  */
 template <typename Ret>
-class PendingResults : public PendingBase {
+class PendingResults : public AbstractPendingResults, public std::enable_shared_from_this<PendingResults<Ret>> {
 private:
     /** A promise for a map containing one future for each reply to the RPC function
      * call. The future end of this promise lives in QueryResults, and is fulfilled
@@ -647,12 +670,13 @@ public:
      * the response promises in this PendingResults.
      * @return A new QueryResults holding a set of futures for this RPC function call
      */
-    QueryResults<Ret> get_future() {
-        return QueryResults<Ret>{promise_for_pending_map.get_future(),
-                                 version_promise.get_future(),
-                                 local_persistence_promise.get_future(),
-                                 global_persistence_promise.get_future(),
-                                 signature_verified_promise.get_future()};
+    std::unique_ptr<QueryResults<Ret>> get_future() {
+        return std::make_unique<QueryResults<Ret>>(this->shared_from_this(),
+                                                   promise_for_pending_map.get_future(),
+                                                   version_promise.get_future(),
+                                                   local_persistence_promise.get_future(),
+                                                   global_persistence_promise.get_future(),
+                                                   signature_verified_promise.get_future());
     }
 
     /**
@@ -817,7 +841,7 @@ public:
  * cause new persistent versions to be generated.
  */
 template <>
-class PendingResults<void> : public PendingBase {
+class PendingResults<void> : public AbstractPendingResults, public std::enable_shared_from_this<PendingResults<void>> {
 private:
     std::promise<std::unique_ptr<std::set<node_id_t>>> promise_for_pending_map;
     bool map_fulfilled = false;
@@ -827,12 +851,13 @@ private:
     std::promise<void> signature_verified_promise;
 
 public:
-    QueryResults<void> get_future() {
-        return QueryResults<void>(promise_for_pending_map.get_future(),
-                                  version_promise.get_future(),
-                                  local_persistence_promise.get_future(),
-                                  global_persistence_promise.get_future(),
-                                  signature_verified_promise.get_future());
+    std::unique_ptr<QueryResults<void>> get_future() {
+        return std::make_unique<QueryResults<void>>(shared_from_this(),
+                                                    promise_for_pending_map.get_future(),
+                                                    version_promise.get_future(),
+                                                    local_persistence_promise.get_future(),
+                                                    global_persistence_promise.get_future(),
+                                                    signature_verified_promise.get_future());
     }
 
     void fulfill_map(const node_list_t& sent_nodes) {
