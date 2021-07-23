@@ -103,9 +103,14 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         //Create a new PendingResults/QueryResults pair for this RPC
         std::shared_ptr<PendingResults<Ret>> pending_results = std::make_shared<PendingResults<Ret>>();
         std::unique_ptr<QueryResults<Ret>> query_results = pending_results->get_future();
-        //Create a weak_ptr to the pending_results, but store it on the heap manually
-        std::weak_ptr<PendingResults<Ret>>* results_heap_ptr = new std::weak_ptr<PendingResults<Ret>>(pending_results);
-        //Compute the size of the message, including the results pointer
+        //A heap-allocated weak_ptr to the PendingResults will be the "invocation ID" for this RPC message
+        std::weak_ptr<PendingResults<Ret>>* results_heap_ptr = nullptr;
+        //But void functions will never send replies, so we only need to keep track of the
+        //PendingResults if the return type is non-void
+        if constexpr(!std::is_void_v<Ret>) {
+            results_heap_ptr = new std::weak_ptr<PendingResults<Ret>>(pending_results);
+        }
+        //Compute the size of the message
         std::size_t size = mutils::bytes_size(results_heap_ptr);
         size += (mutils::bytes_size(remote_args) + ... + 0);
 
@@ -143,8 +148,6 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             const node_id_t& nid, const char* response,
             const std::function<definitely_char*(int)>&) {
         bool is_exception = response[0];
-        // std::weak_ptr<PendingResults<Ret>>* results_heap_ptr = (std::weak_ptr<PendingResults<Ret>>*)(response + 1)[0];
-        // Is the above "array" syntax the same as this version with memcpy?
         std::weak_ptr<PendingResults<Ret>>* results_heap_ptr;
         std::memcpy(&results_heap_ptr, (response + 1), sizeof(results_heap_ptr));
         std::shared_ptr<PendingResults<Ret>> results = results_heap_ptr->lock();
@@ -163,6 +166,12 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             if(results->all_responded()) {
                 delete results_heap_ptr;
             }
+        } else {
+            //If the actual PendingResults is gone, the client doesn't care about any more replies,
+            //and we have lost our ability to track when the last response comes in.
+            //But we can't delete the weak_ptr, because another reply to that message might still arrive,
+            //and results_heap_ptr->lock() would segfault if we had already deleted results_heap_ptr
+            dbg_default_warn("Received an RPC response for invocation ID {} after its QueryResults had been discarded; this std::weak_ptr<PendingResults<Ret>>* will be leaked", fmt::ptr(results_heap_ptr));
         }
         return recv_ret{Opcode(), 0, nullptr, nullptr};
     }
@@ -193,7 +202,6 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             const node_id_t& nid, const char* response,
             const std::function<char*(int)>& f) {
         constexpr std::is_same<void, Ret>* choice{nullptr};
-        //        return receive_response(choice, dsm, nid, response, f);
         mutils::DeserializationManager dsm{*rdv};
         return receive_response(choice, &dsm, nid, response, f);
     }
@@ -339,7 +347,6 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             const node_id_t& who, const char* recv_buf,
             const std::function<char*(int)>& out_alloc) {
         constexpr std::is_same<Ret, void>* choice{nullptr};
-        //      return this->receive_call(choice, dsm, who, recv_buf, out_alloc);
         mutils::DeserializationManager dsm{*rdv};
         return this->receive_call(choice, &dsm, who, recv_buf, out_alloc);
     }
