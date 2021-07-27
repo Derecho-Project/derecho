@@ -165,7 +165,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             if(pending_results) {
                 //We now know the membership of "all nodes in my shard of the subgroup" in the current view
                 pending_results->fulfill_map(
-                    view_manager.unsafe_get_current_view().subgroup_shard_views.at(subgroup_id).at(my_shard).members);
+                        view_manager.unsafe_get_current_view().subgroup_shard_views.at(subgroup_id).at(my_shard).members);
                 pending_results->set_persistent_version(version, timestamp);
                 //Move the fulfilled PendingResults to either the "completed" list or the "awaiting persistence" list
                 //(but move the weak_ptr, not the shared_ptr)
@@ -346,13 +346,12 @@ void RPCManager::notify_global_persistence_finished(subgroup_id_t subgroup_id, p
         std::shared_ptr<AbstractPendingResults> live_pending_results = pending_results_iter->second.lock();
         if(live_pending_results) {
             live_pending_results->set_global_persistence();
-            //If the PendingResults still exists, move the pointer to results_awaiting_signature if the
-            //subgroup needs signatures, or completed_pending_results if it does not
+            //If the subgroup needs signatures, move the pointer to results_awaiting_signature
             if(view_manager.subgroup_is_signed(subgroup_id)) {
                 results_awaiting_signature[subgroup_id].emplace(*pending_results_iter);
-            } else {
-                completed_pending_results[subgroup_id].emplace_back(pending_results_iter->second);
             }
+            //If not, no need to put the pointer in completed_pending_results, since all the replicas have
+            //responded by now, and completed_pending_results is only used for set_exception_for_removed_node
         }
         pending_results_iter = results_awaiting_global_persistence[subgroup_id].erase(pending_results_iter);
     }
@@ -367,9 +366,8 @@ void RPCManager::notify_verification_finished(subgroup_id_t subgroup_id, persist
         std::shared_ptr<AbstractPendingResults> live_pending_results = pending_results_iter->second.lock();
         if(live_pending_results) {
             live_pending_results->set_signature_verified();
-            //Move the PendingResults pointer to completed_pending_results
-            completed_pending_results[subgroup_id].emplace_back(pending_results_iter->second);
         }
+        //Either way, delete the weak_ptr, since it won't be needed by completed_pending_results
         pending_results_iter = results_awaiting_signature[subgroup_id].erase(pending_results_iter);
     }
 }
@@ -378,11 +376,10 @@ void RPCManager::add_connections(const std::vector<uint32_t>& node_ids) {
     connections->add_connections(node_ids);
 }
 
-bool RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle) {
+void RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle) {
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     pending_results_to_fulfill[subgroup_id].push(pending_results_handle);
     pending_results_cv.notify_all();
-    return true;
 }
 
 volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {

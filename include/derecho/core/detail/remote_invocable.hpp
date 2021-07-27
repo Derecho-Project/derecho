@@ -103,12 +103,12 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         //Create a new PendingResults/QueryResults pair for this RPC
         std::shared_ptr<PendingResults<Ret>> pending_results = std::make_shared<PendingResults<Ret>>();
         std::unique_ptr<QueryResults<Ret>> query_results = pending_results->get_future();
-        //A heap-allocated weak_ptr to the PendingResults will be the "invocation ID" for this RPC message
-        std::weak_ptr<PendingResults<Ret>>* results_heap_ptr = nullptr;
+        //A heap-allocated shared_ptr to the PendingResults will be the "invocation ID" for this RPC message
+        std::shared_ptr<PendingResults<Ret>>* results_heap_ptr = nullptr;
         //But void functions will never send replies, so we only need to keep track of the
         //PendingResults if the return type is non-void
         if constexpr(!std::is_void_v<Ret>) {
-            results_heap_ptr = new std::weak_ptr<PendingResults<Ret>>(pending_results);
+            results_heap_ptr = new std::shared_ptr<PendingResults<Ret>>(pending_results);
         }
         //Compute the size of the message
         std::size_t size = mutils::bytes_size(results_heap_ptr);
@@ -116,10 +116,10 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
 
         /*
          * Request message format:
-         * ----------------------------------------------------------------------------
-         * | RPC header (added by   | address of a             | serialized function  |
-         * | RemoteInvokerForClass) | weak_ptr<PendingResults> | arguments            |
-         * ----------------------------------------------------------------------------
+         * ------------------------------------------------------------------------------
+         * | RPC header (added by   | address of a               | serialized function  |
+         * | RemoteInvokerForClass) | shared_ptr<PendingResults> | arguments            |
+         * ------------------------------------------------------------------------------
          */
         char* serialized_args = out_alloc(size);
         {
@@ -148,31 +148,28 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             const node_id_t& nid, const char* response,
             const std::function<definitely_char*(int)>&) {
         bool is_exception = response[0];
-        std::weak_ptr<PendingResults<Ret>>* results_heap_ptr;
+        std::shared_ptr<PendingResults<Ret>>* results_heap_ptr;
         std::memcpy(&results_heap_ptr, (response + 1), sizeof(results_heap_ptr));
-        std::shared_ptr<PendingResults<Ret>> results = results_heap_ptr->lock();
-        if(results) {
-            if(is_exception) {
-                auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(results_heap_ptr));
-                dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, fmt::ptr(results_heap_ptr));
-                rls_default_error("Received an exception from node {}. Exception message: {}", nid, exception_info->exception_what);
-                results->set_exception(nid, std::make_exception_ptr(
-                                                    remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
-            } else {
-                dbg_default_trace("Received an RPC response for invocation ID {} from node {}", fmt::ptr(results_heap_ptr), nid);
-                results->set_value(nid, *mutils::from_bytes<Ret>(dsm, response + 1 + sizeof(results_heap_ptr)));
-            }
-            //If this was the last RPC reponse, the heap-allocated weak_ptr will not be used again
-            if(results->all_responded()) {
-                delete results_heap_ptr;
-            }
+        if(is_exception) {
+            auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(results_heap_ptr));
+            dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, fmt::ptr(results_heap_ptr));
+            rls_default_error("Received an exception from node {}. Exception message: {}", nid, exception_info->exception_what);
+            (*results_heap_ptr)->set_exception(nid, std::make_exception_ptr(
+                                                remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
         } else {
-            //If the actual PendingResults is gone, the client doesn't care about any more replies,
-            //and we have lost our ability to track when the last response comes in.
-            //But we can't delete the weak_ptr, because another reply to that message might still arrive,
-            //and results_heap_ptr->lock() would segfault if we had already deleted results_heap_ptr
-            dbg_default_warn("Received an RPC response for invocation ID {} after its QueryResults had been discarded; this std::weak_ptr<PendingResults<Ret>>* will be leaked", fmt::ptr(results_heap_ptr));
+            dbg_default_trace("Received an RPC response for invocation ID {} from node {}", fmt::ptr(results_heap_ptr), nid);
+            (*results_heap_ptr)->set_value(nid, *mutils::from_bytes<Ret>(dsm, response + 1 + sizeof(results_heap_ptr)));
         }
+        //If this was the last RPC reponse, RemoteInvoker no longer needs the PendingResults,
+        //so we can delete the shared_ptr to it. The PendingResults will get deleted when its
+        //QueryResults goes out of scope (if it hasn't already).
+        if((*results_heap_ptr)->all_responded()) {
+            delete results_heap_ptr;
+        }
+        //WARNING: If the last node to reply fails before sending its response, results_heap_ptr
+        //will be lost, since RPCManager has no way of notifying RemoteInvoker of the failure.
+        //This will leak the entire PendingResults<Ret> since the lost shared_ptr will keep it alive.
+
         return recv_ret{Opcode(), 0, nullptr, nullptr};
     }
 
@@ -272,10 +269,10 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         auto recv_buf = _recv_buf + sizeof(invocation_id);
         /*
          * Response message format:
-         * ------------------------------------------------------------------------------------
-         * | is_exception | address of a                   | serialized response value OR     |
-         * |              | std::weak_ptr<PendingResults>  | serialized remote_exception_info |
-         * ------------------------------------------------------------------------------------
+         * --------------------------------------------------------------------------------------
+         * | is_exception | address of a                     | serialized response value OR     |
+         * |              | std::shared_ptr<PendingResults>  | serialized remote_exception_info |
+         * --------------------------------------------------------------------------------------
          */
         try {
             const auto result = mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);

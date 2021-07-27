@@ -155,8 +155,6 @@ auto Replicated<T>::ordered_send(Args&&... args) {
                     ->multicast_group->send(subgroup_id, payload_size_for_multicast_send, serializer, true);
         });
         group_rpc_manager.finish_rpc_send(subgroup_id, pending_ptr);
-        //Warning: Even though the move-constructor will clean up all the state in *results_ptr, this
-        //still leaks the memory allocated on the heap by new QueryResults<Ret>() in the serializer lambda
         return std::move(*results_ptr);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};

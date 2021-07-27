@@ -138,12 +138,12 @@ class RPCManager {
     std::map<subgroup_id_t, std::map<persistent::version_t, std::weak_ptr<AbstractPendingResults>>> results_awaiting_signature;
     /**
      * For each subgroup, contains a list of PendingResults references for RPC
-     * messages that have completed all of their promise events (fulfilling
-     * ReplyMaps, persistence, etc.) and are only being kept around in case
-     * RPCManager needs to notify them of a removed node on a View change. (I
-     * think the only useful members of this list are the P2P-message-related
-     * PendingResults, since an ordered message that reaches global persistence
-     * can't possibly get a removed_node_exception)
+     * messages that have completed all of their promise events (ReplyMap has
+     * been fulfilled and there is no persistence to track) and are only being
+     * kept around in case RPCManager needs to notify them of a removed node on
+     * a View change. Note that if View changes are rare, each list can grow
+     * very large, since it will not be garbage-collected at any time other than
+     * a View change.
      */
     std::map<subgroup_id_t, std::list<std::weak_ptr<AbstractPendingResults>>> completed_pending_results;
 
@@ -329,22 +329,32 @@ public:
      * @param subgroup_id The subgroup in which persistence has finished for a
      * version
      * @param version The latest version number that PersistenceManager has
-     * finished persisting in that subgroup
+     * finished persisting on all replicas in that subgroup
      */
     void notify_global_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version);
 
+    /**
+     * Callback to be called by MulticastGroup when it detects that a version
+     * has been (globally) verified. This will deliver "signature verified"
+     * events to the PendingResults objects of all RPC messages with version
+     * numbers lower than the provided version (assuming they have already
+     * received their global persistence notification).
+     * @param subgroup_id The subgroup in which global verification has finished
+     * for a version
+     * @param version The latest version number that PersistenceManager has
+     * finished verifying on all replicas in that subgroup
+     */
     void notify_verification_finished(subgroup_id_t subgroup_id, persistent::version_t version);
 
     /**
-     * Sends the next message in the MulticastGroup's send buffer (which is
-     * assumed to be an RPC message prepared by earlier functions) and registers
-     * the "promise object" in pending_results_handle to await replies.
-     * @param subgroup_id The subgroup in which this message is being sent
+     * Notifies RPCManager that an (ordered) RPC message was just sent, which
+     * registers the "promise object" pointed to by pending_results_handle for
+     * delivering reply and persistence events.
+     * @param subgroup_id The subgroup in which the message was sent.
      * @param pending_results_handle A non-owning pointer to the "promise object"
      * created by RemoteInvoker for this send.
-     * @return True if the send was successful, false if the current view is wedged
      */
-    bool finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
+    void finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
 
     /**
      * Retrieves a buffer for sending P2P messages from the RPCManager's pool of
@@ -357,7 +367,8 @@ public:
 
     /**
      * Sends the next P2P message buffer over an RDMA connection to the specified node,
-     * and registers the "promise object" in pending_results_handle to await its reply.
+     * and registers the "promise object" pointed to by pending_results_handle in case
+     * RPCManager needs to deliver a node_removed_from_group_exception.
      * @param dest_node The node to send the message to
      * @param dest_subgroup_id The subgroup ID of the subgroup that node is in
      * @param pending_results_handle A non-owning pointer to the "promise object"
