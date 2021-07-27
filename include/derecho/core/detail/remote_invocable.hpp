@@ -110,6 +110,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         if constexpr(!std::is_void_v<Ret>) {
             results_heap_ptr = new std::shared_ptr<PendingResults<Ret>>(pending_results);
         }
+        pending_results->set_self_ptr(results_heap_ptr);
         //Compute the size of the message
         std::size_t size = mutils::bytes_size(results_heap_ptr);
         size += (mutils::bytes_size(remote_args) + ... + 0);
@@ -164,11 +165,10 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         //so we can delete the shared_ptr to it. The PendingResults will get deleted when its
         //QueryResults goes out of scope (if it hasn't already).
         if((*results_heap_ptr)->all_responded()) {
-            delete results_heap_ptr;
+            //This is equivalent to "delete results_heap_ptr;" but safer, because
+            //PendingResults internally checks to see if the pointer was already deleted
+            (*results_heap_ptr)->delete_self_ptr();
         }
-        //WARNING: If the last node to reply fails before sending its response, results_heap_ptr
-        //will be lost, since RPCManager has no way of notifying RemoteInvoker of the failure.
-        //This will leak the entire PendingResults<Ret> since the lost shared_ptr will keep it alive.
 
         return recv_ret{Opcode(), 0, nullptr, nullptr};
     }

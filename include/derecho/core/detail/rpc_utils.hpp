@@ -590,6 +590,7 @@ public:
 class AbstractPendingResults {
 public:
     virtual void fulfill_map(const node_list_t&) = 0;
+    virtual void delete_self_ptr() = 0;
     virtual void set_persistent_version(persistent::version_t, uint64_t) = 0;
     virtual void set_local_persistence() = 0;
     virtual void set_global_persistence() = 0;
@@ -597,7 +598,6 @@ public:
     virtual void set_exception_for_removed_node(const node_id_t&) = 0;
     virtual void set_exception_for_caller_removed() = 0;
     virtual bool all_responded() const = 0;
-    virtual void reset() = 0;
     virtual ~AbstractPendingResults() {}
 };
 
@@ -660,9 +660,20 @@ private:
      */
     std::promise<void> signature_verified_promise;
 
+    /**
+     * A raw pointer to a heap-allocated shared_ptr to this PendingResults object,
+     * which is used by RemoteInvoker to locate this object when a reply arrives.
+     * Stored here so that the shared_ptr can still be deleted by RPCManager if
+     * a node fails before sending its reply; RemoteInvoker will lose the
+     * shared_ptr if it doesn't get all the replies to a given invocation.
+     */
+    std::shared_ptr<PendingResults<Ret>>* self_heap_ptr;
+
+
 public:
     PendingResults()
-            : reply_promises_are_ready(promise_for_reply_promises.get_future()) {}
+            : reply_promises_are_ready(promise_for_reply_promises.get_future()),
+            self_heap_ptr(nullptr) {}
     virtual ~PendingResults() {}
 
     /**
@@ -696,6 +707,28 @@ public:
         promise_for_reply_promises.set_value(std::move(promises));
         promise_for_pending_map.set_value(std::move(futures));
         map_fulfilled = true;
+    }
+
+    /**
+     * Stores the address of a heap-allocated shared_ptr to this PendingResults
+     * object, which was allocated by RemoteInvoker and used as an invocation ID.
+     * @param heap_ptr A pointer to a shared_ptr to this PendingResults object.
+     */
+    void set_self_ptr(std::shared_ptr<PendingResults<Ret>>* heap_ptr) {
+        self_heap_ptr = heap_ptr;
+    }
+
+    /**
+     * Deletes RemoteInvoker's heap-allocated shared_ptr to this PendingResults
+     * object, assuming it was previously set with set_self_ptr(). This should
+     * only be called by RemoteInvoker or RPCManager. It is safe to call this
+     * method more than once, and it will have no effect after the first call.
+     */
+    void delete_self_ptr() {
+        if(self_heap_ptr) {
+            delete self_heap_ptr;
+            self_heap_ptr = nullptr;
+        }
     }
 
     /**
@@ -814,23 +847,6 @@ public:
         signature_verified_promise.set_value();
     }
 
-    /**
-     * reset this object.
-     */
-    void reset() {
-        promise_for_pending_map = std::promise<std::unique_ptr<futures_map<Ret>>>();
-        promise_for_reply_promises = std::promise<std::map<node_id_t, std::promise<Ret>>>();
-        reply_promises_are_ready = promise_for_reply_promises.get_future();
-        // reply_promises_are_ready_mutex
-        reply_promises.clear();
-        map_fulfilled = false;
-        dest_nodes.clear();
-        responded_nodes.clear();
-        version_promise = std::promise<std::pair<persistent::version_t, uint64_t>>();
-        local_persistence_promise = std::promise<void>();
-        global_persistence_promise = std::promise<void>();
-        signature_verified_promise = std::promise<void>();
-    }
 };
 
 /**
@@ -858,6 +874,14 @@ public:
                                                     local_persistence_promise.get_future(),
                                                     global_persistence_promise.get_future(),
                                                     signature_verified_promise.get_future());
+    }
+
+    void set_self_ptr(std::shared_ptr<PendingResults<void>>* heap_ptr) {
+        //Does nothing because RemoteInvoker doesn't create a heap-allocated pointer for PendingResults<void>
+    }
+
+    void delete_self_ptr() {
+        //Also does nothing for the above reason
     }
 
     void fulfill_map(const node_list_t& sent_nodes) {
@@ -918,14 +942,6 @@ public:
         signature_verified_promise.set_value();
     }
 
-    void reset() {
-        promise_for_pending_map = std::promise<std::unique_ptr<std::set<node_id_t>>>();
-        map_fulfilled = false;
-        version_promise = std::promise<std::pair<persistent::version_t, uint64_t>>();
-        local_persistence_promise = std::promise<void>();
-        global_persistence_promise = std::promise<void>();
-        signature_verified_promise = std::promise<void>();
-    }
 };
 
 /**
