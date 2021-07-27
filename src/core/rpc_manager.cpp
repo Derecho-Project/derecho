@@ -243,8 +243,8 @@ void RPCManager::new_view_callback(const View& new_view) {
                         pending_results_iter->second.get().set_exception_for_removed_node(removed_id);
                     }
                 }
-                pending_results_iter++;
             }
+            pending_results_iter++;
         }
     }
     //Do the same departed-node check on PendingResults in the awaiting_global_persistence map
@@ -261,8 +261,8 @@ void RPCManager::new_view_callback(const View& new_view) {
                         pending_results_iter->second.get().set_exception_for_removed_node(removed_id);
                     }
                 }
-                pending_results_iter++;
             }
+            pending_results_iter++;
         }
     }
 

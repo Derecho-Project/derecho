@@ -4,8 +4,8 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 project(derecho CXX)
 
 # Version
-set(derecho_VERSION 2.1)
-set(derecho_build_VERSION 2.1.0)
+set(derecho_VERSION 2.2)
+set(derecho_build_VERSION 2.2.0)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z -fPIC")
 if (${USE_VERBS_API})
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_VERBS_API")
@@ -50,7 +50,7 @@ endif()
 # libfabric_FOUND
 # libfabric_INCLUDE_DIRS
 # libfabric_LIBRARIES
-find_package(libfabric 1.7.0 REQUIRED)
+find_package(libfabric 1.12.1 REQUIRED)
 
 # spdlog is a packaged system library, so this probably isn't necessary, but
 # it helps ensure that the right version is installed
@@ -59,6 +59,9 @@ find_package(spdlog 1.3.1 REQUIRED)
 
 # find openssl
 find_package(OpenSSL 1.1.1 REQUIRED)
+
+# json
+find_package(nlohmann_json 3.9.0 REQUIRED)
 
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
@@ -87,7 +90,8 @@ target_link_libraries(derecho
     ${mutils_LIBRARIES}
     ${mutils-containers_LIBRARIES}
     ${mutils-tasks_LIBRARIES}
-    ${OPENSSL_LIBRARIES})
+    ${OPENSSL_LIBRARIES}
+    nlohmann_json::nlohmann_json)
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}
     VERSION ${derecho_build_VERSION}
