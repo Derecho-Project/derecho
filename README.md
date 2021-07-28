@@ -140,7 +140,7 @@ To understand the other two options, it helps to remember that internally, Derec
 
 Larger messages are sent via RDMC, our *big object* protocol.  These will be automatically broken into chunks.  Each chunk will be of size  **block_size**.  The **block_size** value we tend to favor in our tests is 1MB, but we have run experiments with values as large as 100MB.   If you plan to send huge objects, like 100MB or even multi-gigabyte images, consider a larger block size: it pays off at that scale.  If you expect that huge objects would be rare, use a value like 1MB.
 
-More information about Derecho parameter setting can be found in the comments in [the default configuration file](https://github.com/Derecho-Project/derecho/blob/master/src/conf/derecho-sample.cfg).  You may want to read about **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
+More information about Derecho parameter setting can be found in the comments in [the default configuration file](src/conf/derecho-sample.cfg).  You may want to read about **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
 
 #### Configuring RDMA Devices
 The most important configuration entries in this section are **provider** and **domain**. The **provider** option specifies the type of RDMA device (i.e. a class of hardware) and the **domain** option specifies the device (i.e. a specific NIC or network interface). This [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
