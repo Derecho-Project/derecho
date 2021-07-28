@@ -351,7 +351,10 @@ public:
     }
 
     /**
-     * test if the futures are ready.
+     * Test if all the future entries are ready.
+     * A true return value indicates that get() will not block.
+     *
+     * @return true/false
      */
     bool is_ready() {
         if (replies.rmap.size() != 0) {
@@ -524,7 +527,10 @@ public:
     }
 
     /**
-     * test if the future is ready.
+     * Test if all the future entries are ready.
+     * A true return value indicates that get() will not block.
+     *
+     * @return true/false
      */
     bool is_ready() {
         return (replies.rmap.size() != 0);
