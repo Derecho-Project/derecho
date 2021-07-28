@@ -37,7 +37,7 @@ target_link_libraries(sender_delay_test derecho)
 add_executable(deliver_predicate_delay deliver_predicate_delay.cpp aggregate_bandwidth.cpp)
 target_link_libraries(deliver_predicate_delay derecho)
 # cooked send bandwidth test
-add_executable(typed_subgroup_bw_test typed_subgroup_bw_test.cpp bytes_object.cpp)
+add_executable(typed_subgroup_bw_test typed_subgroup_bw_test.cpp bytes_object.cpp partial_senders_allocator.cpp)
 target_link_libraries(typed_subgroup_bw_test derecho)
 
 # persistent bandwidth

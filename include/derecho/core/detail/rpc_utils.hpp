@@ -351,6 +351,25 @@ public:
     }
 
     /**
+     * Test if all the future entries are ready.
+     * A true return value indicates that get() will not block.
+     *
+     * @return true/false
+     */
+    bool is_ready() {
+        if (replies.rmap.size() != 0) {
+            for (auto& reply:replies) {
+                using namespace std::chrono;
+                if (reply.second.wait_for(std::chrono::seconds(0s)) != std::future_status::ready) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Retrieves the persistent version number and timestamp that has been assigned
      * to this RPC function call. The persistent version number is only available
      * once the ReplyMap has been fulfilled (they are set at the same time), so this
@@ -505,6 +524,16 @@ public:
                 return *rmap;
             }
         }
+    }
+
+    /**
+     * Test if all the future entries are ready.
+     * A true return value indicates that get() will not block.
+     *
+     * @return true/false
+     */
+    bool is_ready() {
+        return (replies.rmap.size() != 0);
     }
 
     /**
