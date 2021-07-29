@@ -743,7 +743,7 @@ SubgroupAllocationPolicy parse_json_subgroup_policy(const json& jconf, std::set<
         shard_allocation_policy.profiles_by_shard = subgroup_it[profiles_by_shard_field].get<std::vector<std::string>>();
 
         // "reserved_node_ids_by_shard" is not a mandatory field
-        if(subgroup_it.contains(reserved_node_ids_by_shard_field)) {
+        if(!subgroup_it[reserved_node_ids_by_shard_field].is_null()) {
             auto reserved_nodes_and_senders = subgroup_it[reserved_node_ids_by_shard_field].get<std::vector<std::set<std::string>>>();
             
             for (const auto& per_shard_set : reserved_nodes_and_senders) {
