@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
     //This test assumes derecho.cfg specifies a JSON layout path to a file that allocates
     //Foo and Bar overlapping sets of node IDs.
     derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<Foo, Bar>(
-            derecho::getConfString(CONF_DERECHO_JSON_LAYOUT_PATH))};
+            derecho::getConfString(CONF_LAYOUT_JSON_LAYOUT_FILE))};
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state. These must take a PersistentRegistry* argument, but
     //in this case we ignore it because the replicated objects aren't persistent.

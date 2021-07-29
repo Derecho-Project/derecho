@@ -672,18 +672,18 @@ DefaultSubgroupAllocator::DefaultSubgroupAllocator(std::vector<std::type_index> 
 DefaultSubgroupAllocator::DefaultSubgroupAllocator(std::vector<std::type_index> subgroup_types) {
     //It's not possible to delegate to a different constructor based on a boolean,
     //so I have to copy and paste from the other two constructors
-    if(hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT)) {
-        json layout_array = json::parse(getConfString(CONF_DERECHO_JSON_LAYOUT));
+    if(hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT)) {
+        json layout_array = json::parse(getConfString(CONF_LAYOUT_JSON_LAYOUT));
         for(std::size_t subgroup_type_index = 0; subgroup_type_index < subgroup_types.size(); ++subgroup_type_index) {
             policies.emplace(subgroup_types[subgroup_type_index],
                              parse_json_subgroup_policy(layout_array[subgroup_type_index], all_reserved_node_ids));
         }
-    } else if(hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT_PATH)) {
+    } else if(hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT_FILE)) {
         json layout_array;
 
-        std::ifstream json_file_stream(getConfString(CONF_DERECHO_JSON_LAYOUT_PATH));
+        std::ifstream json_file_stream(getConfString(CONF_LAYOUT_JSON_LAYOUT_FILE));
         if(!json_file_stream) {
-            throw derecho_exception("Failed to initialize subgroup allocator! JSON layout file " + getConfString(CONF_DERECHO_JSON_LAYOUT_PATH) + " not found");
+            throw derecho_exception("Failed to initialize subgroup allocator! JSON layout file " + getConfString(CONF_LAYOUT_JSON_LAYOUT_FILE) + " not found");
         }
 
         json_file_stream >> layout_array;
@@ -692,7 +692,7 @@ DefaultSubgroupAllocator::DefaultSubgroupAllocator(std::vector<std::type_index> 
                              parse_json_subgroup_policy(layout_array[subgroup_type_index], all_reserved_node_ids));
         }
     } else {
-        throw derecho_exception("Either json_layout or json_layout_path is required when constructing DefaultSubgroupAllocator with no arguments");
+        throw derecho_exception("Either json_layout or json_layout_file is required when constructing DefaultSubgroupAllocator with no arguments");
     }
 }
 

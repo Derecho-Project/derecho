@@ -45,8 +45,6 @@ private:
 #define CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE "DERECHO/max_p2p_request_payload_size"
 #define CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE "DERECHO/max_p2p_reply_payload_size"
 #define CONF_DERECHO_P2P_WINDOW_SIZE "DERECHO/p2p_window_size"
-#define CONF_DERECHO_JSON_LAYOUT "DERECHO/json_layout"
-#define CONF_DERECHO_JSON_LAYOUT_PATH "DERECHO/json_layout_path"
 
 #define CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE "SUBGROUP/DEFAULT/max_payload_size"
 #define CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE "SUBGROUP/DEFAULT/max_reply_payload_size"
@@ -67,6 +65,9 @@ private:
 #define CONF_PERS_PRIVATE_KEY_FILE "PERS/private_key_file"
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
+
+#define CONF_LAYOUT_JSON_LAYOUT "LAYOUT/json_layout"
+#define CONF_LAYOUT_JSON_LAYOUT_FILE "LAYOUT/json_layout_file"
     // Configuration Table:
     // config name --> default value
     std::map<const std::string, std::string> config = {

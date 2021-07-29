@@ -459,7 +459,7 @@ public:
     /**
      * Constructs a subgroup allocator from a vector of subgroup types, assuming
      * that a JSON layout object has been configured for these subgroup types.
-     * This will use either the json_layout or json_layout_path config option
+     * This will use either the json_layout or json_layout_file config option
      * (whichever one is present) to load a JSON object, and assume that it is
      * an array with one entry for each subgroup type in the same order as the
      * types in the vector.
@@ -493,7 +493,7 @@ public:
 /**
  * Constructs a subgroup allocator using information in the Derecho config
  * file, as long as the template parameters are the subgroup types in the
- * correct order. This will use either the json_layout or json_layout_path
+ * correct order. This will use either the json_layout or json_layout_file
  * config option (whichever one is present) to load a JSON object, then
  * assume that it is an array with one policy entry for each subgroup type,
  * in the same order as the template parameters.
