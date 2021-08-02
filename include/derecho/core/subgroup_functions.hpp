@@ -55,6 +55,7 @@ constexpr char json_type_alias_field[] = "type_alias";
 constexpr char min_nodes_by_shard_field[] = "min_nodes_by_shard";
 constexpr char max_nodes_by_shard_field[] = "max_nodes_by_shard";
 constexpr char reserved_node_ids_by_shard_field[] = "reserved_node_ids_by_shard";
+constexpr char reserved_node_is_sender_tag = '*';
 constexpr char delivery_modes_by_shard_field[] = "delivery_modes_by_shard";
 constexpr char delivery_mode_ordered[] = "Ordered";
 constexpr char delivery_mode_raw[] = "Raw";
@@ -121,6 +122,17 @@ struct ShardAllocationPolicy {
      * subgroups overlap (colocate).
      */
     std::vector<std::set<node_id_t>> reserved_node_ids_by_shard;
+    /**
+     * Only used with 'reserved_node_ids_by_shard'.
+     * For each shard, this stores a list of node IDs that will perform send.
+     * This list must be a subset of the reserved nodes specified in 
+     * 'reserved_node_ids_by_shard'. If 'reserved_sender_ids_by_shard' is empty,
+     * Then, all nodes in the shard, no matter if they are specified in the
+     * reserved pool or not, can send. Otherwise, only the nodes specified in
+     * the reserved pool can send. If none of the live nodes is from the
+     * reserved pool, this shard will have no senders.
+     */
+    std::vector<std::set<node_id_t>> reserved_sender_ids_by_shard;
 };
 
 /**
@@ -136,6 +148,12 @@ struct SubgroupAllocationPolicy {
      * policy for all subgroups of this type. If identical_subgroups is false,
      * contains an entry for each subgroup describing that subgroup's shards. */
     std::vector<ShardAllocationPolicy> shard_policy_by_subgroup;
+    /** The senders contains the node ids of senders for each of the subgroup.
+     * - if senders is empty, all nodes are senders;
+     * - if identical_subgroups is true, senders contains a single entry for all subgroups;
+     * - otherwise, the senders specifies the sender lists for each of subgroup of this type.
+     */
+    std::vector<std::set<uint32_t>> senders;
 };
 
 /**
@@ -441,7 +459,7 @@ public:
     /**
      * Constructs a subgroup allocator from a vector of subgroup types, assuming
      * that a JSON layout object has been configured for these subgroup types.
-     * This will use either the json_layout or json_layout_path config option
+     * This will use either the json_layout or json_layout_file config option
      * (whichever one is present) to load a JSON object, and assume that it is
      * an array with one entry for each subgroup type in the same order as the
      * types in the vector.
@@ -475,7 +493,7 @@ public:
 /**
  * Constructs a subgroup allocator using information in the Derecho config
  * file, as long as the template parameters are the subgroup types in the
- * correct order. This will use either the json_layout or json_layout_path
+ * correct order. This will use either the json_layout or json_layout_file
  * config option (whichever one is present) to load a JSON object, then
  * assume that it is an array with one policy entry for each subgroup type,
  * in the same order as the template parameters.

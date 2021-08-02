@@ -170,9 +170,9 @@ void test_json_layout() {
         "type_alias":   "TestType1",
         "layout":       [
                             {
-                                "min_nodes_by_shard": [2],
-                                "max_nodes_by_shard": [3],
-                                "reserved_node_ids_by_shard": [[1, 2, 3]],
+                                "min_nodes_by_shard": ["2"],
+                                "max_nodes_by_shard": ["3"],
+                                "reserved_node_ids_by_shard": [["*1", "2", "3"]],
                                 "delivery_modes_by_shard": ["Ordered"],
                                 "profiles_by_shard": ["Default"]
                             }
@@ -182,9 +182,9 @@ void test_json_layout() {
         "type_alias":   "TestType2",
         "layout":       [
                             {
-                                "min_nodes_by_shard": [2],
-                                "max_nodes_by_shard": [3],
-                                "reserved_node_ids_by_shard": [[2, 3, 4]],
+                                "min_nodes_by_shard": ["2"],
+                                "max_nodes_by_shard": ["3"],
+                                "reserved_node_ids_by_shard": [["2", "3", "4"]],
                                 "delivery_modes_by_shard": ["Ordered"],
                                 "profiles_by_shard": ["Default"]
                             }
@@ -261,7 +261,10 @@ void print_subgroup_layout(const subgroup_shard_layout_t& layout) {
     for(std::size_t subgroup_num = 0; subgroup_num < layout.size(); ++subgroup_num) {
         string_builder << "Subgroup " << subgroup_num << ": ";
         for(std::size_t shard_num = 0; shard_num < layout[subgroup_num].size(); ++shard_num) {
-            string_builder << layout[subgroup_num][shard_num].members << ", ";
+            string_builder << layout[subgroup_num][shard_num].members
+                           << "|"
+                           << layout[subgroup_num][shard_num].is_sender
+                           << ", ";
         }
         string_builder << "\b\b";
         rls_default_info(string_builder.str());
@@ -281,7 +284,7 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
     curr_view.subgroup_shard_views.clear();
     curr_view.subgroup_ids_by_type_id.clear();
-    std::cout << "View has these members: " << curr_view.members << std::endl;
+    rls_default_info("View has there members: {}", curr_view.members);
     std::map<std::type_index, subgroup_shard_layout_t> subgroup_allocations;
     try {
         auto temp = subgroup_info.subgroup_membership_function(curr_view.subgroup_type_order,
@@ -294,8 +297,7 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
         curr_view.next_unassigned_rank = initial_next_unassigned_rank;
         curr_view.subgroup_shard_views.clear();
         curr_view.subgroup_ids_by_type_id.clear();
-        std::cout << "Got a subgroup_provisioning_exception, marking View inadequate" << std::endl
-                  << std::endl;
+        rls_default_info ("Got a subgroup_provisioning_exception, marking View inadequate");
         return;
     }
     print_allocations(subgroup_allocations);

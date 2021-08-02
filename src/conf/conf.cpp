@@ -53,8 +53,8 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_P2P_WINDOW_SIZE),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_NODE_ID),
-        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_JSON_LAYOUT),
-        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_JSON_LAYOUT_PATH),
+        MAKE_LONG_OPT_ENTRY(CONF_LAYOUT_JSON_LAYOUT),
+        MAKE_LONG_OPT_ENTRY(CONF_LAYOUT_JSON_LAYOUT_FILE),
         // [SUBGROUP/<subgroup name>]
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM),
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE),
@@ -108,11 +108,11 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
         Conf::singleton_initialized_flag.store(CONF_INITIALIZED, std::memory_order_acq_rel);
 
         // 4 - check the configuration for sanity
-        if(hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT) && hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT_PATH)) {
-            throw std::logic_error("Configuration error: Both " CONF_DERECHO_JSON_LAYOUT " and " CONF_DERECHO_JSON_LAYOUT_PATH " were specified. These options are mutually exclusive");
+        if(hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT) && hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT_FILE)) {
+            throw std::logic_error("Configuration error: Both " CONF_LAYOUT_JSON_LAYOUT " and " CONF_LAYOUT_JSON_LAYOUT_FILE " were specified. These options are mutually exclusive");
         }
-        if(hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT_PATH)) {
-            std::ifstream json_file_stream(getConfString(CONF_DERECHO_JSON_LAYOUT_PATH));
+        if(hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT_FILE)) {
+            std::ifstream json_file_stream(getConfString(CONF_LAYOUT_JSON_LAYOUT_FILE));
             if(!json_file_stream) {
                 throw std::logic_error("Configuration error: The JSON layout file could not be opened for reading");
             }
@@ -124,10 +124,10 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
                 std::throw_with_nested(std::logic_error("Configuration error: The JSON layout file does not contain valid JSON"));
             }
         }
-        if(hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT)) {
+        if(hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT)) {
             nlohmann::json json_obj;
             try {
-                json_obj = nlohmann::json::parse(getConfString(CONF_DERECHO_JSON_LAYOUT));
+                json_obj = nlohmann::json::parse(getConfString(CONF_LAYOUT_JSON_LAYOUT));
             } catch(nlohmann::json::exception& ex) {
                 std::throw_with_nested(std::logic_error("Configuration error: The JSON layout string is not valid JSON"));
             }
