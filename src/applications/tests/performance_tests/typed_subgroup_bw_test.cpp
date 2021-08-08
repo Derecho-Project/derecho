@@ -14,7 +14,7 @@
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/Persistent.hpp>
 #include "partial_senders_allocator.hpp"
-
+#include <derecho/utils/time.h>
 
 using std::endl;
 using test::Bytes;
@@ -23,20 +23,26 @@ using namespace std::chrono;
 /**
  * RPC Object with a single function that accepts a string
  */
-class TestObject {
+class TestObject : public derecho::GroupReference {
 public:
-    void fun(const std::string& words) {
-    }
-
-    void bytes_fun(const Bytes& bytes) {
-    }
-
-    bool finishing_call(int x) {
-        return true;
-    }
+    /* group reference */
+    using derecho::GroupReference::group;
+    void fun(const std::string& words);
+    std::tuple<persistent::version_t,uint64_t> bytes_fun(const Bytes& bytes);
+    bool finishing_call(int x);
 
     REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(fun, bytes_fun, finishing_call));
 };
+
+void TestObject::fun(const std::string& words) {}
+
+std::tuple<persistent::version_t,uint64_t> TestObject::bytes_fun(const Bytes& bytes) {
+    return group->template get_subgroup<TestObject>(this->subgroup_index).get_current_version();
+}
+
+bool TestObject::finishing_call(int x) {
+    return true;
+}
 
 struct exp_result {
     int num_nodes;
@@ -111,22 +117,29 @@ int main(int argc, char* argv[]) {
             break;
     }
 
+    // map from version to timestamp in ns.
+    std::map <persistent::version_t,uint64_t> stable_ts;
+    std::vector<std::tuple<persistent::version_t,uint64_t,uint64_t>> timestamp_log;
+    timestamp_log.reserve(total_num_messages);
+
     // variable 'done' tracks the end of the test
     volatile bool done = false;
     // callback into the application code at each message delivery
     auto stability_callback = [&done,
                                total_num_messages,
                                num_delivered = 0u,
-    			       &send_complete_time](uint32_t subgroup,
-                                                   uint32_t sender_id,
-                                                   long long int index,
-                                                   std::optional<std::pair<char*, long long int>> data,
-                                                   persistent::version_t ver) mutable {
+                               &stable_ts,
+    			               &send_complete_time](uint32_t subgroup,
+                                                    uint32_t sender_id,
+                                                    long long int index,
+                                                    std::optional<std::pair<char*, long long int>> data,
+                                                    persistent::version_t ver) mutable {
         // Count the total number of messages delivered
         ++num_delivered;
+        stable_ts.emplace(ver,get_walltime());
         // Check for completion
         if(num_delivered == total_num_messages) {
-	    send_complete_time = std::chrono::steady_clock::now();
+	        send_complete_time = std::chrono::steady_clock::now();
             done = true;
         }
     };
@@ -136,29 +149,6 @@ int main(int argc, char* argv[]) {
     } else {
         pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
     }
-
-    /*******************
-    derecho::SubgroupInfo subgroup_info{[num_nodes](
-                                                const std::vector<std::type_index>& subgroup_type_order,
-                                                const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
-        if(curr_view.num_members < num_nodes) {
-            std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_nodes << std::endl;
-            throw derecho::subgroup_provisioning_exception();
-        }
-        derecho::subgroup_shard_layout_t subgroup_layout(1);
-
-        std::vector<uint32_t> members(num_nodes);
-        for(int i = 0; i < num_nodes; i++) {
-            members[i] = i;
-        }
-
-        subgroup_layout[0].emplace_back(curr_view.make_subview(members));
-        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_nodes);
-        derecho::subgroup_allocation_map_t subgroup_allocation;
-        subgroup_allocation.emplace(std::type_index(typeid(TestObject)), std::move(subgroup_layout));
-        return subgroup_allocation;
-    }};
-    *****************/
 
     auto membership_function = PartialSendersAllocator(num_nodes, senders_mode, derecho::Mode::ORDERED);
     derecho::SubgroupInfo subgroup_info(membership_function);
@@ -173,12 +163,71 @@ int main(int argc, char* argv[]) {
     bzero(bbuf, max_msg_size);
     Bytes bytes(bbuf, max_msg_size);
 
+
     // this function sends all the messages
-    auto send_all = [&]() {
+    auto send_all = [&](std::vector<std::tuple<persistent::version_t,uint64_t,uint64_t>>& timestamp_log) {
+        // 1 - synchronization data structures
+        uint32_t window_size = derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE);
+        uint32_t window_slots = window_size*2;
+        std::mutex window_slots_mutex;
+        std::condition_variable window_slots_cv;
+        std::queue<std::pair<uint64_t,derecho::QueryResults<std::tuple<persistent::version_t,uint64_t>>>> futures;
+        std::mutex futures_mutex;
+        std::condition_variable futures_cv;
+        std::atomic<bool> all_sent(false);
+        // 2 - query thread
+        std::thread query_thread(
+            [&timestamp_log,&window_slots,&window_slots_mutex,&window_slots_cv,&futures,&futures_mutex,&futures_cv,&all_sent](){
+            std::unique_lock<std::mutex> futures_lck{futures_mutex};
+            while(!all_sent || (futures.size()>0)) {
+                // pick pending futures
+                using namespace std::chrono_literals;
+                while(!futures_cv.wait_for(futures_lck,500ms,[&futures,&all_sent]{return(futures.size()>0)||all_sent;}));
+                std::decay_t<decltype(futures)> pending_futures;
+                futures.swap(pending_futures);
+                futures_lck.unlock();
+
+                // queue unlocked
+                while (pending_futures.size()>0) {
+                    auto& replies = pending_futures.front().second.get();
+                    for (auto& reply: replies) {
+                        auto version = std::get<0>(reply.second.get());
+                        uint64_t reply_timestamp_ns = get_walltime();
+                        uint64_t send_timestamp_ns = pending_futures.front().first;
+                        timestamp_log.emplace_back(version, send_timestamp_ns, reply_timestamp_ns);
+                        break;
+                    }
+                    pending_futures.pop();
+                    {
+                        std::lock_guard<std::mutex> window_slots_lock{window_slots_mutex};
+                        window_slots ++;
+                    }
+                    window_slots_cv.notify_one();
+                }
+                futures_lck.lock();
+            }
+        });
+
         for(uint i = 0; i < count; i++) {
-	derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
-        handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
-    }
+            // acquire a window_slot
+            {
+                std::unique_lock<std::mutex> window_slots_lock{window_slots_mutex};
+                window_slots_cv.wait(window_slots_lock,[&window_slots]{return (window_slots >0);});
+                window_slots --;
+            }
+            // send
+            derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
+            auto qr = handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
+            // insert future
+            {
+                uint64_t timestamp_ns = get_walltime();
+                std::unique_lock<std::mutex> future_lock{futures_mutex};
+                futures.emplace(timestamp_ns,std::move(qr));
+            }
+            futures_cv.notify_one();
+        }
+        all_sent.store(true);
+        query_thread.join();
     };
 
     int node_rank = group.get_my_rank();
@@ -188,29 +237,18 @@ int main(int argc, char* argv[]) {
 
 
     if(senders_mode == PartialSendMode::ALL_SENDERS) {
-        send_all();
+        send_all(timestamp_log);
     } else if(senders_mode == PartialSendMode::HALF_SENDERS) {
         if(node_rank > (num_nodes - 1) / 2) {
-            send_all();
+            send_all(timestamp_log);
         }
     } else {
         if(node_rank == num_nodes - 1) {
-            send_all();
+            send_all(timestamp_log);
         }
     }
 
-    /*
-    if(node_rank == 0) {
-        derecho::rpc::QueryResults<bool> results = handle.ordered_send<RPC_NAME(finishing_call)>(0);
-        std::cout << "waiting for response..." << std::endl;
-#pragma GCC diagnostic ignored "-Wunused-variable"
-        decltype(results)::ReplyMap& replies = results.get();
-#pragma GCC diagnostic pop
-    }
-    */
-
-    while(!done){
-    }
+    while(!done);
 
     free(bbuf);
 
@@ -238,6 +276,14 @@ int main(int argc, char* argv[]) {
                                derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), count,
                                avg_msec, avg_gbps},
                     "data_derecho_typed_subgroup_bw");
+    }
+
+    // write timestamp log into file
+    std::ofstream ofile(DEFAULT_PROC_NAME);
+    ofile << "#ver send(us) stable(us) acked(us)" << std::endl;
+    for (auto t: timestamp_log) {
+        auto ver = std::get<0>(t);
+        ofile << ver << "\t" << std::get<1>(t)/1000 << "\t" << stable_ts.at(ver)/1000 << "\t" << std::get<2>(t)/1000 << std::endl;
     }
 
     group.barrier_sync();
