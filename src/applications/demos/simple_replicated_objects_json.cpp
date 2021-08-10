@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
 
     //Define subgroup membership using the default subgroup allocator function
     //When constructed using make_subgroup_allocator with no arguments, this will check the config file
-    //for either the json_layout or json_layout_path options, and use whichever one is present to define
+    //for either the json_layout or json_layout_file options, and use whichever one is present to define
     //the mapping from types to subgroup allocation parameters.
     derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<Foo, Bar>()};
 

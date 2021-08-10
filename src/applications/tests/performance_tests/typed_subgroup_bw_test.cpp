@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
 
     if((argc - dashdash_pos) < 4) {
         std::cout << "Invalid command line arguments." << std::endl;
-        std::cout << "USAGE: " << argv[0] << " [ derecho-config-list -- ] <num_nodes> <count> <num_senders_selector>[proc_name]" << std::endl;
+        std::cout << "USAGE: " << argv[0] << " [ derecho-config-list -- ] <num_nodes> <count> <num_senders_selector> [proc_name]" << std::endl;
         std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
@@ -137,6 +137,7 @@ int main(int argc, char* argv[]) {
         pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
     }
 
+    /*******************
     derecho::SubgroupInfo subgroup_info{[num_nodes](
                                                 const std::vector<std::type_index>& subgroup_type_order,
                                                 const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
@@ -157,6 +158,10 @@ int main(int argc, char* argv[]) {
         subgroup_allocation.emplace(std::type_index(typeid(TestObject)), std::move(subgroup_layout));
         return subgroup_allocation;
     }};
+    *****************/
+
+    auto membership_function = PartialSendersAllocator(num_nodes, senders_mode, derecho::Mode::ORDERED);
+    derecho::SubgroupInfo subgroup_info(membership_function);
 
     auto ba_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
 
