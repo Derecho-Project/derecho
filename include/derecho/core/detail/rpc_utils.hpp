@@ -755,6 +755,7 @@ public:
      */
     void delete_self_ptr() {
         if(self_heap_ptr) {
+            dbg_default_trace("delete_self_ptr() deleting the shared_ptr at {}", fmt::ptr(self_heap_ptr));
             delete self_heap_ptr;
             self_heap_ptr = nullptr;
         }

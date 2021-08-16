@@ -151,6 +151,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         bool is_exception = response[0];
         std::shared_ptr<PendingResults<Ret>>* results_heap_ptr;
         std::memcpy(&results_heap_ptr, (response + 1), sizeof(results_heap_ptr));
+        dbg_default_trace("Received an RPC response from node {} with invocation ID {}", nid, fmt::ptr(results_heap_ptr));
+        dbg_default_flush();
         if(is_exception) {
             auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(results_heap_ptr));
             dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, fmt::ptr(results_heap_ptr));
@@ -167,6 +169,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         if((*results_heap_ptr)->all_responded()) {
             //This is equivalent to "delete results_heap_ptr;" but safer, because
             //PendingResults internally checks to see if the pointer was already deleted
+            dbg_default_trace("Calling delete_self_ptr on {}", fmt::ptr(results_heap_ptr));
             (*results_heap_ptr)->delete_self_ptr();
         }
 
@@ -267,6 +270,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         void* invocation_id;
         std::memcpy(&invocation_id, _recv_buf, sizeof(void*));
         auto recv_buf = _recv_buf + sizeof(invocation_id);
+        dbg_default_trace("Received an RPC call with invocation ID {} from node {}", fmt::ptr(invocation_id), caller);
         /*
          * Response message format:
          * --------------------------------------------------------------------------------------

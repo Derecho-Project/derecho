@@ -259,6 +259,7 @@ void RPCManager::new_view_callback(const View& new_view) {
                     //This PendingResults will not receive any more replies, so RemoteInvoker doesn't need to
                     //access it through its heap-allocated shared_ptr. Delete that pointer here to avoid leaking
                     //the PendingResults, since RemoteInvoker can only delete it by receiving a valid reply.
+                    dbg_default_trace("In new_view_callback, calling delete_self_ptr on PendingResults for version {}", pending_results_iter->first);
                     live_pending_results->delete_self_ptr();
                 }
                 pending_results_iter++;
@@ -284,6 +285,7 @@ void RPCManager::new_view_callback(const View& new_view) {
                             live_pending_results->set_exception_for_removed_node(removed_id);
                         }
                     }
+                    dbg_default_trace("In new_view_callback, calling delete_self_ptr on PendingResults for version {}", pending_results_iter->first);
                     live_pending_results->delete_self_ptr();
                 }
                 pending_results_iter++;
@@ -313,6 +315,7 @@ void RPCManager::new_view_callback(const View& new_view) {
                         live_pending_results->set_exception_for_removed_node(removed_id);
                     }
                 }
+                dbg_default_trace("In new_view_callback, calling delete_self_ptr on a completed PendingResults for subgroup {}", subgroup_id);
                 live_pending_results->delete_self_ptr();
                 pending_results_iter++;
             } else {
