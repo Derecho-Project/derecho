@@ -39,7 +39,7 @@ constexpr int updates_per_loop = 1000;
 int main(int argc, char** argv) {
     pthread_setname_np(pthread_self(), "view_change_test");
 
-    int num_args = 1;
+    int num_args = 2;
     if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]))) {
         std::cout << "Invalid command line arguments." << std::endl;
         std::cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_shards max_shard_size" << std::endl;
