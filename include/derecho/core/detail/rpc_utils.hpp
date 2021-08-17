@@ -371,10 +371,10 @@ public:
      * @return true/false
      */
     bool is_ready() {
-        if (replies.rmap.size() != 0) {
-            for (auto& reply:replies) {
+        if(replies.rmap.size() != 0) {
+            for(auto& reply : replies) {
                 using namespace std::chrono;
-                if (reply.second.wait_for(std::chrono::seconds(0s)) != std::future_status::ready) {
+                if(reply.second.wait_for(std::chrono::seconds(0s)) != std::future_status::ready) {
                     return false;
                 }
             }
@@ -626,7 +626,7 @@ public:
     virtual void set_signature_verified() = 0;
     virtual void set_exception_for_removed_node(const node_id_t&) = 0;
     virtual void set_exception_for_caller_removed() = 0;
-    virtual bool all_responded() const = 0;
+    virtual bool all_responded() = 0;
     virtual ~AbstractPendingResults() {}
 };
 
@@ -652,6 +652,10 @@ private:
      * function call was actually sent and the set of destination nodes is known. */
     std::future<std::map<node_id_t, std::promise<Ret>>> reply_promises_are_ready;
     std::mutex reply_promises_are_ready_mutex;
+    /**
+     * Contains one promise for each node that the RPC function call was sent to,
+     * which will be fulfilled when that node replies. Indexed by the node's ID.
+     */
     std::map<node_id_t, std::promise<Ret>> reply_promises;
     /**
      * True if the reply map has been fulfilled, i.e. fulfill_map() has been
@@ -660,7 +664,23 @@ private:
      * called on it.
     */
     bool map_fulfilled = false;
-    std::set<node_id_t> dest_nodes, responded_nodes;
+    /**
+     * The set of nodes that the RPC function call was sent to; equal to the
+     * key set of reply_promises.
+     */
+    std::set<node_id_t> dest_nodes;
+    /**
+     * The set of nodes that have responded to the RPC function call, either by
+     * delivering a reply or by failing. If a node ID is in this set, its future
+     * in reply_promises has been fulfilled with either set_value or set_exception.
+     */
+    std::set<node_id_t> responded_nodes;
+    /**
+     * Controls access to responded_nodes because std::set isn't thread-safe.
+     * Both the predicates thread and the P2P worker thread may access
+     * responded_nodes at the same time (especially during view changes).
+     */
+    std::mutex responded_nodes_mutex;
 
     /**
      * A promise for a persistent version (which is actually a pair of a version
@@ -698,11 +718,10 @@ private:
      */
     std::shared_ptr<PendingResults<Ret>>* self_heap_ptr;
 
-
 public:
     PendingResults()
             : reply_promises_are_ready(promise_for_reply_promises.get_future()),
-            self_heap_ptr(nullptr) {}
+              self_heap_ptr(nullptr) {}
     virtual ~PendingResults() {}
 
     /**
@@ -775,6 +794,7 @@ public:
             }
             //Set exceptions for any nodes that have not yet responded
             for(auto& node_and_promise : reply_promises) {
+                std::lock_guard<std::mutex> lock(responded_nodes_mutex);
                 if(responded_nodes.find(node_and_promise.first)
                    == responded_nodes.end()) {
                     node_and_promise.second.set_exception(
@@ -792,6 +812,7 @@ public:
      */
     void set_exception_for_removed_node(const node_id_t& removed_nid) {
         assert(map_fulfilled);
+        std::lock_guard<std::mutex> lock(responded_nodes_mutex);
         if(dest_nodes.find(removed_nid) != dest_nodes.end()
            && responded_nodes.find(removed_nid) == responded_nodes.end()) {
             //Mark the node as "responded" for the purposes of the other methods
@@ -810,10 +831,12 @@ public:
      */
     void set_value(const node_id_t& nid, const Ret& v) {
         std::lock_guard<std::mutex> lock(reply_promises_are_ready_mutex);
-        responded_nodes.insert(nid);
+        {
+            std::lock_guard<std::mutex> lock(responded_nodes_mutex);
+            responded_nodes.insert(nid);
+        }
         if(reply_promises.size() == 0) {
             dbg_default_trace("PendingResults<{}>::set_value about to wait on reply_promises_are_ready", typeid(Ret).name());
-            dbg_default_flush();
             reply_promises = std::move(reply_promises_are_ready.get());
         }
         reply_promises.at(nid).set_value(v);
@@ -826,7 +849,10 @@ public:
      * @param e The exception_ptr that the RPC function call returned
      */
     void set_exception(const node_id_t& nid, const std::exception_ptr e) {
-        responded_nodes.insert(nid);
+        {
+            std::lock_guard<std::mutex> lock(responded_nodes_mutex);
+            responded_nodes.insert(nid);
+        }
         if(reply_promises.size() == 0) {
             reply_promises = std::move(reply_promises_are_ready.get());
         }
@@ -837,7 +863,8 @@ public:
      * @return True if all destination nodes for this RPC function call have
      * responded, either by sending a reply or by being removed from the group
      */
-    bool all_responded() const {
+    bool all_responded() {
+        std::lock_guard<std::mutex> lock(responded_nodes_mutex);
         return map_fulfilled && (responded_nodes == dest_nodes);
     }
 
@@ -876,7 +903,6 @@ public:
     void set_signature_verified() {
         signature_verified_promise.set_value();
     }
-
 };
 
 /**
@@ -932,7 +958,7 @@ public:
         }
     }
 
-    bool all_responded() const {
+    bool all_responded() {
         return map_fulfilled;
     }
 
@@ -971,7 +997,6 @@ public:
     void set_signature_verified() {
         signature_verified_promise.set_value();
     }
-
 };
 
 /**

@@ -49,6 +49,11 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     using remote_function_type = std::function<Ret(Args...)>;
     const Opcode invoke_opcode;
     const Opcode reply_opcode;
+    /**
+     * Guards the critical section in receive_response to prevent race
+     * conditions between set_value and all_responded on a QueryResults.
+     */
+    std::mutex receive_response_mutex;
 
     Ret* returnRet() {
         return nullptr;
@@ -138,7 +143,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
 
     /**
      * Specialization of receive_response for non-void functions. Stores the
-     * response in the results map, or stores the exception if there was an
+     * response in the results object, or stores the exception if there was an
      * exception.
      * @return An empty recv_ret, since there is no response to a response
      */
@@ -152,7 +157,9 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         std::shared_ptr<PendingResults<Ret>>* results_heap_ptr;
         std::memcpy(&results_heap_ptr, (response + 1), sizeof(results_heap_ptr));
         dbg_default_trace("Received an RPC response from node {} with invocation ID {}", nid, fmt::ptr(results_heap_ptr));
-        dbg_default_flush();
+        //Hold this lock while calling set_value, all_responded, and delete_self_ptr to ensure that
+        //only one thread will get all_responded = true and delete the pointer.
+        std::lock_guard<std::mutex> lock(receive_response_mutex);
         if(is_exception) {
             auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(results_heap_ptr));
             dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, fmt::ptr(results_heap_ptr));
@@ -167,8 +174,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         //so we can delete the shared_ptr to it. The PendingResults will get deleted when its
         //QueryResults goes out of scope (if it hasn't already).
         if((*results_heap_ptr)->all_responded()) {
-            //This is equivalent to "delete results_heap_ptr;" but safer, because
-            //PendingResults internally checks to see if the pointer was already deleted
+            //Note that delete_self_ptr() deletes results_heap_ptr
             dbg_default_trace("Calling delete_self_ptr on {}", fmt::ptr(results_heap_ptr));
             (*results_heap_ptr)->delete_self_ptr();
         }
