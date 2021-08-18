@@ -55,6 +55,12 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     std::mutex receive_response_mutex;
 
+    /**
+     * Returns a null pointer of the same type as this RPC function's return
+     * type. This function exists only to allow other code that does not know
+     * the template parameters of the RemoteInvoker to deduce the type Ret by
+     * using decltype().
+     */
     Ret* returnRet() {
         return nullptr;
     }

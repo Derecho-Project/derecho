@@ -34,7 +34,7 @@ public:
     REGISTER_RPC_FUNCTIONS(TestObject, P2P_TARGETS(read_state), ORDERED_TARGETS(update));
 };
 
-constexpr int updates_per_loop = 1000;
+constexpr int updates_per_loop = 100000;
 
 int main(int argc, char** argv) {
     pthread_setname_np(pthread_self(), "view_change_test");
@@ -85,4 +85,6 @@ int main(int argc, char** argv) {
             test_done = true;
         }
     }
+
+    group.leave();
 }

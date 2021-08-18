@@ -74,6 +74,9 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_PERS_MAX_LOG_ENTRY),
         MAKE_LONG_OPT_ENTRY(CONF_PERS_MAX_DATA_SIZE),
         MAKE_LONG_OPT_ENTRY(CONF_PERS_PRIVATE_KEY_FILE),
+        // [LOGGER]
+        MAKE_LONG_OPT_ENTRY(CONF_LOGGER_LOG_FILE_DEPTH),
+        MAKE_LONG_OPT_ENTRY(CONF_LOGGER_LOG_TO_TERMINAL),
         {0, 0, 0, 0}};
 
 void Conf::initialize(int argc, char* argv[], const char* conf_file) {

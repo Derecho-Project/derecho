@@ -20,8 +20,10 @@ std::shared_ptr<spdlog::logger> LoggerFactory::_create_logger(
     spdlog::level::level_enum log_level) {
     std::vector<spdlog::sink_ptr> log_sinks;
     log_sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-        logger_name + ".log",1L<<20, 3));
-    log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+        logger_name + ".log",1L<<20, derecho::getConfUInt32(CONF_LOGGER_LOG_FILE_DEPTH)));
+    if(derecho::getConfBoolean(CONF_LOGGER_LOG_TO_TERMINAL)) {
+        log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+    }
     std::shared_ptr<spdlog::logger> log = std::make_shared<spdlog::async_logger>(
         logger_name,
         log_sinks.begin(),

@@ -65,6 +65,8 @@ private:
 #define CONF_PERS_PRIVATE_KEY_FILE "PERS/private_key_file"
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
+#define CONF_LOGGER_LOG_TO_TERMINAL "LOGGER/log_to_terminal"
+#define CONF_LOGGER_LOG_FILE_DEPTH "LOGGER/log_file_depth"
 
 #define CONF_LAYOUT_JSON_LAYOUT "LAYOUT/json_layout"
 #define CONF_LAYOUT_JSON_LAYOUT_FILE "LAYOUT/json_layout_file"
@@ -114,7 +116,9 @@ private:
             {CONF_PERS_PRIVATE_KEY_FILE, "private_key.pem"},
             // [LOGGER]
             {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
-            {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"}};
+            {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"},
+            {CONF_LOGGER_LOG_TO_TERMINAL, "true"},
+            {CONF_LOGGER_LOG_FILE_DEPTH, "3"}};
 
 public:
     // the option for parsing command line with getopt(not GetPot!!!)
