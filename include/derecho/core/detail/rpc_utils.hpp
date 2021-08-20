@@ -710,6 +710,13 @@ private:
     std::promise<void> signature_verified_promise;
 
     /**
+     * A flag set to true the first time delete_self_ptr() is called, to
+     * prevent it from attempting to delete the pointer again if it is
+     * mistakenly called twice on the same object.
+     */
+    bool heap_pointer_deleted;
+
+    /**
      * A raw pointer to a heap-allocated shared_ptr to this PendingResults object,
      * which is used by RemoteInvoker to locate this object when a reply arrives.
      * Stored here so that the shared_ptr can still be deleted by RPCManager if
@@ -721,6 +728,7 @@ private:
 public:
     PendingResults()
             : reply_promises_are_ready(promise_for_reply_promises.get_future()),
+              heap_pointer_deleted(false),
               self_heap_ptr(nullptr) {}
     virtual ~PendingResults() {}
 
@@ -773,10 +781,11 @@ public:
      * method more than once, and it will have no effect after the first call.
      */
     void delete_self_ptr() {
-        if(self_heap_ptr) {
+        if(!heap_pointer_deleted) {
             dbg_default_trace("delete_self_ptr() deleting the shared_ptr at {}", fmt::ptr(self_heap_ptr));
+            heap_pointer_deleted = true;
+            //This must be the last statement in the method, since it might result in this object getting deleted
             delete self_heap_ptr;
-            self_heap_ptr = nullptr;
         }
     }
 
