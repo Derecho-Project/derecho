@@ -882,7 +882,7 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
                 gmssst::set(gmsSST.changes[my_rank][next_change_index],
                             make_change_proposal(curr_view->members[my_rank], curr_view->members[failed_rank]));  // Reports the failure
                 gmssst::increment(gmsSST.num_changes[my_rank]);
-                dbg_default_debug("Leader proposed a change to remove failed node {}", curr_view->members[failed_rank]);
+                dbg_default_debug("Leader proposed change #{} to remove failed node {}. Num_installed is currently {}", gmsSST.num_changes[my_rank], curr_view->members[failed_rank], gmsSST.num_installed[my_rank]);
                 //Note: The proposed change has not actually been pushed yet
             }
             //If the next view has already been proposed, update it with the new failures
@@ -1070,6 +1070,7 @@ void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
 }
 
 void ViewManager::leader_commit_change(DerechoSST& gmsSST) {
+    dbg_default_debug("min_acked was {}, and leader's num_committed was {}", min_acked(gmsSST, curr_view->failed), gmsSST.num_committed[curr_view->my_rank]);
     gmssst::set(gmsSST.num_committed[gmsSST.get_local_index()],
                 min_acked(gmsSST, curr_view->failed));  // Leader commits a new request
     dbg_default_debug("Leader committing change proposal #{}", gmsSST.num_committed[gmsSST.get_local_index()]);
@@ -1512,6 +1513,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         curr_view->wedge();
     }
 
+    dbg_default_debug("Delivering new-view upcalls for view {}", curr_view->vid);
     // Announce the new view to the application
     for(auto& view_upcall : view_upcalls) {
         view_upcall(*curr_view);
@@ -1570,6 +1572,7 @@ void ViewManager::transition_multicast_group(
 
     // Initialize this node's row in the new SST
     int changes_installed = next_view->joined.size() + next_view->departed.size();
+    dbg_default_debug("Initializing local SST row for view {}, with {} changes installed", next_view->vid, changes_installed);
     next_view->gmsSST->init_local_row_from_previous(
             (*curr_view->gmsSST), curr_view->my_rank, changes_installed);
     gmssst::set(next_view->gmsSST->vid[next_view->my_rank], next_view->vid);
@@ -1599,7 +1602,7 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tc
     uint16_t joiner_external_port = 0;
     client_socket.read(joiner_external_port);
 
-    dbg_default_debug("Proposing change to add node {}", joiner_id);
+    dbg_default_debug("Proposing change #{} to add node {}. Num_installed is currently {}", gmsSST.num_changes[curr_view->my_rank] + 1, joiner_id, gmsSST.num_installed[curr_view->my_rank]);
     size_t next_change_index = gmsSST.num_changes[curr_view->my_rank]
                                - gmsSST.num_installed[curr_view->my_rank];
     if(next_change_index == gmsSST.changes.size()) {
