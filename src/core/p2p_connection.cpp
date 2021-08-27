@@ -73,6 +73,7 @@ char* P2PConnection::get_sendbuffer_ptr(REQUEST_TYPE type) {
         return const_cast<char*>(outgoing_p2p_buffer.get())
                + getOffsetBuf(type, outgoing_seq_nums_map[type]);
     }
+    dbg_default_error("Error: a caller of {} tries to get more reply buffers than requests",__PRETTY_FUNCTION__);
     return nullptr;
 }
 

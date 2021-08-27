@@ -481,8 +481,10 @@ void RPCManager::p2p_request_worker() {
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
             char* buf = connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
-            buf[0] = 0;
-            connections->send(request.sender_id);
+            if (buf != nullptr) {
+                buf[0] = 0;
+                connections->send(request.sender_id);
+            }
         }
     }
 }
