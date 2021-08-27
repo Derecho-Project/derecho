@@ -115,7 +115,7 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) const {
                 },
                 std::forward<Args>(args)...);
         group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
-        return std::move(return_pair.results);
+        return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
     }
@@ -130,8 +130,8 @@ auto Replicated<T>::ordered_send(Args&&... args) {
         using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<rpc::to_internal_tag<false>(tag)>(
                 std::forward<Args>(args)...))>::type;
         //These pointers help "return" the PendingResults/QueryResults out of the lambda
-        rpc::QueryResults<Ret>* results_ptr;
-        rpc::PendingResults<Ret>* pending_ptr;
+        std::unique_ptr<rpc::QueryResults<Ret>> results_ptr;
+        std::weak_ptr<rpc::PendingResults<Ret>> pending_ptr;
         auto serializer = [&](char* buffer) {
             //By the time this lambda runs, the current thread will be holding a read lock on view_mutex
             const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
@@ -145,8 +145,8 @@ auto Replicated<T>::ordered_send(Args&&... args) {
                         }
                     },
                     std::forward<Args>(args)...);
-            results_ptr = new rpc::QueryResults<Ret>(std::move(send_return_struct.results));
-            pending_ptr = &send_return_struct.pending;
+            results_ptr = std::move(send_return_struct.results);
+            pending_ptr = send_return_struct.pending;
         };
 
         std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
@@ -154,9 +154,7 @@ auto Replicated<T>::ordered_send(Args&&... args) {
             return group_rpc_manager.view_manager.curr_view
                     ->multicast_group->send(subgroup_id, payload_size_for_multicast_send, serializer, true);
         });
-        group_rpc_manager.finish_rpc_send(subgroup_id, *pending_ptr);
-        //Warning: Even though the move-constructor will clean up all the state in *results_ptr, this
-        //still leaks the memory allocated on the heap by new QueryResults<Ret>() in the serializer lambda
+        group_rpc_manager.finish_rpc_send(subgroup_id, pending_ptr);
         return std::move(*results_ptr);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -312,7 +310,7 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                 },
                 std::forward<Args>(args)...);
         group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
-        return std::move(return_pair.results);
+        return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
     }

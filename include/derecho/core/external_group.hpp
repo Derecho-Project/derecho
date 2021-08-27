@@ -44,7 +44,7 @@ private:
     std::unique_ptr<View> curr_view;
     std::unique_ptr<sst::P2PConnectionManager> p2p_connections;
     std::unique_ptr<std::map<rpc::Opcode, rpc::receive_fun_t>> receivers;
-    std::map<subgroup_id_t, std::list<rpc::PendingBase_ref>> fulfilled_pending_results;
+    std::map<subgroup_id_t, std::list<std::weak_ptr<AbstractPendingResults>>> fulfilled_pending_results;
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
 
     template <typename T>
@@ -59,7 +59,7 @@ private:
     bool get_view(const node_id_t nid);
     void clean_up();
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
-    void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, rpc::PendingBase& pending_results_handle);
+    void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
     uint32_t get_index_of_type(const std::type_info& ti) const;
 
 

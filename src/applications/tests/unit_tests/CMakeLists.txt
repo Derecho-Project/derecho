@@ -33,3 +33,6 @@ target_link_libraries(openssl_test derecho)
 
 add_executable(signature_chain_test signature_chain_test.cpp)
 target_link_libraries(signature_chain_test derecho)
+
+add_executable(view_change_test view_change_test.cpp)
+target_link_libraries(view_change_test derecho)
