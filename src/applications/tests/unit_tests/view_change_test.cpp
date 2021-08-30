@@ -102,9 +102,12 @@ void nonpersistent_test(uint32_t num_shards, uint32_t max_shard_size) {
             try {
                 //Wait for the first entry in the reply map to get its results
                 //This will confirm that the update was delivered to all replicas
-                bool success = update_results.get().begin()->second.get();
+                update_results.get().begin()->second.get();
             } catch(derecho::derecho_exception& ex) {
                 dbg_default_warn("Exception occurred while awaiting reply to update #{}. What(): {}", counter, ex.what());
+            }
+            if(counter % 1000 == 0) {
+                std::cout << "Done with " << counter << " updates" << std::endl;
             }
         }
         //Maybe this will ensure all the log messages finish printing before the stdout line

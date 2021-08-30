@@ -757,40 +757,78 @@ void ViewManager::register_predicates() {
     auto leader_suspected_changed = [this](const DerechoSST& sst) {
         return active_leader && suspected_not_equal(sst, last_suspected);
     };
+    //This trigger will actually be used by several predicates to call propose_changes
+    auto propose_changes_trig = [this](DerechoSST& sst) { propose_changes(sst); };
+    if(!leader_suspicion_handle.is_valid()) {
+        leader_suspicion_handle = curr_view->gmsSST->predicates.insert(
+                leader_suspected_changed, propose_changes_trig,
+                sst::PredicateType::RECURRENT);
+    }
+
     auto nonleader_suspected_changed = [this](const DerechoSST& sst) {
         return !active_leader && suspected_not_equal(sst, last_suspected);
     };
     auto new_suspicion_trig = [this](DerechoSST& sst) { new_suspicion(sst); };
+    if(!follower_suspicion_handle.is_valid()) {
+        follower_suspicion_handle = curr_view->gmsSST->predicates.insert(
+                nonleader_suspected_changed, new_suspicion_trig, sst::PredicateType::RECURRENT);
+    }
 
     auto start_join_pred = [this](const DerechoSST& sst) {
         return active_leader && has_pending_join();
     };
-    auto propose_changes_trig = [this](DerechoSST& sst) { propose_changes(sst); };
+    if(!start_join_handle.is_valid()) {
+        start_join_handle = curr_view->gmsSST->predicates.insert(
+                start_join_pred, propose_changes_trig, sst::PredicateType::RECURRENT);
+    }
 
     auto new_sockets_pred = [this](const DerechoSST& sst) {
         return has_pending_new();
     };
     auto new_sockets = [this](DerechoSST& sst) { process_new_sockets(); };
+    if(!new_sockets_handle.is_valid()) {
+        new_sockets_handle = curr_view->gmsSST->predicates.insert(new_sockets_pred, new_sockets,
+                                                                  sst::PredicateType::RECURRENT);
+    }
 
     auto change_commit_ready = [this](const DerechoSST& gmsSST) {
         return active_leader
                && min_acked(gmsSST, curr_view->failed) > gmsSST.num_committed[curr_view->my_rank];
     };
     auto commit_change = [this](DerechoSST& sst) { leader_commit_change(sst); };
+    if(!change_commit_ready_handle.is_valid()) {
+        change_commit_ready_handle = curr_view->gmsSST->predicates.insert(
+                change_commit_ready, commit_change, sst::PredicateType::RECURRENT);
+    }
 
     auto leader_proposed_change = [this](const DerechoSST& gmsSST) {
         return gmsSST.num_changes[curr_view->find_rank_of_leader()]
                > gmsSST.num_acked[curr_view->my_rank];
     };
     auto ack_proposed_change = [this](DerechoSST& sst) { acknowledge_proposed_change(sst); };
+    if(!leader_proposed_handle.is_valid()) {
+        leader_proposed_handle = curr_view->gmsSST->predicates.insert(
+                leader_proposed_change, ack_proposed_change,
+                sst::PredicateType::RECURRENT);
+    }
 
+    /* This predicate is used by non-leaders to detect when it's time to start a
+     * View change. Thus, the leader must have finished committing its entire
+     * batch of changes, including the end-of-view marker.
+     */
     auto leader_committed_changes = [this](const DerechoSST& gmsSST) {
         const int leader_rank = curr_view->find_rank_of_leader();
         return gmsSST.num_committed[leader_rank]
                        > gmsSST.num_installed[curr_view->my_rank]
-               && changes_includes_end_of_view(gmsSST, leader_rank);
+               && end_of_view_committed(gmsSST, leader_rank);
     };
     auto view_change_trig = [this](DerechoSST& sst) { start_meta_wedge(sst); };
+    if(!leader_committed_handle.is_valid()) {
+        leader_committed_handle = curr_view->gmsSST->predicates.insert(
+                leader_committed_changes, view_change_trig,
+                sst::PredicateType::ONE_TIME);
+    }
+
     /* This predicate detects if there are pending changes that are not yet part of a batch,
      * and I am the leader. It should run once at the beginning of each view to see if we just
      * installed a new view that already has pending changes (but not more often than that).
@@ -803,38 +841,6 @@ void ViewManager::register_predicates() {
     curr_view->gmsSST->predicates.insert(new_view_has_changes,
                                          propose_changes_trig,
                                          sst::PredicateType::ONE_TIME);
-
-    if(!leader_suspicion_handle.is_valid()) {
-        leader_suspicion_handle = curr_view->gmsSST->predicates.insert(
-                leader_suspected_changed, propose_changes_trig,
-                sst::PredicateType::RECURRENT);
-    }
-    if(!follower_suspicion_handle.is_valid()) {
-        follower_suspicion_handle = curr_view->gmsSST->predicates.insert(
-                nonleader_suspected_changed, new_suspicion_trig, sst::PredicateType::RECURRENT);
-    }
-    if(!start_join_handle.is_valid()) {
-        start_join_handle = curr_view->gmsSST->predicates.insert(
-                start_join_pred, propose_changes_trig, sst::PredicateType::RECURRENT);
-    }
-    if(!new_sockets_handle.is_valid()) {
-        new_sockets_handle = curr_view->gmsSST->predicates.insert(new_sockets_pred, new_sockets,
-                                                                  sst::PredicateType::RECURRENT);
-    }
-    if(!change_commit_ready_handle.is_valid()) {
-        change_commit_ready_handle = curr_view->gmsSST->predicates.insert(
-                change_commit_ready, commit_change, sst::PredicateType::RECURRENT);
-    }
-    if(!leader_proposed_handle.is_valid()) {
-        leader_proposed_handle = curr_view->gmsSST->predicates.insert(
-                leader_proposed_change, ack_proposed_change,
-                sst::PredicateType::RECURRENT);
-    }
-    if(!leader_committed_handle.is_valid()) {
-        leader_committed_handle = curr_view->gmsSST->predicates.insert(
-                leader_committed_changes, view_change_trig,
-                sst::PredicateType::ONE_TIME);
-    }
 }
 
 /* ------------- 2. Predicate-Triggers That Implement View Management Logic ---------- */
@@ -1126,7 +1132,7 @@ void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
 }
 
 void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
-    dbg_default_debug("Meta-wedging view {}", curr_view->vid);
+    dbg_default_debug("Meta-wedging view {} because leader num_committed is {} and local num_installed is {}", curr_view->vid, gmsSST.num_committed[curr_view->find_rank_of_leader()], gmsSST.num_installed[curr_view->my_rank]);
     // Disable all the other SST predicates, except suspected_changed and the
     // one I'm about to register
     gmsSST.predicates.remove(start_join_handle);
@@ -2077,10 +2083,9 @@ void ViewManager::copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& ol
 }
 
 bool ViewManager::changes_contains(const DerechoSST& gmsSST, const node_id_t q) {
-    int myRow = gmsSST.get_local_index();
-    for(int p_index = 0;
-        p_index < gmsSST.num_changes[myRow] - gmsSST.num_installed[myRow];
-        p_index++) {
+    const int myRow = gmsSST.get_local_index();
+    const int changes_length = gmsSST.num_changes[myRow] - gmsSST.num_installed[myRow];
+    for(int p_index = 0; p_index < changes_length; p_index++) {
         const node_id_t p(const_cast<uint16_t&>(gmsSST.changes[myRow][p_index].change_id));
         if(p == q) {
             return true;
@@ -2090,7 +2095,18 @@ bool ViewManager::changes_contains(const DerechoSST& gmsSST, const node_id_t q) 
 }
 
 bool ViewManager::changes_includes_end_of_view(const DerechoSST& gmsSST, const int rank_of_leader) {
-    for(int i = 0; i < gmsSST.num_changes[rank_of_leader] - gmsSST.num_installed[rank_of_leader]; ++i) {
+    const int changes_length = gmsSST.num_changes[rank_of_leader] - gmsSST.num_installed[rank_of_leader];
+    for(int i = 0; i < changes_length; ++i) {
+        if(gmsSST.changes[rank_of_leader][i].end_of_view) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ViewManager::end_of_view_committed(const DerechoSST& gmsSST, const int rank_of_leader) {
+    const int committed_length = gmsSST.num_committed[rank_of_leader] - gmsSST.num_installed[rank_of_leader];
+    for(int i = 0; i < committed_length; ++i) {
         if(gmsSST.changes[rank_of_leader][i].end_of_view) {
             return true;
         }
