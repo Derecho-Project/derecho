@@ -21,6 +21,7 @@
 #include "rpc_utils.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/utils/logger.hpp>
+#include <derecho/persistent/Persistent.hpp>
 
 namespace derecho {
 
@@ -189,8 +190,9 @@ class RPCManager {
      */
     void p2p_message_handler(node_id_t sender_id, char* msg_buf);
 
-    /** Reports to the view manager that the given node has failed if it's internal member.
-     * Otherwise clean up p2p_connections and external sockets in lf.cpp
+    /**
+     * Reports to the view manager that the given node has failed if it's an
+     * internal member, or removes its global SST connection if it's an external member.
      */
     void report_failure(const node_id_t who);
 

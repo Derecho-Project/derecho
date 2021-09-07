@@ -513,7 +513,7 @@ void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgr
         internal_callbacks.post_next_version_callback(subgroup_num, version, msg_ts_us);
         internal_callbacks.rpc_callback(subgroup_num, msg.sender_id, version, msg_ts_us, buf, payload_size);
         if(callbacks.global_stability_callback) {
-            callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, 
+            callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                                 {{buf + h->header_size, msg.size - h->header_size}},
                                                 version);
         }
@@ -1332,7 +1332,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
             return nullptr;
         }
 
-        if(pending_sst_sends[subgroup_num] || next_sends[subgroup_num]) {
+        if(smc_send_in_progress[subgroup_num] || next_sends[subgroup_num]) {
             return nullptr;
         }
 
@@ -1360,18 +1360,18 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         last_transfer_medium[subgroup_num] = true;
         return buf + sizeof(header);
     } else {
-        if(pending_sst_sends[subgroup_num] || next_sends[subgroup_num]) {
+        if(smc_send_in_progress[subgroup_num] || next_sends[subgroup_num]) {
             return nullptr;
         }
 
-        pending_sst_sends[subgroup_num] = true;
+        smc_send_in_progress[subgroup_num] = true;
         if(thread_shutdown) {
-            pending_sst_sends[subgroup_num] = false;
+            smc_send_in_progress[subgroup_num] = false;
             return nullptr;
         }
         char* buf = (char*)sst_multicast_group_ptrs[subgroup_num]->get_buffer(msg_size);
         if(!buf) {
-            pending_sst_sends[subgroup_num] = false;
+            smc_send_in_progress[subgroup_num] = false;
             return nullptr;
         }
         auto current_time = get_walltime();
@@ -1421,14 +1421,9 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         return true;
     } else {
         committed_sst_index[subgroup_num]++;
-        pending_sst_sends[subgroup_num] = false;
+        smc_send_in_progress[subgroup_num] = false;
         return true;
     }
-}
-
-bool MulticastGroup::check_pending_sst_sends(subgroup_id_t subgroup_num) {
-    std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
-    return pending_sst_sends[subgroup_num];
 }
 
 std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgroup_num) {

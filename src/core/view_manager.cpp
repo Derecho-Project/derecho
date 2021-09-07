@@ -1182,8 +1182,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
         }
         // wait for all pending sst sends to finish
         dbg_default_debug("Waiting for pending SST sends to finish");
-        while(curr_view->multicast_group->check_pending_sst_sends(subgroup_id)) {
-        }
+        curr_view->multicast_group->sst_send_trigger(subgroup_id, curr_subgroup_settings, num_shard_members, gmsSST);
         gmsSST.put_with_completion();
         gmsSST.sync_with_members(
                 curr_view->multicast_group->get_shard_sst_indices(subgroup_id));
