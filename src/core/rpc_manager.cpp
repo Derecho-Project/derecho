@@ -154,7 +154,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         //This is a self-receive of an RPC message I sent, so I have a reply-map that needs fulfilling
         const uint32_t my_shard = view_manager.unsafe_get_current_view().my_subgroups.at(subgroup_id);
         {
-            whendebug(int32_t msg_seq_num = persistent::unpack_version<int32_t>(version).second);
+            whenlog(int32_t msg_seq_num = persistent::unpack_version<int32_t>(version).second);
             dbg_default_trace("RPCManager got a self-receive for message {}", msg_seq_num);
             std::unique_lock<std::mutex> lock(pending_results_mutex);
             // because of a race condition, pending_results_to_fulfill can genuinely be empty
