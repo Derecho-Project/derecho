@@ -58,20 +58,33 @@ public:
 void persistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t num_updates);
 void nonpersistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t num_updates);
 
-int main(int argc, char** argv) {
-    pthread_setname_np(pthread_self(), "view_change_test");
+constexpr const char default_proc_name[] = "view_change_test";
+constexpr int num_required_args = 4;
 
-    int num_args = 4;
-    if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]))) {
+int main(int argc, char** argv) {
+    int dashdash_pos = argc - 1;
+    while(dashdash_pos > 0) {
+        if(strcmp(argv[dashdash_pos], "--") == 0) {
+            break;
+        }
+        dashdash_pos--;
+    }
+
+    if((argc - dashdash_pos) < num_required_args) {
         std::cout << "Invalid command line arguments." << std::endl;
-        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] <num_shards> <max_shard_size> <num_updates> <persistence_on/off>" << std::endl;
+        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] <num_shards> <max_shard_size> <num_updates> <persistence_on/off> [proc_name]" << std::endl;
         return -1;
     }
 
-    const uint32_t num_shards = std::stoi(argv[argc - num_args]);
-    const uint32_t max_shard_size = std::stoi(argv[argc - num_args + 1]);
-    const uint32_t num_updates = std::stoi(argv[argc - num_args + 2]);
-    const bool use_persistence = (std::string(argv[argc - num_args + 3]) == "on");
+    const uint32_t num_shards = std::stoi(argv[dashdash_pos + 1]);
+    const uint32_t max_shard_size = std::stoi(argv[dashdash_pos + 2]);
+    const uint32_t num_updates = std::stoi(argv[dashdash_pos + 3]);
+    const bool use_persistence = (std::string(argv[dashdash_pos + 4]) == "on");
+    if((argc - dashdash_pos) > num_required_args) {
+        pthread_setname_np(pthread_self(), argv[dashdash_pos + 5]);
+    } else {
+        pthread_setname_np(pthread_self(), default_proc_name);
+    }
 
     derecho::Conf::initialize(argc, argv);
 
