@@ -26,7 +26,7 @@ public:
 
     //Returns true so that replicas will send an acknowledgement when the update is complete
     bool update(int new_state) {
-        dbg_default_debug("Received RPC update {}", new_state);
+        dbg_default_trace("Received RPC update {}", new_state);
         state = new_state;
         return true;
     }
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     const uint32_t max_shard_size = std::stoi(argv[dashdash_pos + 2]);
     const uint32_t num_updates = std::stoi(argv[dashdash_pos + 3]);
     const bool use_persistence = (std::string(argv[dashdash_pos + 4]) == "on");
-    if((argc - dashdash_pos) > num_required_args) {
+    if(dashdash_pos + 5 < argc) {
         pthread_setname_np(pthread_self(), argv[dashdash_pos + 5]);
     } else {
         pthread_setname_np(pthread_self(), default_proc_name);
