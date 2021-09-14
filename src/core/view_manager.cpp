@@ -8,12 +8,12 @@
 #include <tuple>
 
 #include <derecho/core/derecho_exception.hpp>
-#include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/detail/public_key_store.hpp>
 #include <derecho/core/detail/version_code.hpp>
 #include <derecho/core/detail/view_manager.hpp>
 #include <derecho/core/git_version.hpp>
 #include <derecho/core/replicated.hpp>
+#include <derecho/utils/container_template_functions.hpp>
 
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/utils/logger.hpp>

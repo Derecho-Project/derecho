@@ -1,8 +1,8 @@
 #ifndef CONF_HPP
 #define CONF_HPP
 
-#include <atomic>
 #include "getpot/GetPot"
+#include <atomic>
 #include <getopt.h>
 #include <inttypes.h>
 #include <map>
@@ -11,6 +11,11 @@
 #include <unistd.h>
 
 namespace derecho {
+
+
+// This configuration option is built-in, based on code in remote_invocable.hpp, and can't be changed
+// It's declared here so that it can be compared to the supplied config options
+constexpr std::size_t DERECHO_MIN_RPC_RESPONSE_SIZE = 128;
 
 #define CONF_ENTRY_INTEGER(name, section, string)
 
@@ -60,6 +65,11 @@ private:
 #define CONF_PERS_PRIVATE_KEY_FILE "PERS/private_key_file"
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
+#define CONF_LOGGER_LOG_TO_TERMINAL "LOGGER/log_to_terminal"
+#define CONF_LOGGER_LOG_FILE_DEPTH "LOGGER/log_file_depth"
+
+#define CONF_LAYOUT_JSON_LAYOUT "LAYOUT/json_layout"
+#define CONF_LAYOUT_JSON_LAYOUT_FILE "LAYOUT/json_layout_file"
     // Configuration Table:
     // config name --> default value
     std::map<const std::string, std::string> config = {
@@ -81,9 +91,9 @@ private:
             {CONF_DERECHO_RESTART_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
             {CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS, "false"},
-	        {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
-	        {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
-	        {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
+            {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
+            {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
+            {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
             {CONF_DERECHO_MAX_NODE_ID, "1024"},
             // [SUBGROUP/<subgroupname>]
             {CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE, "10240"},
@@ -101,12 +111,14 @@ private:
             {CONF_PERS_FILE_PATH, ".plog"},
             {CONF_PERS_RAMDISK_PATH, "/dev/shm/volatile_t"},
             {CONF_PERS_RESET, "false"},
-            {CONF_PERS_MAX_LOG_ENTRY, "1048576"}, // 1M log entries.
-            {CONF_PERS_MAX_DATA_SIZE, "549755813888"}, // 512G total data size.
+            {CONF_PERS_MAX_LOG_ENTRY, "1048576"},       // 1M log entries.
+            {CONF_PERS_MAX_DATA_SIZE, "549755813888"},  // 512G total data size.
             {CONF_PERS_PRIVATE_KEY_FILE, "private_key.pem"},
             // [LOGGER]
             {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
-            {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"}};
+            {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"},
+            {CONF_LOGGER_LOG_TO_TERMINAL, "true"},
+            {CONF_LOGGER_LOG_FILE_DEPTH, "3"}};
 
 public:
     // the option for parsing command line with getopt(not GetPot!!!)

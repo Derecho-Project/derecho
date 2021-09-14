@@ -1,17 +1,22 @@
 /**
- * @file subgroup_functions.h
- *
- * @date Feb 28, 2017
+ * @file subgroup_functions.hpp
  */
 
 #pragma once
 
+#include <exception>
 #include <memory>
+#include <nlohmann/json.hpp>
+#include <set>
 #include <variant>
 
+#include "derecho_exception.hpp"
 #include "derecho_modes.hpp"
 #include "detail/derecho_internal.hpp"
 #include "subgroup_info.hpp"
+#include <derecho/utils/logger.hpp>
+
+using json = nlohmann::json;
 
 namespace derecho {
 
@@ -40,6 +45,21 @@ constexpr char min_nodes_profile_field[] = "min_nodes";
 constexpr char max_nodes_profile_field[] = "max_nodes";
 /* It would be really nice if we could group these together in an enumerated class
  * called ProfileFields or something, but there's no way to do that with strings. */
+
+/*
+ * String constants for the names of JSON object fields that the JSON-based
+ * default subgroup allocator will look up
+ */
+constexpr char json_layout_field[] = "layout";
+constexpr char json_type_alias_field[] = "type_alias";
+constexpr char min_nodes_by_shard_field[] = "min_nodes_by_shard";
+constexpr char max_nodes_by_shard_field[] = "max_nodes_by_shard";
+constexpr char reserved_node_ids_by_shard_field[] = "reserved_node_ids_by_shard";
+constexpr char reserved_node_is_sender_tag = '*';
+constexpr char delivery_modes_by_shard_field[] = "delivery_modes_by_shard";
+constexpr char delivery_mode_ordered[] = "Ordered";
+constexpr char delivery_mode_raw[] = "Raw";
+constexpr char profiles_by_shard_field[] = "profiles_by_shard";
 
 /**
  * A simple implementation of shard_view_generator_t that creates a single,
@@ -93,6 +113,26 @@ struct ShardAllocationPolicy {
      * indicating which profile it should use. (Ignored if even_shards is
      * true). */
     std::vector<std::string> profiles_by_shard;
+    /**
+     * Only used when even_shards is false.
+     * For each shard, this stores a list of node IDs reserved for it. When a
+     * new node is added to the View with an ID on the list, it will always be
+     * added to its dedicated shard. A node ID can be reserved by more than one
+     * shard, as long as they are in different subgroups; this will make the
+     * subgroups overlap (colocate).
+     */
+    std::vector<std::set<node_id_t>> reserved_node_ids_by_shard;
+    /**
+     * Only used with 'reserved_node_ids_by_shard'.
+     * For each shard, this stores a list of node IDs that will perform send.
+     * This list must be a subset of the reserved nodes specified in 
+     * 'reserved_node_ids_by_shard'. If 'reserved_sender_ids_by_shard' is empty,
+     * Then, all nodes in the shard, no matter if they are specified in the
+     * reserved pool or not, can send. Otherwise, only the nodes specified in
+     * the reserved pool can send. If none of the live nodes is from the
+     * reserved pool, this shard will have no senders.
+     */
+    std::vector<std::set<node_id_t>> reserved_sender_ids_by_shard;
 };
 
 /**
@@ -108,6 +148,12 @@ struct SubgroupAllocationPolicy {
      * policy for all subgroups of this type. If identical_subgroups is false,
      * contains an entry for each subgroup describing that subgroup's shards. */
     std::vector<ShardAllocationPolicy> shard_policy_by_subgroup;
+    /** The senders contains the node ids of senders for each of the subgroup.
+     * - if senders is empty, all nodes are senders;
+     * - if identical_subgroups is true, senders contains a single entry for all subgroups;
+     * - otherwise, the senders specifies the sender lists for each of subgroup of this type.
+     */
+    std::vector<std::set<uint32_t>> senders;
 };
 
 /**
@@ -131,6 +177,11 @@ struct CrossProductPolicy {
      * as receivers, where S is the number of members in the source subgroup. */
     std::pair<std::type_index, uint32_t> target_subgroup;
 };
+
+/**
+ * A type alias for a std::variant containing one of the possible subgroup policies.
+ */
+using SubgroupPolicyVariant = std::variant<SubgroupAllocationPolicy, CrossProductPolicy>;
 
 /* Helper functions that construct ShardAllocationPolicy values for common cases. */
 
@@ -255,7 +306,12 @@ protected:
      * CrossProductPolicy if that type should use the "cross-product" allocator
      * instead.
      */
-    const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> policies;
+    std::map<std::type_index, SubgroupPolicyVariant> policies;
+
+    /**
+     * The union set of reserved_node_ids from all shards.
+     */
+    std::set<node_id_t> all_reserved_node_ids;
 
     /**
      * Determines how many members each shard can have in the current view, based
@@ -287,12 +343,16 @@ protected:
      * @param subgroup_type The subgroup type to allocate members for
      * @param curr_view The current view, whose next_unassigned_rank will be updated
      * @param shard_sizes The map of membership sizes for every subgroup and shard
+     * @param curr_members
+     * @param curr_member_set
      * @return A subgroup layout for this subgroup type
      */
     subgroup_shard_layout_t allocate_standard_subgroup_type(
             const std::type_index subgroup_type,
             View& curr_view,
-            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+            const std::vector<node_id_t>& curr_members,
+            const std::set<node_id_t>& curr_member_set) const;
 
     /**
      * Creates and returns a new membership allocation for a single subgroup
@@ -303,6 +363,10 @@ protected:
      * @param prev_view The previous View, now known to be non-null
      * @param curr_view The current View, whose next_unassigned_rank will be updated
      * @param shard_sizes The map of membership sizes for every subgroup and shard in curr_view
+     * @param surviving_member_set
+     * @param added_member_set
+     * @param curr_members
+     * @param curr_member_set
      * @return A subgroup layout for this subgroup type.
      */
     subgroup_shard_layout_t update_standard_subgroup_type(
@@ -310,7 +374,11 @@ protected:
             const subgroup_type_id_t subgroup_type_id,
             const std::unique_ptr<View>& prev_view,
             View& curr_view,
-            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+            const std::set<node_id_t>& surviving_member_set,
+            const std::set<node_id_t>& added_member_set,
+            const std::vector<node_id_t>& curr_members,
+            const std::set<node_id_t>& curr_member_set) const;
 
     /**
      * Helper function that implements the subgroup allocation algorithm for all
@@ -344,17 +412,145 @@ protected:
                                            subgroup_allocation_map_t& subgroup_layouts) const;
 
 public:
-    DefaultSubgroupAllocator(const std::map<std::type_index,
-                                            std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>&
+    /**
+     * Constructs a subgroup allocator from a map of subgroup policies.
+     * @param policies_by_subgroup_type A map containing one entry for each
+     * subgroup type, whose value is the allocation policy to use for that
+     * subgroup type (either a SubgroupAllocationPolicy or a CrossProductPolicy)
+     */
+    DefaultSubgroupAllocator(const std::map<std::type_index, SubgroupPolicyVariant>&
                                      policies_by_subgroup_type)
             : policies(policies_by_subgroup_type) {}
+    /**
+     * Constructs a subgroup allocator with policies that include reserved node
+     * IDs. In this case the allocator must be initialized with the set of all
+     * reserved node IDs used by any policy in the map.
+     * @param policies_by_subgroup_type A map containing one entry for each
+     * subgroup type, whose value is the allocation policy to use for that
+     * subgroup type (either a SubgroupAllocationPolicy or a CrossProductPolicy)
+     * @param all_reserved_node_ids The set of all reserved node IDs used by any
+     * policy in the map.
+     */
+    DefaultSubgroupAllocator(const std::map<std::type_index, SubgroupPolicyVariant>&
+                                     policies_by_subgroup_type,
+                             const std::set<node_id_t>& all_reserved_node_ids)
+            : policies(policies_by_subgroup_type),
+              all_reserved_node_ids(all_reserved_node_ids) {}
+
+    /**
+     * Constructs a subgroup allocator from a vector of subgroup types and a
+     * JSON object containing layout policy information for each subgroup type.
+     * This assumes that the JSON object is an array with one entry for each
+     * subgroup type, in the same order as the types in the vector.
+     * @param subgroup_types A vector of subgroup types (as type_indexes)
+     * @param layout_array A JSON object containing a policy entry for each subgroup type
+     */
+    DefaultSubgroupAllocator(std::vector<std::type_index> subgroup_types, const json& layout_array);
+
+    /**
+     * Constructs a subgroup allocator from a vector of subgroup types and a
+     * path to a file containing a JSON string with layout information for each
+     * type.
+     * @param subgroup_types A vector of subgroup types (as type_indexes)
+     * @param json_file_path A path to a file containing a JSON string
+     */
+    DefaultSubgroupAllocator(std::vector<std::type_index> subgroup_types, const std::string& json_file_path);
+
+    /**
+     * Constructs a subgroup allocator from a vector of subgroup types, assuming
+     * that a JSON layout object has been configured for these subgroup types.
+     * This will use either the json_layout or json_layout_file config option
+     * (whichever one is present) to load a JSON object, and assume that it is
+     * an array with one entry for each subgroup type in the same order as the
+     * types in the vector.
+     * @param subgroup_types A vector of subgroup types (as type_indexes)
+     */
+    DefaultSubgroupAllocator(std::vector<std::type_index> subgroup_types);
+
+    /**
+     * Copy constructor
+     */
     DefaultSubgroupAllocator(const DefaultSubgroupAllocator& to_copy)
-            : policies(to_copy.policies) {}
+            : policies(to_copy.policies),
+              all_reserved_node_ids(to_copy.all_reserved_node_ids) {}
+    /**
+     * Move constructor
+     */
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
     subgroup_allocation_map_t operator()(const std::vector<std::type_index>& subgroup_type_order,
                                          const std::unique_ptr<View>& prev_view,
                                          View& curr_view) const;
 };
+
+/*
+ * Since constructors can't take template parameters, these free functions
+ * allow you to construct a DefaultSubgroupAllocator by specifying the
+ * subgroup types as template parameters rather than type_indexes. This is
+ * modeled after the same workaround used by std::make_unique<T>
+ */
+
+/**
+ * Constructs a subgroup allocator using information in the Derecho config
+ * file, as long as the template parameters are the subgroup types in the
+ * correct order. This will use either the json_layout or json_layout_file
+ * config option (whichever one is present) to load a JSON object, then
+ * assume that it is an array with one policy entry for each subgroup type,
+ * in the same order as the template parameters.
+ * @tparam The subgroup types, in the same order as the layout policies in
+ * the JSON object.
+ */
+template <typename... ReplicatedTypes>
+DefaultSubgroupAllocator make_subgroup_allocator() {
+    return DefaultSubgroupAllocator(std::vector<std::type_index>{std::type_index(typeid(ReplicatedTypes))...});
+}
+
+/**
+ * Constructs a subgroup allocator from a JSON object describing layout
+ * policies for each subgroup type.
+ * @param json_file_path A path to a file containing a JSON string
+ * @tparam The subgroup types, in the same order as the layout policies
+ * in the JSON object
+ */
+template <typename... ReplicatedTypes>
+DefaultSubgroupAllocator make_subgroup_allocator(const std::string& json_file_path) {
+    return DefaultSubgroupAllocator({std::type_index(typeid(ReplicatedTypes))...}, json_file_path);
+}
+
+/**
+ * Constructs a subgroup allocator from a JSON object describing layout
+ * policies for each subgroup type.
+ * @param layout A JSON object that is an array with one entry for each
+ * subgroup type
+ * @tparam The subgroup types, in the same order as the layout policies
+ * in the JSON object
+ */
+template <typename... ReplicatedTypes>
+DefaultSubgroupAllocator make_subgroup_allocator(const json& layout) {
+    return DefaultSubgroupAllocator({std::type_index(typeid(ReplicatedTypes))...}, layout);
+}
+
+
+
+/**
+ * Generate a single-type subgroup allocation policy from a JSON object
+ * @param jconf A subgroup configuration represented in json format.
+ * @param all_reserved_node_ids A set that holds the union of all reserved node_ids.
+ * @return SubgroupAllocationPolicy for that subgroup
+ */
+SubgroupAllocationPolicy parse_json_subgroup_policy(const json&, std::set<node_id_t>&);
+
+/**
+ * TODO: If we just need to check shards within one subgroup, this function is redundant.
+ * Make sure that no shards inside a subgroup reserve same node_ids. Shards in
+ * different subgroups of one same type or from different types can share nodes,
+ * and this why we use the reserved_node_id feature.
+ * For example, we can assign 2 subgroups for type "PersistentCascadeStoreWithStringKey"
+ * to store data and model respectively for an ML application, and actually reserve
+ * the same node_ids for shards in this two subgroup. This way the data and the model
+ * coexist in the same node, thus delivering performance gains.
+ * @param dsa_map the subgroup allocation map derived from json configuration.
+ */
+void check_reserved_node_id_pool(const std::map<std::type_index, SubgroupPolicyVariant>& dsa_map);
 
 }  // namespace derecho

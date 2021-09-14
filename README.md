@@ -45,6 +45,34 @@ This project is organized as a standard CMake-built C++ library: all headers are
 ## Installation
 Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.
 
+### Network requirements (important!)
+Derecho was designed to run correctly on:
+* RDMA, which can be deployed on Infiniband or Ethernet (RoCE).
+* TCP (but not UDP).
+
+Under the surface, the specific requirements are these.  First, Derecho needs the network to be reliable, ordered, to deliver data exactly once in the order sent, to have its own built-in flow control, and to automatically detect failures.  TCP works this way, and is widely available.  RDMA mimics TCP and adds some features of its own, and we leverage those when we have access to them.  For example, RDMA allows us to directly write into the memory of a remote machine, with permissions.  This is very useful and is a core technology that Derecho was designed around.
+
+Derecho accesses the network via a configurable layer that currently offers:
+* Direct use of RDMA verbs.
+* Indirect networking, via a wrapper called "LibFabric" that offers efficient mappings to TCP or RDMA verbs. 
+* Eventually (Derecho V2.3 or beyond): the DataPlane Developers Kit, DPDK.  Again, our DPDK support will focus on mappings to TCP or RDMA.
+
+Your job when configuring Derecho is to build with one of these choices (by default we use LibFabric), then tell us in the Derecho config file which "sub-choice" to make, if any.  So, for LibFabric, you must tell us "tcp" or "verbs".   Do not use the LibFabrics "socket" provider -- this is deprecated and can cause Derecho to malfunction.
+
+It is quite easy to misconfigure Derecho.  You can simply tell us to map to a protocol like UDP, or some other option that lacks the semantics shared by TCP and RDMA.  If you do that, our system will break -- it may start up, but then it will crash.  
+
+How would you decide whether the LibFabrics or DPDK mapping to some other technology is safe for Derecho?  Your task centers on understanding what we require, then verifying that your favorite technology matches our needs.  Specifically, Derecho requires:  
+* A way to send data as a stream of blocks (one-sided RDMA remote writes), each operation telling the transport system where to put some block of data on the remote node.  This is how RDMA works "out of the box."  When we run on TCP, we depend on LibFabric to implement this abstraction.  
+* With each block of bytes, we expect our writes to be applied in the order we sent them, and we require "cache line atomicity" from the memory subsystem on the target machine.  This just means that if we write 1234 into X, and then write 4567 into X (X denotes a variable inside one 64-byte cache line), a reader might see 1234 for a while, but then eventually would see 4567.  The update order doesn't change, and the bytes don't somehow become mashed together.  
+* Memory fencing on an operation-by-operation basis.  This means that if we do two writes, block A and then block B, and a remote process can see the data from B, it will also see the data from A.  Memory fencing implies cache-coherency: no remote process that sees data from B would run into stale cached data from before A or B occurred.  
+* Sequential consistency for non-fenced updates from a single source.  Derecho uses memory fencing -- not locking.  Memory fencing is weaker than "atomics", which is a property needed if a system has multiple writers contending to update the same location.  We don't need atomics: in Derecho, any given memory location has just a single writer.
+
+You may be surprised to learn that TCP has these guarantees.  In fact, TCP "on its own" only has some of them.  The fencing property is really a side-effect of using LibFabric, which emulates RDMA on TCP in its tcp transport protocol for one-sided writes.  In RDMA, the properties we described are standard.
+
+Equally, it may be surprising that LibFabric on other transports, such as UDP, lacks this guarantee.  In fact this puzzles us too: LibFabrics was originally proposed as a way to emulate RDMA on TCP and other transports, and you would expect that its one-sided RDMA write implementation really should be faithful to RDMA semantics.  However, when LibFabric was extended to support UDP, the solution was designed to emulate RDMA to the extent possible, but without ever retransmitting bytes.  Thus with UDP, LibFabric will not be reliable, although it will be sequentially consistent and separate verbs will be memory-fenced.  This is not strong enough for Derecho.
+
+Above, we noted that we hope to support Derecho on DPDK.  DPDK, like LibFabrics, is a very thin standard wrapper over various user-space networking and remote memory options (including RDMA).  DPDK passes the properties of the underlying transport through.  DPDK does support a third-party layer, urdma, that translates RDMA verbs into DPDK operations, and we believe that this mix should work over TCP (so: urdma on DPDK on TCP looks plausible to us).  URDMA on DPDK on RDMA looks fine too.  But urdma on DPDK on UDP would not work because UDP is unreliable.
+
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
@@ -52,8 +80,9 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 * The OpenSSL SSL/TLS Library. On Ubuntu and other Debian-like systems, you can install package `libssl-dev`. We tested with v1.1.1f. But it should work for any version >= 1.1.1.
 * The "rdmacm" and "ibverbs" system libraries for Linux, at version 17.1 or higher. On Ubuntu and other Debian-like systems, these are in the packages `librdmacm-dev` and `libibverbs-dev`.
 * [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.3.1 or newer. On Ubuntu 19.04 and later this can be installed with the package `libspdlog-dev`. The version of spdlog in Ubuntu 18.04's repositories is too old, but if you are running Ubuntu 18.04 you can download the `libspdlog-dev` package [here](http://old-releases.ubuntu.com/ubuntu/pool/universe/s/spdlog/libspdlog-dev_1.3.1-1_amd64.deb) and install it manually with no other dependencies needed.
-* The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please install `v1.7.0` from source code. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
-* Matthew's C++ utilities
+* The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). Since this library's interface changes significantly between versions, please install `v1.12.1` from source rather than any packaged version. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
+* Lohmann's [JSON for Modern C++](https://github.com/nlohmann/json) library, v3.9 or newer. This library is not packaged for Ubuntu, but can easily be installed with our [installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-json.sh).
+* @mpmilano's C++ utilities, which are all CMake libraries that can be installed with "make install":
   - [`mutils`](https://github.com/mpmilano/mutils) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils.sh))
   - [`mutils-containers`](https://github.com/mpmilano/mutils-containers) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-containers.sh))
   - [`mutils-tasks`](https://github.com/mpmilano/mutils-tasks) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-tasks.sh))
@@ -111,7 +140,7 @@ To understand the other two options, it helps to remember that internally, Derec
 
 Larger messages are sent via RDMC, our *big object* protocol.  These will be automatically broken into chunks.  Each chunk will be of size  **block_size**.  The **block_size** value we tend to favor in our tests is 1MB, but we have run experiments with values as large as 100MB.   If you plan to send huge objects, like 100MB or even multi-gigabyte images, consider a larger block size: it pays off at that scale.  If you expect that huge objects would be rare, use a value like 1MB.
 
-More information about Derecho parameter setting can be found in the comments in [the default configuration file](https://github.com/Derecho-Project/derecho/blob/master/conf/derecho-default.cfg).  You may want to read about **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
+More information about Derecho parameter setting can be found in the comments in [the default configuration file](src/conf/derecho-sample.cfg).  You may want to read about **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
 
 #### Configuring RDMA Devices
 The most important configuration entries in this section are **provider** and **domain**. The **provider** option specifies the type of RDMA device (i.e. a class of hardware) and the **domain** option specifies the device (i.e. a specific NIC or network interface). This [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
@@ -246,9 +275,9 @@ std::unique_ptr<derecho::Group<LoadBalancer, Cache, Storage>> group;
 
 In order to start or join a Group, all members (including processes that join later) must define a function that provides the membership (as a subset of the current View) for each subgroup. The membership function's input is the list of Replicated Object types, the current View, and the previous View if there was one. Its return type is a `std::map` mapping each Replicated Object type to a vector representing all the subgroups of that type (since there can be more than one subgroup that implements the same Replicated Object type). Each entry in this vector is another vector, whose size indicates the number of shards the subgroup should be divided into, and whose entries are SubViews describing the membership of each shard. For example, if the membership function's return value is named `members`, then `members[std::type_index(typeid(Cache))][0][2]` is a SubView identifying the members of the third shard of the first subgroup of type "Cache."
 
-Derecho provides a default subgroup membership function that automatically assigns nodes from the Group into disjoint subgroups and shards, given a policy that describes the desired number of nodes in each subgroup/shard. It assigns nodes in ascending rank order, and leaves any "extra" nodes (not needed to fully populate all subgroups) at the end (highest rank) of the membership list. During a View change, this function attempts to preserve the correct number of nodes in each shard without re-assigning any nodes to new roles. It does this by copying the subgroup membership from the previous View as much as possible, and assigning idle nodes from the end of the Group's membership list to replace failed members of subgroups.
+**The default membership function:** Derecho provides a default subgroup membership function that automatically assigns nodes from the Group into disjoint subgroups and shards, given a policy (an instance of SubgroupAllocationPolicy or ShardAllocationPolicy) that describes the desired number of nodes in each subgroup/shard. The function assigns nodes in ascending rank order, and leaves any "extra" nodes (not needed to fully populate all subgroups) at the end (highest rank) of the membership list. During a View change, it attempts to preserve the correct number of nodes in each shard without re-assigning any nodes to new roles. It does this by copying the subgroup membership from the previous View as much as possible, and assigning idle nodes from the end of the Group's membership list to replace failed members of subgroups.
 
-There are several helper functions in `subgroup_functions.hpp` that construct AllocationPolicy objects for different scenarios, to make it easier to set up the default subgroup membership function. Here is an example of how the default membership function could be configured for two types of Replicated Objects using these functions:
+There are several helper functions in `subgroup_functions.hpp` that construct SubgroupAllocationPolicy objects for different scenarios, to make it easier to set up the default subgroup membership function. Here is an example of how the default membership function could be configured for two types of Replicated Objects using these functions:
 
 ```cpp
 derecho::SubgroupInfo subgroup_function {derecho::DefaultSubgroupAllocator({
@@ -259,7 +288,87 @@ derecho::SubgroupInfo subgroup_function {derecho::DefaultSubgroupAllocator({
 ```
 Based on the policies constructed for the constructor argument of DefaultSubgroupAllocator, the function will create one subgroup of type Foo, with two shards of 3 members each. Next, it will create two subgroups of type Bar, each of which has only one shard of size 3. Note that the order in which subgroups are allocated is the order in which their Replicated Object types are listed in the Group's template parameters, so this instance of the default subgroup allocator will assign the first 6 nodes to the Foo subgroup and the second 6 nodes to the Bar subgroups the first time it runs.
 
-More advanced users may, of course, want to define their own subgroup membership functions. The demo program `overlapping_replicated_objects.cpp` shows a relatively simple example of a user-defined membership function. In this program, the SubgroupInfo contains a C++ lambda function that implements the `shard_view_generator_t` type signature and handles subgroup assignment for Replicated Objects of type Foo, Bar, and Cache:
+The subgroup membership function's SubgroupAllocationPolicy objects can also be constructed from JSON strings, which allows you to change the allocation policy without recompiling code. To use this feature, add the option **json_layout_path** to the Derecho config file, specifying the (relative or absolute) path to a JSON file, and construct the DefaultSubgroupAllocator using the templated `make_subgroup_allocator` function. The template parameters to this function must be the same Replicated Objects as the template parameters for the Group object, in the same order; for example, this subgroup function would be used for `derecho::Group<Foo, Bar>`:
+
+```cpp
+derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<Foo, Bar>()};
+```
+
+The JSON file specified with the **json_layout_path** option should contain an array with one entry per Replicated Object type, in the same order as these types are listed in the template parameters. Each array entry should be an (JSON) object with a property named "layout", whose value is an array of one or more objects describing allocation policies for each subgroup of this type. An allocation policy object in JSON has fields very similar to the fields of ShardAllocationPolicy object: `min_nodes_by_shard`, `max_nodes_by_shard`, `delivery_modes_by_shard`, and `profiles_by_shard`. Unlike a ShardAllocationPolicy object, however, identical_subgroups and even_shards cannot be used; each of these fields must be an array of length equal to the number of shards desired. Here is an example of a JSON file that creates the same allocation policies as the arguments to the DefaultSubgroupAllocator constructor above:
+
+```json
+[
+    {
+        "type_alias": "Foo",
+        "layout": [
+            {
+                "min_nodes_by_shard": [2, 2],
+                "max_nodes_by_shard": [3, 3],
+                "delivery_modes_by_shard": ["Ordered", "Ordered"],
+                "profiles_by_shard": ["DEFAULT", "DEFAULT"]
+            }
+        ]
+    },
+    {
+        "type_alias": "Bar",
+        "layout": [
+            {
+                "min_nodes_by_shard": [1],
+                "max_nodes_by_shard": [3],
+                "delivery_modes_by_shard": ["Ordered"],
+                "profiles_by_shard": ["DEFAULT"]
+            },
+            {
+                "min_nodes_by_shard": [1],
+                "max_nodes_by_shard": [3],
+                "delivery_modes_by_shard": ["Ordered"],
+                "profiles_by_shard": ["DEFAULT"]
+            }
+        ]
+    }
+]
+
+```
+
+The field "type_alias" is optional for Derecho (it is only used by Cascade), but it is useful to help keep track of which array entry corresponds to which subgroup type. The layout policies will actually be applied to Replicated Object types in the order they appear in the template parameters for Group and `make_subgroup_allocator`, regardless of what name is used in "type_alias."
+
+Instead of using a separate JSON file, the same JSON layout policy can be embedded directly in the Derecho config file using the option **json_layout**, whose value will be interpreted as a JSON string. It is an error to use both **json_layout** and **json_layout_path** in the same config file.
+
+**Reserved node IDs**: The default subgroup allocation function's behavior can be significantly changed by using the optional field `reserved_node_ids_by_shard` in ShardAllocationPolicy, which has an equivalent optional field "reserved_node_ids_by_shard" in the JSON layout syntax. This field specifies a set of node IDs that should always be assigned to each shard (if they exist in the current View), regardless of where those nodes appear in the rank order. If shards have reserved node IDs, the allocation function will always assign those node IDs to the shards that reserved them, and then assign any remaining nodes in the default fashion (round robin in ascending rank order). If multiple shards from different subgroups reserve the same node IDs, those nodes will be assigned to all of the shards that reserved them, and thus be members of more than one subgroup. However, multiple shards in the same subgroup cannot reserve the same node ID (this will result in a configuration error), since shards by definition must be disjoint.
+
+Here is an example of a JSON layout string that uses "reserved_node_ids_by_shard" to make the Bar subgroup's (only) shard co-resident with members of both shards of the Foo subgroup:
+
+```json
+[
+    {
+        "type_alias": "Foo",
+        "layout": [
+            {
+                "min_nodes_by_shard": [2, 2],
+                "max_nodes_by_shard": [3, 3],
+                "reserved_nodes_by_shard": [[1, 2, 3], [4, 5, 6]],
+                "delivery_modes_by_shard": ["Ordered", "Ordered"],
+                "profiles_by_shard": ["DEFAULT", "DEFAULT"]
+            }
+        ]
+    },
+    {
+        "type_alias": "Bar",
+        "layout": [
+            {
+                "min_nodes_by_shard": [1],
+                "max_nodes_by_shard": [3],
+                "reserved_nodes_by_shard": [[3, 4, 5]],
+                "delivery_modes_by_shard": ["Ordered"],
+                "profiles_by_shard": ["DEFAULT"]
+            }
+        ]
+    }
+]
+
+```
+
+**Defining a custom membership function:** If the default membership function's node-allocation algorithm doesn't fit your needs, you can define own subgroup membership function. The demo program `overlapping_replicated_objects.cpp` shows a relatively simple example of a user-defined membership function. In this program, the SubgroupInfo contains a C++ lambda function that implements the `shard_view_generator_t` type signature and handles subgroup assignment for Replicated Objects of type Foo, Bar, and Cache:
 
 ```cpp
 [](const std::vector<std::type_index>& subgroup_type_order,

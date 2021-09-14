@@ -25,9 +25,19 @@ Bytes::Bytes()
           is_temporary(false) {
 }
 
+Bytes::Bytes(const Bytes& other)
+    : size(other.size), is_temporary(false) {
+    if(size > 0) {
+        bytes = new char[size];
+        memcpy(bytes, other.bytes, size);
+    } else {
+        bytes = nullptr;
+    }
+}
+
 Bytes::~Bytes() {
     if(bytes != nullptr && !is_temporary) {
-        delete bytes;
+        delete[] bytes;
     }
 }
 
@@ -43,7 +53,7 @@ Bytes& Bytes::operator=(Bytes&& other) {
 
 Bytes& Bytes::operator=(const Bytes& other) {
     if(bytes != nullptr && !is_temporary) {
-        delete bytes;
+        delete[] bytes;
     }
     size = other.size;
     if(size > 0) {
@@ -91,5 +101,9 @@ mutils::context_ptr<const Bytes> Bytes::from_bytes_noalloc_const(mutils::Deseria
     return mutils::context_ptr<const Bytes>{new Bytes(const_cast<char*>(buffer + sizeof(std::size_t)),
                                                       ((std::size_t*)(buffer))[0],
                                                       true)};
+}
+
+char* Bytes::get() const {
+    return bytes;
 }
 }  // namespace test

@@ -1,0 +1,27 @@
+
+[
+    {
+        "type_alias":   "Foo",
+        "layout":       [
+                            {
+                                "min_nodes_by_shard": ["2"],
+                                "max_nodes_by_shard": ["2"],
+                                "reserved_node_ids_by_shard":[["1", "2", "3"]],
+                                "delivery_modes_by_shard": ["Ordered"],
+                                "profiles_by_shard": ["VCS"]
+                            }
+                        ]
+    },
+    {
+        "type_alias":   "Bar",
+        "layout":       [
+                            {
+                                "min_nodes_by_shard": ["2"],
+                                "max_nodes_by_shard": ["2"],
+                                "reserved_node_ids_by_shard":[["2", "3", "4"]],
+                                "delivery_modes_by_shard": ["Ordered"],
+                                "profiles_by_shard": ["DEFAULT"]
+                            }
+                        ]
+    }
+]

@@ -387,7 +387,7 @@ template <typename T>
 std::enable_if_t<std::is_base_of<ByteRepresentable CMA std::decay_t<T>>::value,
                  context_ptr<T>>
 from_bytes_noalloc(
-        DeserializationManager* ctx, const char* v,
+        DeserializationManager* ctx, char* v,
         context_ptr<std::decay_t<T>> = context_ptr<std::decay_t<T>>{}) {
     return std::decay_t<T>::from_bytes_noalloc(ctx, v);
 }
@@ -886,7 +886,7 @@ from_bytes(DeserializationManager*, char const* v) {
         auto t = std::make_unique<T2>(*(T2*)v);
         // std::memcpy(t.get(),v,sizeof(T));
 #if __GNUC_PREREQ(9,0)
-        return t; // RVO optimization is default for 
+        return t; // RVO optimization is default for
 #else
         return std::move(t);
 #endif
@@ -1050,9 +1050,9 @@ from_bytes(DeserializationManager* ctx, char const* buffer) {
 
     auto new_map = std::make_unique<T>();
     for(int i = 0; i < size; ++i) {
-        auto key = from_bytes_noalloc<key_t>(ctx, buf_ptr, context_ptr<key_t>{});
+        auto key = from_bytes_noalloc<key_t>(ctx, buf_ptr);
         buf_ptr += bytes_size(*key);
-        auto value = from_bytes_noalloc<value_t>(ctx, buf_ptr, context_ptr<value_t>{});
+        auto value = from_bytes_noalloc<value_t>(ctx, buf_ptr);
         buf_ptr += bytes_size(*value);
         new_map->emplace(*key, *value);
     }

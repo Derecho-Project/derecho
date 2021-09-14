@@ -103,3 +103,20 @@ std::size_t index_of(const Container& container, const typename Container::value
 }
 
 }  // namespace derecho
+
+//This needs to be in namespace std to allow std::sets to be printed out in the obvious way
+namespace std {
+
+/**
+ * Writes a string representation of a std::set to an output stream.
+ */
+template <typename T>
+std::ostream& operator<<(std::ostream& out, const std::set<T>& s) {
+    if(!s.empty()) {
+        out << '{';
+        std::copy(s.begin(), s.end(), std::ostream_iterator<T>(out, ", "));
+        out << "\b\b}";
+    }
+    return out;
+}
+}  // namespace std
