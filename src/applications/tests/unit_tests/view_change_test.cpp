@@ -57,6 +57,7 @@ public:
 
 void persistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t num_updates);
 void nonpersistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t num_updates);
+void new_view_callback(const derecho::View& new_view);
 
 constexpr const char default_proc_name[] = "view_change_test";
 constexpr int num_required_args = 4;
@@ -95,6 +96,10 @@ int main(int argc, char** argv) {
     }
 }
 
+void new_view_callback(const derecho::View& new_view) {
+    std::cout << "Transitioned to view " << new_view.vid << " with members " << new_view.members << std::endl;
+}
+
 void nonpersistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t num_updates) {
     derecho::SubgroupInfo layout(derecho::DefaultSubgroupAllocator(
             {{std::type_index(typeid(TestObject)),
@@ -104,7 +109,7 @@ void nonpersistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t n
         return std::make_unique<TestObject>(0);
     };
 
-    derecho::Group<TestObject> group(layout, test_object_factory);
+    derecho::Group<TestObject> group({}, layout, {}, {&new_view_callback}, test_object_factory);
 
     std::cout << "Sending " << num_updates << " multicast updates" << std::endl;
     derecho::Replicated<TestObject>& replica_group = group.get_subgroup<TestObject>();
@@ -142,7 +147,7 @@ void persistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t num_
         return std::make_unique<PersistentTestObject>(pr);
     };
 
-    derecho::Group<PersistentTestObject> group(layout, test_object_factory);
+    derecho::Group<PersistentTestObject> group({}, layout, {}, {&new_view_callback}, test_object_factory);
 
     std::cout << "Sending " << num_updates << " multicast updates" << std::endl;
     derecho::Replicated<PersistentTestObject>& replica_group = group.get_subgroup<PersistentTestObject>();
