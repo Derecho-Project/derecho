@@ -85,6 +85,8 @@ public:
 
     template <typename SubgroupType>
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
+
+    virtual node_id_t get_my_id() = 0;
 };
 
 template <typename ReplicatedType>
@@ -93,7 +95,6 @@ protected:
     virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
     virtual void set_external_caller_pointer(std::type_index, uint32_t, void**) = 0;
     virtual ViewManager& get_view_manager() = 0;
-    virtual node_id_t get_my_id() = 0;
 
 public:
     Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num = 0);
