@@ -14,9 +14,12 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <derecho/utils/logger.hpp>
+
 namespace tcp {
 
-socket::socket(std::string server_ip, uint16_t server_port, bool retry) {
+socket::socket(std::string server_ip, uint16_t server_port, bool retry)
+        : remote_port(server_port) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
     if(sock < 0) throw connection_failure(server_ip);
 
@@ -49,15 +52,18 @@ socket::socket(std::string server_ip, uint16_t server_port, bool retry) {
         }
     }
 }
-socket::socket(socket&& s) : sock(s.sock), remote_ip(s.remote_ip) {
+socket::socket(socket&& s) : sock(s.sock), remote_ip(s.remote_ip), remote_port(s.remote_port) {
     s.sock = -1;
     s.remote_ip = std::string();
+    s.remote_port = 0;
 }
 
 socket& socket::operator=(socket&& s) {
     sock = s.sock;
     s.sock = -1;
     remote_ip = std::move(s.remote_ip);
+    remote_port = s.remote_port;
+    s.remote_port = 0;
     return *this;
 }
 
@@ -67,7 +73,7 @@ socket::~socket() {
 
 bool socket::is_empty() const { return sock == -1; }
 
-int socket::try_connect(std::string servername, int port, int timeout_ms) {
+int socket::try_connect(std::string servername, uint16_t port, int timeout_ms) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
     if(sock < 0) throw connection_failure(servername);
 
@@ -78,6 +84,7 @@ int socket::try_connect(std::string servername, int port, int timeout_ms) {
     char server_ip_cstr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, server->h_addr, server_ip_cstr, sizeof(server_ip_cstr));
     remote_ip = std::string(server_ip_cstr);
+    remote_port = port;
 
     sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -155,6 +162,7 @@ void socket::read(char* buffer, size_t size) {
             throw socket_io_error(errno, "Read failed due to an error in socket connected to " + remote_ip);
         }
     }
+    dbg_default_debug("From {}:{}, read {} bytes", remote_ip, remote_port, total_bytes);
 }
 
 ssize_t socket::read_partial(char* buffer, size_t max_size) {
@@ -192,6 +200,7 @@ void socket::write(const char* buffer, size_t size) {
             throw socket_io_error(errno, "socket::write: Unexpected error in socket connected to " + remote_ip);
         }
     }
+    dbg_default_debug("Sent to {}:{}, {} bytes", remote_ip, remote_port, total_bytes);
 }
 
 std::string socket::get_self_ip() {
@@ -212,7 +221,7 @@ std::string socket::get_self_ip() {
     return std::string(my_ip_cstr);
 }
 
-connection_listener::connection_listener(uint16_t port, int queue_depth) {
+connection_listener::connection_listener(uint16_t port, int queue_depth) : port(port) {
     sockaddr_in serv_addr;
 
     int listenfd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -252,18 +261,21 @@ socket connection_listener::accept() {
     int sock = ::accept(*fd, (struct sockaddr*)&client_addr_info, &len);
     if(sock < 0) throw connection_failure("connection_listener: accept() failed");
 
+    uint16_t client_port;
     if(client_addr_info.ss_family == AF_INET) {
         // Client has an IPv4 address
         struct sockaddr_in* s = (struct sockaddr_in*)&client_addr_info;
         inet_ntop(AF_INET, &s->sin_addr, client_ip_cstr, sizeof client_ip_cstr);
+        client_port = ntohs(s->sin_port);
     } else {  // AF_INET6
         // Client has an IPv6 address
         struct sockaddr_in6* s = (struct sockaddr_in6*)&client_addr_info;
         inet_ntop(AF_INET6, &s->sin6_addr, client_ip_cstr,
                   sizeof client_ip_cstr);
+        client_port = ntohs(s->sin6_port);
     }
 
-    return socket(sock, std::string(client_ip_cstr));
+    return socket(sock, std::string(client_ip_cstr), client_port);
 }
 
 std::optional<socket> connection_listener::try_accept(int timeout_ms) {
@@ -306,17 +318,20 @@ std::optional<socket> connection_listener::try_accept(int timeout_ms) {
 
     if(success) {
         char client_ip_cstr[INET6_ADDRSTRLEN + 1];
+        uint16_t client_port;
         if(client_addr_info.ss_family == AF_INET) {
             // Client has an IPv4 address
             struct sockaddr_in* s = (struct sockaddr_in*)&client_addr_info;
             inet_ntop(AF_INET, &s->sin_addr, client_ip_cstr, sizeof client_ip_cstr);
+            client_port = ntohs(s->sin_port);
         } else {  // AF_INET6
             // Client has an IPv6 address
             struct sockaddr_in6* s = (struct sockaddr_in6*)&client_addr_info;
             inet_ntop(AF_INET6, &s->sin6_addr, client_ip_cstr,
                       sizeof client_ip_cstr);
+            client_port = ntohs(s->sin6_port);
         }
-        return socket(client_sock, std::string(client_ip_cstr));
+        return socket(client_sock, std::string(client_ip_cstr), client_port);
     } else {
         return std::nullopt;
     }

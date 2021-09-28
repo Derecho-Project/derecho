@@ -135,7 +135,8 @@ void nonpersistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t n
     //Maybe this will ensure all the log messages finish printing before the stdout line
     dbg_default_flush();
     std::cout << "Done sending all updates." << std::endl;
-    group.leave();
+    group.barrier_sync();
+    group.leave(true);
 }
 
 void persistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t num_updates) {
@@ -167,5 +168,6 @@ void persistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t num_
     //Maybe this will ensure all the log messages finish printing before the stdout line
     dbg_default_flush();
     std::cout << "Done sending all updates." << std::endl;
-    group.leave();
+    group.barrier_sync();
+    group.leave(true);
 }

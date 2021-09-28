@@ -398,6 +398,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
                               subgroup_and_leader.first, subgroup_and_leader.second);
             std::size_t buffer_size;
             leader_socket.get().read(buffer_size);
+            dbg_default_debug("Read object size {} from {}", buffer_size, leader_socket.get().get_remote_ip());
             std::unique_ptr<char[]> buffer = std::make_unique<char[]>(buffer_size);
             leader_socket.get().read(buffer.get(), buffer_size);
             dbg_default_trace("Deserializing Replicated Object from buffer of size {}", buffer_size);
@@ -407,7 +408,8 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
             throw derecho_exception("Fatal error: Node " + std::to_string(subgroup_and_leader.second) + " failed during state transfer!");
         }
     }
-    dbg_default_debug("Done receiving all Replicated Objects from subgroup leaders");
+
+    dbg_default_debug("Done receiving all Replicated Objects from subgroup leaders {}", subgroups_and_leaders.empty() ? "(there were none to receive)" : "");
 }
 
 template <typename... ReplicatedTypes>

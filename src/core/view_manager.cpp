@@ -291,7 +291,9 @@ bool ViewManager::receive_view_and_leaders() {
         //The leader will first send the size of the necessary buffer, then the serialized View
         std::size_t size_of_view;
         leader_connection->read(size_of_view);
+        dbg_default_debug("Read size_of_view = {} from leader over joiner socket", size_of_view);
         char buffer[size_of_view];
+        dbg_default_debug("Receiving initial view over joiner socket");
         leader_connection->read(buffer, size_of_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
         if(in_total_restart) {
@@ -493,7 +495,7 @@ void ViewManager::setup_initial_tcp_connections(const View& initial_view, const 
             tcp_sockets.add_node(initial_view.members[i],
                                  {initial_view.member_ips_and_ports[i].ip_address,
                                   initial_view.member_ips_and_ports[i].state_transfer_port});
-            dbg_default_debug("Established a TCP connection to node {}", initial_view.members[i]);
+            dbg_default_debug("Established a state-transfer TCP connection to node {}", initial_view.members[i]);
         }
     }
 }
@@ -508,7 +510,7 @@ void ViewManager::reinit_tcp_connections(const View& initial_view, const node_id
             tcp_sockets.add_node(initial_view.members[i],
                                  {initial_view.member_ips_and_ports[i].ip_address,
                                   initial_view.member_ips_and_ports[i].state_transfer_port});
-            dbg_default_debug("Established a TCP connection to node {}", initial_view.members[i]);
+            dbg_default_debug("Established a state-transfer TCP connection to node {}", initial_view.members[i]);
         }
     }
 }
@@ -1377,6 +1379,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
             if(i != curr_view->my_rank && !curr_view->failed[i]) {
                 LockedReference<std::unique_lock<std::mutex>, tcp::socket> member_socket
                         = tcp_sockets.get_socket(curr_view->members[i]);
+                dbg_default_debug("Sending node at {} the new view over the state-transfer socket", member_socket.get().get_remote_ip());
                 send_view(*next_view, member_socket.get());
             }
         }
@@ -1385,6 +1388,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         const node_id_t leader_id = curr_view->members[curr_view->find_rank_of_leader()];
         std::size_t size_of_view;
         tcp_sockets.read(leader_id, reinterpret_cast<char*>(&size_of_view), sizeof(size_of_view));
+        dbg_default_debug("Read size of view: {}. Receiving view from leader.", size_of_view);
         char buffer[size_of_view];
         tcp_sockets.read(leader_id, buffer, size_of_view);
         next_view = mutils::from_bytes<View>(nullptr, buffer);
@@ -1409,8 +1413,10 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         // proposed_join_sockets and send them the new View and old shard
         // leaders list
         for(std::size_t c = 0; c < next_view->joined.size(); ++c) {
+            dbg_default_debug("Sending joining node {} the new view over the joiner socket", proposed_join_sockets.front().first);
             send_view(*next_view, proposed_join_sockets.front().second);
             std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
+            dbg_default_debug("Sending node {} the old shard leaders vector on the joiner socket. size_of_vector is {}",proposed_join_sockets.front().first, size_of_vector);
             proposed_join_sockets.front().second.write(size_of_vector);
             mutils::post_object([this](const char* bytes, std::size_t size) {
                 proposed_join_sockets.front().second.write(bytes, size);
@@ -1436,9 +1442,11 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     if(active_leader) {
         for(auto& joiner_socket : joiner_sockets) {
             //Eventually, we could check for success here and abort the view if a node failed
+            dbg_default_debug("Sending node at {} a PREPARE message on the joiner socket", joiner_socket.get_remote_ip());
             joiner_socket.write(CommitMessage::PREPARE);
         }
         for(auto& joiner_socket : joiner_sockets) {
+            dbg_default_debug("Sending node at {} a COMMIT message, then closing the joiner socket", joiner_socket.get_remote_ip());
             joiner_socket.write(CommitMessage::COMMIT);
         }
         joiner_sockets.clear();
@@ -1703,12 +1711,13 @@ std::vector<int> ViewManager::process_suspicions(DerechoSST& gmsSST) {
 }
 
 void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
-    dbg_default_debug("Sending node at {} the new view", client_socket.get_remote_ip());
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
         client_socket.write(bytes, size);
     };
     std::size_t size_of_view = mutils::bytes_size(new_view);
+    dbg_default_debug("Sending node at {} the new view. View size is {} bytes", client_socket.get_remote_ip(), size_of_view);
     client_socket.write(size_of_view);
+    dbg_default_debug("send_view starting to send view");
     mutils::post_object(bind_socket_write, new_view);
 }
 
@@ -1744,9 +1753,9 @@ void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_
         persistent::version_t persistent_log_length = 0;
         joiner_socket.get().read(persistent_log_length);
         persistent::PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
-        dbg_default_debug("Got log tail length {}", persistent_log_length);
+        dbg_default_debug("Got log tail length {} from {}", persistent_log_length, joiner_socket.get().get_remote_ip());
     }
-    dbg_default_debug("Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
+    dbg_default_debug("Sending Replicated Object state for subgroup {} to node {} over the state-transfer socket", subgroup_id, new_node_id);
     subgroup_object->send_object(joiner_socket.get());
 }
 
@@ -1759,7 +1768,7 @@ void ViewManager::update_tcp_connections() {
         tcp_sockets.add_node(joiner_id,
                              {next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].ip_address,
                               next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].state_transfer_port});
-        dbg_default_debug("Established a TCP connection to node {}", joiner_id);
+        dbg_default_debug("Established a state-transfer TCP connection to node {}", joiner_id);
     }
 }
 

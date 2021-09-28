@@ -52,11 +52,11 @@ bool tcp_connections::add_connection(const node_id_t other_id,
                     return true;
 
             } catch(connection_failure&) {
-                std::cerr << "Got error while attempting to listen on port"
+                std::cerr << "Got error while attempting to listen on port " << conn_listener->get_listening_port()
                           << std::endl;
                 return false;
             } catch(socket_error&) {
-                std::cerr << "WARNING: failed to exchange id with node" << other_id
+                std::cerr << "WARNING: failed to exchange id with node " << other_id
                           << std::endl;
                 return false;
             }

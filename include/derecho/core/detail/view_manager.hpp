@@ -652,10 +652,12 @@ private:
     static std::unique_ptr<std::vector<std::vector<ValueType>>> receive_vector2d(tcp::socket& socket) {
         std::size_t buffer_size;
         socket.read(buffer_size);
+        dbg_default_debug("Read size_of_vector = {} from {}", buffer_size, socket.get_remote_ip());
         if(buffer_size == 0) {
             return std::make_unique<std::vector<std::vector<ValueType>>>();
         }
         char buffer[buffer_size];
+        dbg_default_debug("Reading a serialized vector from {}", socket.get_remote_ip());
         socket.read(buffer, buffer_size);
         return mutils::from_bytes<std::vector<std::vector<ValueType>>>(nullptr, buffer);
     }
