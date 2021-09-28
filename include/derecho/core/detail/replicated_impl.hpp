@@ -177,9 +177,9 @@ void Replicated<T>::send_object(tcp::socket& receiver_socket) const {
     auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
         receiver_socket.write(bytes, size);
     };
-    dbg_default_debug("send_object sending object size {} to {}", object_size(), receiver_socket.get_remote_ip());
+    dbg_default_trace("send_object sending object size {} to {}", object_size(), receiver_socket.get_remote_ip());
     mutils::post_object(bind_socket_write, object_size());
-    dbg_default_debug("send_object starting send to {}", receiver_socket.get_remote_ip());
+    dbg_default_trace("send_object starting send to {}", receiver_socket.get_remote_ip());
     send_object_raw(receiver_socket);
 }
 

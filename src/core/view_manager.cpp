@@ -291,9 +291,9 @@ bool ViewManager::receive_view_and_leaders() {
         //The leader will first send the size of the necessary buffer, then the serialized View
         std::size_t size_of_view;
         leader_connection->read(size_of_view);
-        dbg_default_debug("Read size_of_view = {} from leader over joiner socket", size_of_view);
+        dbg_default_trace("Read size_of_view = {} from leader over joiner socket", size_of_view);
         char buffer[size_of_view];
-        dbg_default_debug("Receiving initial view over joiner socket");
+        dbg_default_trace("Receiving initial view over joiner socket");
         leader_connection->read(buffer, size_of_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
         if(in_total_restart) {
@@ -1715,9 +1715,9 @@ void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
         client_socket.write(bytes, size);
     };
     std::size_t size_of_view = mutils::bytes_size(new_view);
-    dbg_default_debug("Sending node at {} the new view. View size is {} bytes", client_socket.get_remote_ip(), size_of_view);
+    dbg_default_trace("Sending node at {} the new view. View size is {} bytes", client_socket.get_remote_ip(), size_of_view);
     client_socket.write(size_of_view);
-    dbg_default_debug("send_view starting to send view");
+    dbg_default_trace("send_view starting to send view");
     mutils::post_object(bind_socket_write, new_view);
 }
 

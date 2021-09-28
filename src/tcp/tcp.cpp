@@ -14,8 +14,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <derecho/utils/logger.hpp>
-
 namespace tcp {
 
 socket::socket(std::string server_ip, uint16_t server_port, bool retry)
@@ -162,7 +160,6 @@ void socket::read(char* buffer, size_t size) {
             throw socket_io_error(errno, "Read failed due to an error in socket connected to " + remote_ip);
         }
     }
-    dbg_default_debug("From {}:{}, read {} bytes", remote_ip, remote_port, total_bytes);
 }
 
 ssize_t socket::read_partial(char* buffer, size_t max_size) {
@@ -200,7 +197,6 @@ void socket::write(const char* buffer, size_t size) {
             throw socket_io_error(errno, "socket::write: Unexpected error in socket connected to " + remote_ip);
         }
     }
-    dbg_default_debug("Sent to {}:{}, {} bytes", remote_ip, remote_port, total_bytes);
 }
 
 std::string socket::get_self_ip() {
