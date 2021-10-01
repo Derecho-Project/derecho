@@ -881,6 +881,10 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
         //First, check for failures
         const std::vector<int> failed_ranks = process_suspicions(gmsSST);
         for(const int failed_rank : failed_ranks) {
+            //If another node reported this one as failed, don't attempt to propose changes (they will be ignored)
+            if(failed_rank == my_rank) {
+                throw derecho_exception("Some other node reported that I failed.  Node " + std::to_string(curr_view->members[my_rank]) + " terminating.");
+            }
             if(!changes_contains(gmsSST, curr_view->members[failed_rank])) {
                 const int next_change_index = gmsSST.num_changes[my_rank] - gmsSST.num_installed[my_rank];
                 if(next_change_index == static_cast<int>(gmsSST.changes.size())) {
@@ -1186,8 +1190,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
         dbg_default_debug("Waiting for pending SST sends to finish");
         curr_view->multicast_group->sst_send_trigger(subgroup_id, curr_subgroup_settings, num_shard_members, gmsSST);
         gmsSST.put_with_completion();
-        gmsSST.sync_with_members(
-                curr_view->multicast_group->get_shard_sst_indices(subgroup_id));
+        gmsSST.sync_with_members(curr_view->multicast_group->get_shard_sst_indices(subgroup_id));
         while(curr_view->multicast_group->receiver_predicate(
                 curr_subgroup_settings, shard_ranks_by_sender_rank,
                 num_shard_senders, gmsSST)) {
@@ -1416,7 +1419,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
             dbg_default_debug("Sending joining node {} the new view over the joiner socket", proposed_join_sockets.front().first);
             send_view(*next_view, proposed_join_sockets.front().second);
             std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
-            dbg_default_debug("Sending node {} the old shard leaders vector on the joiner socket. size_of_vector is {}",proposed_join_sockets.front().first, size_of_vector);
+            dbg_default_debug("Sending node {} the old shard leaders vector on the joiner socket. size_of_vector is {}", proposed_join_sockets.front().first, size_of_vector);
             proposed_join_sockets.front().second.write(size_of_vector);
             mutils::post_object([this](const char* bytes, std::size_t size) {
                 proposed_join_sockets.front().second.write(bytes, size);

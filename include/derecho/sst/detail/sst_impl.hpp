@@ -244,7 +244,12 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::freeze(int row_index) {
+void SST<DerivedSST>::freeze(uint32_t row_index) {
+    // If some other node reported this one as failed,
+    // don't attempt to freeze your own row
+    if(row_index == my_index) {
+        return;
+    }
     {
         std::lock_guard<std::mutex> lock(freeze_mutex);
         if(row_is_frozen[row_index]) {
