@@ -75,7 +75,7 @@ public:
     virtual ~_Group() = default;
 
     template <typename SubgroupType>
-    auto& get_subgroup(uint32_t subgroup_num = 0);
+    auto& get_subgroup(uint32_t subgroup_index = 0);
 
     template <typename SubgroupType>
     auto& get_nonmember_subgroup(uint32_t subgroup_num = 0);
@@ -97,7 +97,7 @@ protected:
     virtual ViewManager& get_view_manager() = 0;
 
 public:
-    Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num = 0);
+    Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_index = 0);
     ExternalCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
     std::size_t get_number_of_shards(uint32_t subgroup_index = 0);

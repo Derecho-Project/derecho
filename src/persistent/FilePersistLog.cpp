@@ -557,6 +557,7 @@ int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) {
     FPL_UNLOCK;
 
     if(key != this->hidx.begin() && this->hidx.size() > 0) {
+        key --;
         dbg_default_trace("getHLCIndex returns: hlc:({0},{1}),idx:{2}", key->hlc.m_rtc_us, key->hlc.m_logic, key->log_idx);
         return key->log_idx;
     }
@@ -570,27 +571,11 @@ int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) {
 
 const void* FilePersistLog::getEntry(const HLC& rhlc) {
     LogEntry* ple = nullptr;
-    //    unsigned __int128 key = ((((unsigned __int128)rhlc.m_rtc_us)<<64) | rhlc.m_logic);
 
-    FPL_RDLOCK;
+    int64_t idx = getHLCIndex(rhlc);
 
-    dbg_default_trace("getEntry for hlc({0},{1})", rhlc.m_rtc_us, rhlc.m_logic);
-    struct hlc_index_entry skey(rhlc, 0);
-    auto key = this->hidx.upper_bound(skey);
-    FPL_UNLOCK;
-
-#ifndef NDEBUG
-    dbg_default_trace("hidx.size = {}", this->hidx.size());
-    if(key == this->hidx.end())
-        dbg_default_trace("found upper bound = hidx.end()");
-    else
-        dbg_default_trace("found upper bound = hlc({},{}),idx{}", key->hlc.m_rtc_us, key->hlc.m_logic, key->log_idx);
-#endif  //NDEBUG
-
-    if(key != this->hidx.begin() && this->hidx.size() > 0) {
-        key--;
-        ple = LOG_ENTRY_AT(key->log_idx);
-        dbg_default_trace("getEntry returns: hlc:({0},{1}),idx:{2}", key->hlc.m_rtc_us, key->hlc.m_logic, key->log_idx);
+    if (idx != INVALID_INDEX) {
+        ple = LOG_ENTRY_AT(idx);
     }
 
     // no object exists before the requested timestamp.
