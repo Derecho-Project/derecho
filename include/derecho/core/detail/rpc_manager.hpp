@@ -91,8 +91,20 @@ class RPCManager {
     friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
 
-    /** Contains an RDMA connection to each member of the group. */
+    /**
+     * Manages an RDMA connection to each member of the group, and to each
+     * external client that has not yet failed or disconnected. These are used
+     * for receiving P2P request messages and sending replies (to both P2P and
+     * ordered RPC messages).
+     */
     std::unique_ptr<sst::P2PConnectionManager> connections;
+
+    /**
+     * Contains all the node IDs that currently correspond to external clients,
+     * rather than Derecho group members. Needed only because the external
+     * clients are treated differently when they fail.
+     */
+    std::set<node_id_t> external_client_ids;
 
     /**
      * This mutex guards all the pending_results maps.
@@ -241,9 +253,17 @@ public:
 
     ~RPCManager();
 
+    /**
+     * Post-constructor setup method that creates the set of P2P connections
+     * (i.e. the P2PConnectionManager object).
+     */
     void create_connections();
 
-    void add_connections(const std::vector<uint32_t>& node_ids);
+    /**
+     * Sets up a new P2P connection to an external client. Normally, P2P connections
+     * are set up in the new-view callback, but external clients can join at any time.
+     */
+    void add_external_connection(node_id_t node_id);
 
     /**
      * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P

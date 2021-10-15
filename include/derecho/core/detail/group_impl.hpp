@@ -321,8 +321,8 @@ void Group<ReplicatedTypes...>::set_up_components() {
         rpc_manager.notify_persistence_finished(subgroup_id, version);
     });
     //Connect ViewManager's external_join_handler to RPCManager
-    view_manager.register_add_external_connection_upcall([this](const std::vector<uint32_t>& node_ids) {
-        rpc_manager.add_connections(node_ids);
+    view_manager.register_add_external_connection_upcall([this](uint32_t node_id) {
+        rpc_manager.add_external_connection(node_id);
     });
     //Give RPCManager a standard "new view callback" on every View change
     view_manager.add_view_upcall([this](const View& new_view) {

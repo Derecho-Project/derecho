@@ -264,7 +264,7 @@ private:
      */
     std::atomic<bool> bSilent = false;
 
-    std::function<void(const std::vector<uint32_t>&)> add_external_connection_upcall;
+    std::function<void(uint32_t)> add_external_connection_upcall;
 
     bool has_pending_new() { return pending_new_sockets.locked().access.size() > 0; }
     bool has_pending_join() { return pending_join_sockets.size() > 0; }
@@ -782,7 +782,7 @@ public:
      */
     void finish_setup();
 
-    void register_add_external_connection_upcall(const std::function<void(const std::vector<uint32_t>&)>& upcall) {
+    void register_add_external_connection_upcall(const std::function<void(uint32_t)>& upcall) {
         add_external_connection_upcall = upcall;
     }
 

@@ -24,14 +24,14 @@ RPCManager::~RPCManager() {
 }
 
 void RPCManager::report_failure(const node_id_t who) {
-    const auto& members = view_manager.get_members();
-    if(std::count(members.begin(), members.end(), who)) {
-        // internal member
-        view_manager.report_failure(who);
-    } else {
+    //Simultaneously test if the ID is in external_client_ids and, if so, erase it
+    if(external_client_ids.erase(who) != 0) {
         // external client
         dbg_default_debug("External client with id {} failed, doing cleanup", who);
         sst::remove_node(who);
+    } else {
+        // internal member
+        view_manager.report_failure(who);
     }
 }
 
@@ -391,8 +391,9 @@ void RPCManager::notify_verification_finished(subgroup_id_t subgroup_id, persist
     }
 }
 
-void RPCManager::add_connections(const std::vector<uint32_t>& node_ids) {
-    connections->add_connections(node_ids);
+void RPCManager::add_external_connection(node_id_t node_id) {
+    external_client_ids.emplace(node_id);
+    connections->add_connections({node_id});
 }
 
 void RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle) {
