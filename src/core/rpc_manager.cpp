@@ -28,6 +28,7 @@ void RPCManager::report_failure(const node_id_t who) {
     if(external_client_ids.erase(who) != 0) {
         // external client
         dbg_default_debug("External client with id {} failed, doing cleanup", who);
+        connections->remove_connections({who});
         sst::remove_node(who);
     } else {
         // internal member
