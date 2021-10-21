@@ -439,7 +439,7 @@ void RPCManager::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_
 }
 
 void RPCManager::p2p_request_worker() {
-    pthread_setname_np(pthread_self(), "request_worker_thread");
+    pthread_setname_np(pthread_self(), "p2p_req_wkr");
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
@@ -490,7 +490,7 @@ void RPCManager::p2p_request_worker() {
 }
 
 void RPCManager::p2p_receive_loop() {
-    pthread_setname_np(pthread_self(), "rpc_listener_thread");
+    pthread_setname_np(pthread_self(), "rpc_lsnr");
 
     // set the thread local rpc_handler context
     _in_rpc_handler = true;
