@@ -883,7 +883,12 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
         for(const int failed_rank : failed_ranks) {
             //If another node reported this one as failed, don't attempt to propose changes (they will be ignored)
             if(failed_rank == my_rank) {
-                throw derecho_exception("Some other node reported that I failed.  Node " + std::to_string(curr_view->members[my_rank]) + " terminating.");
+                if(gmsSST.rip[my_rank]) {
+                    //If RIP is set, this node is shutting down, so no need to throw an exception
+                    return;
+                } else {
+                    throw derecho_exception("Some other node reported that I failed.  Node " + std::to_string(curr_view->members[my_rank]) + " terminating.");
+                }
             }
             if(!changes_contains(gmsSST, curr_view->members[failed_rank])) {
                 const int next_change_index = gmsSST.num_changes[my_rank] - gmsSST.num_installed[my_rank];
@@ -2355,6 +2360,10 @@ void ViewManager::report_failure(const node_id_t who) {
     }
     const int failed_rank = curr_view->rank_of(who);
     dbg_default_debug("Node ID {} failure reported; marking suspected[{}]", who, failed_rank);
+    if(failed_rank == -1) {
+        //Belated failure report of a node that has already been removed
+        return;
+    }
     gmssst::set(curr_view->gmsSST->suspected[curr_view->my_rank][failed_rank], true);
     int failed_cnt = 0;
     int rip_cnt = 0;
