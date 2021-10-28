@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 2.8.1)
+cmake_minimum_required(VERSION 3.15.4)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 project(derecho CXX)
 
 # Version
 set(derecho_VERSION 2.2)
-set(derecho_build_VERSION 2.2.1)
+set(derecho_build_VERSION 2.2.2)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z -fPIC")
 if (${USE_VERBS_API})

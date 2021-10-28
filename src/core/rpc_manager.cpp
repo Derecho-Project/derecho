@@ -24,15 +24,15 @@ RPCManager::~RPCManager() {
 }
 
 void RPCManager::report_failure(const node_id_t who) {
-    const auto& members = view_manager.get_members();
-    if(std::count(members.begin(), members.end(), who)) {
-        // internal member
-        view_manager.report_failure(who);
-    } else {
+    //Simultaneously test if the ID is in external_client_ids and, if so, erase it
+    if(external_client_ids.erase(who) != 0) {
         // external client
         dbg_default_debug("External client with id {} failed, doing cleanup", who);
         connections->remove_connections({who});
         sst::remove_node(who);
+    } else {
+        // internal member
+        view_manager.report_failure(who);
     }
 }
 
@@ -155,6 +155,8 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         //This is a self-receive of an RPC message I sent, so I have a reply-map that needs fulfilling
         const uint32_t my_shard = view_manager.unsafe_get_current_view().my_subgroups.at(subgroup_id);
         {
+            whenlog(int32_t msg_seq_num = persistent::unpack_version<int32_t>(version).second);
+            dbg_default_trace("RPCManager got a self-receive for message {}", msg_seq_num);
             std::unique_lock<std::mutex> lock(pending_results_mutex);
             // because of a race condition, pending_results_to_fulfill can genuinely be empty
             // so before accessing it we should sleep on a condition variable and let the main
@@ -175,6 +177,8 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                 } else {
                     completed_pending_results[subgroup_id].emplace_back(pending_results_to_fulfill[subgroup_id].front());
                 }
+            } else {
+                dbg_default_debug("Did not fulfill the PendingResults for message {} because it was already gone", msg_seq_num);
             }
             //Regardless of whether the weak_ptr was valid, delete the entry because we're done with it
             pending_results_to_fulfill[subgroup_id].pop();
@@ -390,8 +394,9 @@ void RPCManager::notify_verification_finished(subgroup_id_t subgroup_id, persist
     }
 }
 
-void RPCManager::add_connections(const std::vector<uint32_t>& node_ids) {
-    connections->add_connections(node_ids);
+void RPCManager::add_external_connection(node_id_t node_id) {
+    external_client_ids.emplace(node_id);
+    connections->add_connections({node_id});
 }
 
 void RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle) {
@@ -485,7 +490,7 @@ void RPCManager::p2p_request_worker() {
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
             char* buf = connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
-            if (buf != nullptr) {
+            if(buf != nullptr) {
                 buf[0] = 0;
                 connections->send(request.sender_id);
             }

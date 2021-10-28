@@ -264,7 +264,7 @@ private:
      */
     std::atomic<bool> bSilent = false;
 
-    std::function<void(const std::vector<uint32_t>&)> add_external_connection_upcall;
+    std::function<void(uint32_t)> add_external_connection_upcall;
 
     bool has_pending_new() { return pending_new_sockets.locked().access.size() > 0; }
     bool has_pending_join() { return pending_join_sockets.size() > 0; }
@@ -450,11 +450,30 @@ private:
                                       uint num_shard_senders);
 
     /* -- Static helper methods that implement chunks of view-management functionality -- */
-    static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
+    /** Copies the local node's suspected array from the SST to an ordinary vector. */
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
+    /**
+     * Returns true if any row in the SST has a suspected array that has new
+     * "true" entries compared to the vector argument, which should contain a
+     * copy of the local node's suspected array.
+     */
+    static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
+    /** Returns true if the local node's changes list contains the given node ID */
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
+    /**
+     * Returns true if the pending changes currently proposed by the leader
+     * include a change with the end-of-view marker set to true. The leader's
+     * rank is passed as a parameter to avoid re-computing it inside the method.
+     */
     static bool changes_includes_end_of_view(const DerechoSST& gmsSST, const int rank_of_leader);
+    /**
+     * Returns true if the set of changes committed by the leader, but not yet
+     * installed, includes a change with the end-of-view marker set to true.
+     */
+    static bool end_of_view_committed(const DerechoSST& gmsSST, const int rank_of_leader);
+    /** Returns the minimum value of num_acked across all non-failed members */
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
+    /** Returns true if all non-failed nodes suspect all nodes lower in rank than the current leader */
     static bool previous_leaders_suspected(const DerechoSST& gmsSST, const View& curr_view);
 
     /**
@@ -633,10 +652,12 @@ private:
     static std::unique_ptr<std::vector<std::vector<ValueType>>> receive_vector2d(tcp::socket& socket) {
         std::size_t buffer_size;
         socket.read(buffer_size);
+        dbg_default_debug("Read size_of_vector = {} from {}", buffer_size, socket.get_remote_ip());
         if(buffer_size == 0) {
             return std::make_unique<std::vector<std::vector<ValueType>>>();
         }
         char buffer[buffer_size];
+        dbg_default_debug("Reading a serialized vector from {}", socket.get_remote_ip());
         socket.read(buffer, buffer_size);
         return mutils::from_bytes<std::vector<std::vector<ValueType>>>(nullptr, buffer);
     }
@@ -761,7 +782,7 @@ public:
      */
     void finish_setup();
 
-    void register_add_external_connection_upcall(const std::function<void(const std::vector<uint32_t>&)>& upcall) {
+    void register_add_external_connection_upcall(const std::function<void(uint32_t)>& upcall) {
         add_external_connection_upcall = upcall;
     }
 

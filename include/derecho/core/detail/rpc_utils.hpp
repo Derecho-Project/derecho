@@ -773,6 +773,14 @@ private:
      */
     std::shared_ptr<PendingResults<Ret>>* self_heap_ptr;
 
+    /**
+     * A mutex that can be used to control access to this object "as a whole,"
+     * in order to make a sequence of method invocations atomic. This is
+     * necessary to make receive_response thread-safe, since the sequence
+     * "set_value()/set_exception() then all_responded()" needs to be atomic.
+     */
+    std::mutex this_object_mutex;
+
 public:
     PendingResults()
             : reply_promises_are_ready(promise_for_reply_promises.get_future()),
@@ -869,14 +877,16 @@ public:
      */
     void set_exception_for_removed_node(const node_id_t& removed_nid) {
         assert(map_fulfilled);
+        if(reply_promises.size() == 0) {
+            reply_promises = std::move(reply_promises_are_ready.get());
+        }
         std::lock_guard<std::mutex> lock(responded_nodes_mutex);
         if(dest_nodes.find(removed_nid) != dest_nodes.end()
            && responded_nodes.find(removed_nid) == responded_nodes.end()) {
             //Mark the node as "responded" for the purposes of the other methods
             responded_nodes.insert(removed_nid);
-            set_exception(removed_nid,
-                          std::make_exception_ptr(
-                                  node_removed_from_group_exception{removed_nid}));
+            reply_promises.at(removed_nid).set_exception(
+                std::make_exception_ptr(node_removed_from_group_exception{removed_nid}));
         }
     }
 
@@ -959,6 +969,15 @@ public:
      */
     void set_signature_verified() {
         signature_verified_promise.set_value();
+    }
+
+    /**
+     * @return A reference to the "object mutex" stored in this PendingResults.
+     * Callers should lock this mutex before performing a sequence of multiple
+     * method calls to prevent threads from interleaving between them.
+     */
+    std::mutex& object_mutex() {
+        return this_object_mutex;
     }
 };
 

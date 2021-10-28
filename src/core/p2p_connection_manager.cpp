@@ -245,8 +245,12 @@ void P2PConnectionManager::check_failures_loop() {
                 std::lock_guard<std::mutex> connection_lock(p2p_connections[nid].first);
                 if(p2p_connections[nid].second) {
                     p2p_connections[nid].second->get_res()->report_failure();
+                    //Note for the future: It would be nice to add the failed node ID to a
+                    //thread-local "already failed" list, so that this thread doesn't re-check
+                    //it between now and the next view change.
                 }
             }
+            //Release lock before calling the upcall, since it may call remove_connections
             if(failure_upcall) {
                 failure_upcall(nid);
             }
