@@ -54,17 +54,17 @@ Under the surface, the specific requirements are these.  First, Derecho needs th
 
 Derecho accesses the network via a configurable layer that currently offers:
 * Direct use of RDMA verbs.
-* Indirect networking, via a wrapper called "LibFabric" that offers efficient mappings to TCP or RDMA verbs. 
+* Indirect networking, via a wrapper called "LibFabric" that offers efficient mappings to TCP or RDMA verbs.
 * Eventually (Derecho V2.3 or beyond): the DataPlane Developers Kit, DPDK.  Again, our DPDK support will focus on mappings to TCP or RDMA.
 
 Your job when configuring Derecho is to build with one of these choices (by default we use LibFabric), then tell us in the Derecho config file which "sub-choice" to make, if any.  So, for LibFabric, you must tell us "tcp" or "verbs".   Do not use the LibFabrics "socket" provider -- this is deprecated and can cause Derecho to malfunction.
 
-It is quite easy to misconfigure Derecho.  You can simply tell us to map to a protocol like UDP, or some other option that lacks the semantics shared by TCP and RDMA.  If you do that, our system will break -- it may start up, but then it will crash.  
+It is quite easy to misconfigure Derecho.  You can simply tell us to map to a protocol like UDP, or some other option that lacks the semantics shared by TCP and RDMA.  If you do that, our system will break -- it may start up, but then it will crash.
 
-How would you decide whether the LibFabrics or DPDK mapping to some other technology is safe for Derecho?  Your task centers on understanding what we require, then verifying that your favorite technology matches our needs.  Specifically, Derecho requires:  
-* A way to send data as a stream of blocks (one-sided RDMA remote writes), each operation telling the transport system where to put some block of data on the remote node.  This is how RDMA works "out of the box."  When we run on TCP, we depend on LibFabric to implement this abstraction.  
-* With each block of bytes, we expect our writes to be applied in the order we sent them, and we require "cache line atomicity" from the memory subsystem on the target machine.  This just means that if we write 1234 into X, and then write 4567 into X (X denotes a variable inside one 64-byte cache line), a reader might see 1234 for a while, but then eventually would see 4567.  The update order doesn't change, and the bytes don't somehow become mashed together.  
-* Memory fencing on an operation-by-operation basis.  This means that if we do two writes, block A and then block B, and a remote process can see the data from B, it will also see the data from A.  Memory fencing implies cache-coherency: no remote process that sees data from B would run into stale cached data from before A or B occurred.  
+How would you decide whether the LibFabrics or DPDK mapping to some other technology is safe for Derecho?  Your task centers on understanding what we require, then verifying that your favorite technology matches our needs.  Specifically, Derecho requires:
+* A way to send data as a stream of blocks (one-sided RDMA remote writes), each operation telling the transport system where to put some block of data on the remote node.  This is how RDMA works "out of the box."  When we run on TCP, we depend on LibFabric to implement this abstraction.
+* With each block of bytes, we expect our writes to be applied in the order we sent them, and we require "cache line atomicity" from the memory subsystem on the target machine.  This just means that if we write 1234 into X, and then write 4567 into X (X denotes a variable inside one 64-byte cache line), a reader might see 1234 for a while, but then eventually would see 4567.  The update order doesn't change, and the bytes don't somehow become mashed together.
+* Memory fencing on an operation-by-operation basis.  This means that if we do two writes, block A and then block B, and a remote process can see the data from B, it will also see the data from A.  Memory fencing implies cache-coherency: no remote process that sees data from B would run into stale cached data from before A or B occurred.
 * Sequential consistency for non-fenced updates from a single source.  Derecho uses memory fencing -- not locking.  Memory fencing is weaker than "atomics", which is a property needed if a system has multiple writers contending to update the same location.  We don't need atomics: in Derecho, any given memory location has just a single writer.
 
 You may be surprised to learn that TCP has these guarantees.  In fact, TCP "on its own" only has some of them.  The fencing property is really a side-effect of using LibFabric, which emulates RDMA on TCP in its tcp transport protocol for one-sided writes.  In RDMA, the properties we described are standard.
@@ -430,13 +430,13 @@ cache_rpc_handle.ordered_send<RPC_NAME(put)>("Foo", "Bar");
 derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_send<RPC_NAME(contains)>("Foo");
 ```
 
-P2P (peer-to-peer) sends are invoked through the `ExternalCaller` interface, which is exactly like the `Replicated` interface except that it only provides the `p2p_send` function. ExternalCaller objects are provided through the `get_nonmember_subgroup` method of Group, which works exactly like `get_subgroup` (except for the assumption that the caller is not a member of the requested subgroup). For example, this is how a process that is not a member of the second Cache-type subgroup would get an ExternalCaller to that subgroup:
+P2P (peer-to-peer) sends are invoked through the `PeerCaller` interface, which is exactly like the `Replicated` interface except that it only provides the `p2p_send` function. PeerCaller objects are provided through the `get_nonmember_subgroup` method of Group, which works exactly like `get_subgroup` (except for the assumption that the caller is not a member of the requested subgroup). For example, this is how a process that is not a member of the second Cache-type subgroup would get a PeerCaller to that subgroup:
 
 ```cpp
-ExternalCaller<Cache>& p2p_cache_handle = group->get_nonmember_subgroup<Cache>(1);
+PeerCaller<Cache>& p2p_cache_handle = group->get_nonmember_subgroup<Cache>(1);
 ```
 
-When invoking a P2P send, the caller must specify, as the first argument, the ID of the node to communicate with. The caller must ensure that this node is actually a member of the subgroup that the ExternalCaller targets (though it can be in any shard of that subgroup). Nodes can find out the current membership of a subgroup by calling the `get_subgroup_members` method on the Group, which uses the same template parameter and argument as `get_subgroup` to select a subgroup by type and index. For example, assuming Cache subgroups are not sharded, this is how a non-member process could make a call to `get`, targeting the first node in the second subgroup of type Cache:
+When invoking a P2P send, the caller must specify, as the first argument, the ID of the node to communicate with. The caller must ensure that this node is actually a member of the subgroup that the PeerCaller targets (though it can be in any shard of that subgroup). Nodes can find out the current membership of a subgroup by calling the `get_subgroup_members` method on the Group, which uses the same template parameter and argument as `get_subgroup` to select a subgroup by type and index. For example, assuming Cache subgroups are not sharded, this is how a non-member process could make a call to `get`, targeting the first node in the second subgroup of type Cache:
 
 ```cpp
 std::vector<node_id_t> cache_members = group.get_subgroup_members<Cache>(1)[0];

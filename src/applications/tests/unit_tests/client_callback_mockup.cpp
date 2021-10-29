@@ -124,7 +124,7 @@ ClientNode::~ClientNode() {
 
 std::pair<persistent::version_t, uint64_t> ClientNode::submit_update(uint32_t update_counter,
                                                                      const Blob& new_data) const {
-    derecho::ExternalCaller<StorageNode>& storage_subgroup = group->template get_nonmember_subgroup<StorageNode>();
+    derecho::PeerCaller<StorageNode>& storage_subgroup = group->template get_nonmember_subgroup<StorageNode>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<StorageNode>();
 
     const node_id_t storage_node_to_contact = storage_members[0][0];
@@ -309,7 +309,7 @@ void StorageNode::callback_thread_function() {
             if(requested_event_happened) {
                 //Send a callback to the client
                 dbg_default_debug("Callback thread sending a callback to node {} for version {}", requests_iter->second.client, requested_version);
-                derecho::ExternalCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
+                derecho::PeerCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
                 auto p2p_send_results = client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
                         requests_iter->second.client, requests_iter->second.callback_type,
                         requested_version, my_subgroup_id);
@@ -349,7 +349,7 @@ void StorageNode::callback_thread_function() {
                 break;
         }
         //Send a callback to the client
-        derecho::ExternalCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
+        derecho::PeerCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
         dbg_default_debug("Callback thread sending a callback to node {} for version {}", requests_by_version.begin()->second.client, requests_by_version.begin()->first);
         auto p2p_send_results = client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
                 requests_by_version.begin()->second.client, requests_by_version.begin()->second.callback_type,

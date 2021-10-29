@@ -5,7 +5,7 @@
 #include "test_objects.hpp"
 #include <derecho/conf/conf.hpp>
 
-using derecho::ExternalCaller;
+using derecho::PeerCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     derecho::Group<Foo, Bar, Cache> group({}, subgroup_info, {},
                                            std::vector<derecho::view_upcall_t>{},
                                            foo_factory, bar_factory, cache_factory);
-    
+
     cout << "Finished constructing/joining Group" << endl;
 
     const uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
             string_builder << "Node " << my_id << " Update " << count << "  ";
             bar_rpc_handle.ordered_send<RPC_NAME(append)>(string_builder.str());
         }
-        ExternalCaller<Cache>& cache_p2p_handle = group.get_nonmember_subgroup<Cache>();
+        PeerCaller<Cache>& cache_p2p_handle = group.get_nonmember_subgroup<Cache>();
         int p2p_target = 4;
         derecho::rpc::QueryResults<std::string> result = cache_p2p_handle.p2p_send<RPC_NAME(get)>(p2p_target, "Stuff");
         std::string response = result.get().get(p2p_target);
@@ -101,11 +101,11 @@ int main(int argc, char** argv) {
             }
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        ExternalCaller<Foo>& foo_p2p_handle = group.get_nonmember_subgroup<Foo>();
+        PeerCaller<Foo>& foo_p2p_handle = group.get_nonmember_subgroup<Foo>();
         node_id_t foo_p2p_target = foo_members[1];
         derecho::rpc::QueryResults<int> foo_result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(foo_p2p_target);
         cout << "Node " << foo_p2p_target << " returned Foo state = " << foo_result.get().get(foo_p2p_target) << endl;
-        ExternalCaller<Bar>& bar_p2p_handle = group.get_nonmember_subgroup<Bar>();
+        PeerCaller<Bar>& bar_p2p_handle = group.get_nonmember_subgroup<Bar>();
         node_id_t bar_p2p_target = foo_members[0];
         derecho::rpc::QueryResults<std::string> bar_result = bar_p2p_handle.p2p_send<RPC_NAME(print)>(bar_p2p_target);
     }

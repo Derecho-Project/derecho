@@ -281,8 +281,8 @@ const uint64_t Replicated<T>::compute_global_stability_frontier() {
 }
 
 template <typename T>
-ExternalCaller<T>::ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id,
-                                  rpc::RPCManager& group_rpc_manager)
+PeerCaller<T>::PeerCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id,
+                          rpc::RPCManager& group_rpc_manager)
         : node_id(nid),
           subgroup_id(subgroup_id),
           group_rpc_manager(group_rpc_manager),
@@ -293,7 +293,7 @@ ExternalCaller<T>::ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t
 //but I'm afraid that will introduce unnecessary overheads.
 template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
-auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
+auto PeerCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
         assert(dest_node != node_id);
         if(group_rpc_manager.view_manager.get_current_view().get().rank_of(dest_node) == -1) {
@@ -322,11 +322,11 @@ template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto ShardIterator<T>::p2p_send(Args&&... args) {
     // shard_reps should have at least one member
-    auto send_result = EC.template p2p_send<tag>(shard_reps.at(0), std::forward<Args>(args)...);
+    auto send_result = caller.template p2p_send<tag>(shard_reps.at(0), std::forward<Args>(args)...);
     std::vector<decltype(send_result)> send_result_vec;
     send_result_vec.emplace_back(std::move(send_result));
     for(uint i = 1; i < shard_reps.size(); ++i) {
-        send_result_vec.emplace_back(EC.template p2p_send<tag>(shard_reps[i], std::forward<Args>(args)...));
+        send_result_vec.emplace_back(caller.template p2p_send<tag>(shard_reps[i], std::forward<Args>(args)...));
     }
     return send_result_vec;
 }

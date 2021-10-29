@@ -29,7 +29,7 @@ namespace derecho {
 template <typename T>
 class Replicated;
 template <typename T>
-class ExternalCaller;
+class PeerCaller;
 
 class ViewManager;
 
@@ -88,7 +88,7 @@ class RPCManager {
     template <typename T>
     friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
     template <typename T>
-    friend class ::derecho::ExternalCaller;
+    friend class ::derecho::PeerCaller;
     ViewManager& view_manager;
 
     /**

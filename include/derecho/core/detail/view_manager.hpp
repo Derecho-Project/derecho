@@ -35,7 +35,7 @@ namespace derecho {
 template <typename T>
 class Replicated;
 template <typename T>
-class ExternalCaller;
+class PeerCaller;
 
 /**
  * A little helper class that implements a threadsafe queue by requiring all

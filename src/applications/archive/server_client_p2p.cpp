@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
 
     // client
     if(node_rank >= S) {
-        ExternalCaller<Server>& server_p2p_handle = group.get_nonmember_subgroup<Server>();
+        PeerCaller<Server>& server_p2p_handle = group.get_nonmember_subgroup<Server>();
         int server = node_rank % S;
         string bytes(B, 'a');
         for(unsigned long long int i = 0;; i++) {
