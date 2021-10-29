@@ -64,14 +64,22 @@ private:
     Blob(char* buffer, std::size_t size, bool temporary);
 };
 
+/**
+ * Enumerates the types of events a client could be interested in receiving
+ * notifications about from the storage node.
+ */
 enum class ClientCallbackType {
-    LOCAL_PERSISTENCE,
-    GLOBAL_PERSISTENCE,
-    SIGNATURE_VERIFICATION
+    LOCAL_PERSISTENCE,      // Local persistence is finished for an update
+    GLOBAL_PERSISTENCE,     // Global persistence is finished for an update
+    SIGNATURE_VERIFICATION  //Signature verification is finished for an update
 };
 
 std::ostream& operator<<(std::ostream& os, const ClientCallbackType& cb_type);
 
+/**
+ * Structure used by StorageNode to pass callback requests from the
+ * register_callback RPC function to the callback-sending thread.
+ */
 struct CallbackRequest {
     ClientCallbackType callback_type;
     node_id_t client;
@@ -131,16 +139,40 @@ public:
                            P2P_TARGETS(update, get, register_callback));
 };
 
+/**
+ * Structure used by the client node to pass callback notifications from its
+ * P2P RPC-receiving thread to its callback-handling thread.
+ */
 struct CallbackEvent {
     ClientCallbackType callback_type;
     persistent::version_t version;
     derecho::subgroup_id_t sending_subgroup;
 };
 
-class ClientNode : public mutils::ByteRepresentable,
-                   public derecho::GroupReference {
+/**
+ * The interface that internal or external clients must implement (as an RPC
+ * function) in order to receive notification messages from Derecho nodes.
+ */
+class NotificationSupport {
+public:
+    /**
+     * A P2P-callable RPC function that is invoked when a Derecho node wants to
+     * deliver a notification callback to this client.
+     */
+    virtual void receive_callback(const ClientCallbackType& callback_type,
+                                  persistent::version_t version,
+                                  derecho::subgroup_id_t sending_subgroup) const = 0;
+};
+
+class InternalClientNode : public mutils::ByteRepresentable,
+                           public derecho::GroupReference,
+                           public NotificationSupport {
     using derecho::GroupReference::group;
 
+    /**
+     * A function that this node should run in response to receiving a
+     * "global persistence finished" notification from a storage node
+     */
     mutable derecho::persistence_callback_t global_persistence_callback;
 
     std::thread client_callbacks_thread;
@@ -158,15 +190,20 @@ class ClientNode : public mutils::ByteRepresentable,
     mutable std::condition_variable event_queue_nonempty;
 
 public:
-    ClientNode(const derecho::persistence_callback_t& global_persistence_callback);
-    ~ClientNode();
+    InternalClientNode(const derecho::persistence_callback_t& global_persistence_callback);
+    virtual ~InternalClientNode();
 
+    /**
+     * Sends an update to a StorageNode (using a P2P RPC) and registers interest in a
+     * persistence callback for that update's version.
+     * @return The version and timestamp assigned to the update by the StorageNode
+     */
     std::pair<persistent::version_t, uint64_t> submit_update(uint32_t update_counter,
                                                              const Blob& new_data) const;
 
-    void receive_callback(const ClientCallbackType& callback_type,
-                          persistent::version_t version,
-                          derecho::subgroup_id_t sending_subgroup) const;
+    virtual void receive_callback(const ClientCallbackType& callback_type,
+                                  persistent::version_t version,
+                                  derecho::subgroup_id_t sending_subgroup) const;
 
     /**
      * Function that implements the callback-handling thread. This thread actually
@@ -185,9 +222,9 @@ public:
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
-    static std::unique_ptr<ClientNode> from_bytes(mutils::DeserializationManager*, const char* const v) {
-        return std::make_unique<ClientNode>(derecho::persistence_callback_t{});
+    static std::unique_ptr<InternalClientNode> from_bytes(mutils::DeserializationManager*, const char* const v) {
+        return std::make_unique<InternalClientNode>(derecho::persistence_callback_t{});
     };
 
-    REGISTER_RPC_FUNCTIONS(ClientNode, P2P_TARGETS(receive_callback, submit_update));
+    REGISTER_RPC_FUNCTIONS(InternalClientNode, P2P_TARGETS(receive_callback, submit_update));
 };

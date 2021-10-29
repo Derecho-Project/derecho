@@ -101,9 +101,9 @@ int main(int argc, char** argv) {
         while(true) {
         }
     } else {
-        derecho::ExternalGroup<TestObject> group;
+        derecho::ExternalGroupClient<TestObject> group;
 
-        cout << "Finished constructing ExternalGroup" << endl;
+        cout << "Finished constructing ExternalGroupClient" << endl;
 
         std::vector<node_id_t> members = group.get_members();
         std::vector<node_id_t> shard_members = group.get_shard_members(0, 0);

@@ -112,17 +112,17 @@ std::ostream& operator<<(std::ostream& os, const ClientCallbackType& cb_type) {
 
 /* ------------------- ClientNode implementation ------------------- */
 
-ClientNode::ClientNode(const derecho::persistence_callback_t& global_persistence_callback)
+InternalClientNode::InternalClientNode(const derecho::persistence_callback_t& global_persistence_callback)
         : global_persistence_callback(global_persistence_callback),
           thread_shutdown(false) {
     client_callbacks_thread = std::thread([this]() { callback_thread_function(); });
 };
-ClientNode::~ClientNode() {
+InternalClientNode::~InternalClientNode() {
     thread_shutdown = true;
     event_queue_nonempty.notify_all();
 }
 
-std::pair<persistent::version_t, uint64_t> ClientNode::submit_update(uint32_t update_counter,
+std::pair<persistent::version_t, uint64_t> InternalClientNode::submit_update(uint32_t update_counter,
                                                                      const Blob& new_data) const {
     derecho::PeerCaller<StorageNode>& storage_subgroup = group->template get_nonmember_subgroup<StorageNode>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<StorageNode>();
@@ -146,7 +146,7 @@ std::pair<persistent::version_t, uint64_t> ClientNode::submit_update(uint32_t up
     return version_and_timestamp;
 }
 
-void ClientNode::receive_callback(const ClientCallbackType& callback_type, persistent::version_t version, derecho::subgroup_id_t sending_subgroup) const {
+void InternalClientNode::receive_callback(const ClientCallbackType& callback_type, persistent::version_t version, derecho::subgroup_id_t sending_subgroup) const {
     dbg_default_debug("Got a callback of type {} for version {}", callback_type, version);
     //Send the callback event to the callback thread then return, so the P2P receive thread doesn't block for too long
     std::unique_lock<std::mutex> lock(event_queue_mutex);
@@ -154,7 +154,7 @@ void ClientNode::receive_callback(const ClientCallbackType& callback_type, persi
     event_queue_nonempty.notify_all();
 }
 
-void ClientNode::callback_thread_function() {
+void InternalClientNode::callback_thread_function() {
     pthread_setname_np(pthread_self(), "client_callback");
     while(!thread_shutdown) {
         CallbackEvent next_event;
@@ -309,7 +309,7 @@ void StorageNode::callback_thread_function() {
             if(requested_event_happened) {
                 //Send a callback to the client
                 dbg_default_debug("Callback thread sending a callback to node {} for version {}", requests_iter->second.client, requested_version);
-                derecho::PeerCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
+                derecho::PeerCaller<InternalClientNode>& client_subgroup = group->template get_nonmember_subgroup<InternalClientNode>();
                 auto p2p_send_results = client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
                         requests_iter->second.client, requests_iter->second.callback_type,
                         requested_version, my_subgroup_id);
@@ -349,7 +349,7 @@ void StorageNode::callback_thread_function() {
                 break;
         }
         //Send a callback to the client
-        derecho::PeerCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
+        derecho::PeerCaller<InternalClientNode>& client_subgroup = group->template get_nonmember_subgroup<InternalClientNode>();
         dbg_default_debug("Callback thread sending a callback to node {} for version {}", requests_by_version.begin()->second.client, requests_by_version.begin()->first);
         auto p2p_send_results = client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
                 requests_by_version.begin()->second.client, requests_by_version.begin()->second.callback_type,
@@ -409,18 +409,18 @@ int main(int argc, char** argv) {
     };
 
     auto client_subgroup_factory = [&](persistent::PersistentRegistry* registry, derecho::subgroup_id_t subgroup_id) {
-        return std::make_unique<ClientNode>(client_callback_function);
+        return std::make_unique<InternalClientNode>(client_callback_function);
     };
 
     //Subgroup and shard layout
     derecho::SubgroupInfo subgroup_layout(derecho::DefaultSubgroupAllocator(
-            {{std::type_index(typeid(ClientNode)),
+            {{std::type_index(typeid(InternalClientNode)),
               derecho::one_subgroup_policy(derecho::fixed_even_shards(num_client_nodes, 1))},
              {std::type_index(typeid(StorageNode)),
               derecho::one_subgroup_policy(derecho::fixed_even_shards(1, num_storage_nodes))}}));
 
     //Set up and join the group
-    derecho::Group<ClientNode, StorageNode> group(
+    derecho::Group<InternalClientNode, StorageNode> group(
             {nullptr, nullptr, nullptr, nullptr},
             subgroup_layout,
             {}, {},
@@ -430,12 +430,12 @@ int main(int argc, char** argv) {
     //Figure out which subgroup this node got assigned to
     uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     std::vector<node_id_t> storage_members = group.get_subgroup_members<StorageNode>(0)[0];
-    std::vector<std::vector<node_id_t>> client_tier_shards = group.get_subgroup_members<ClientNode>(0);
+    std::vector<std::vector<node_id_t>> client_tier_shards = group.get_subgroup_members<InternalClientNode>(0);
     if(member_of_shards(my_id, client_tier_shards)) {
         std::cout << "Assigned the ClientNode role" << std::endl;
         //Send some updates to the storage nodes and request callbacks when they have globally persisted
         Blob test_update(nullptr, update_size);
-        derecho::Replicated<ClientNode>& this_subgroup = group.get_subgroup<ClientNode>();
+        derecho::Replicated<InternalClientNode>& this_subgroup = group.get_subgroup<InternalClientNode>();
         for(unsigned counter = 0; counter < num_updates; ++counter) {
             std::generate(&test_update.bytes[0], &test_update.bytes[test_update.size], [&]() {
                 return characters[char_distribution(random_generator)];
