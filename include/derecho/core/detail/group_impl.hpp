@@ -321,8 +321,8 @@ void Group<ReplicatedTypes...>::set_up_components() {
         rpc_manager.notify_persistence_finished(subgroup_id, version);
     });
     //Connect ViewManager's external_join_handler to RPCManager
-    view_manager.register_add_external_connection_upcall([this](const std::vector<uint32_t>& node_ids) {
-        rpc_manager.add_connections(node_ids);
+    view_manager.register_add_external_connection_upcall([this](uint32_t node_id) {
+        rpc_manager.add_external_connection(node_id);
     });
     //Give RPCManager a standard "new view callback" on every View change
     view_manager.add_view_upcall([this](const View& new_view) {
@@ -400,13 +400,15 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
             leader_socket.get().read(buffer_size);
             std::unique_ptr<char[]> buffer = std::make_unique<char[]>(buffer_size);
             leader_socket.get().read(buffer.get(), buffer_size);
+            dbg_default_trace("Deserializing Replicated Object from buffer of size {}", buffer_size);
             subgroup_object->receive_object(buffer.get());
         } catch(tcp::socket_error& e) {
             //Convert socket exceptions to a more readable error message, since this will cause a crash
             throw derecho_exception("Fatal error: Node " + std::to_string(subgroup_and_leader.second) + " failed during state transfer!");
         }
     }
-    dbg_default_debug("Done receiving all Replicated Objects from subgroup leaders");
+
+    dbg_default_debug("Done receiving all Replicated Objects from subgroup leaders {}", subgroups_and_leaders.empty() ? "(there were none to receive)" : "");
 }
 
 template <typename... ReplicatedTypes>

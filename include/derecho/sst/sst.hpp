@@ -313,7 +313,7 @@ public:
 
     /** Marks a row as frozen, so it will no longer update, and its corresponding
      * node will not receive writes. */
-    void freeze(int row_index);
+    void freeze(uint32_t row_index);
 
     /** Returns the total number of rows in the table. */
     unsigned int get_num_rows() const { return num_members; }

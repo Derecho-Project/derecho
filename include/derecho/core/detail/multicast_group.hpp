@@ -317,7 +317,10 @@ private:
     /** next_message is the message that will be sent when send is called the next time.
      * It is std::nullopt when there is no message to send. */
     std::vector<std::optional<RDMCMessage>> next_sends;
-    std::map<uint32_t, bool> pending_sst_sends;
+    /** For each subgroup, indicates whether an SST Multicast send is currently in progress
+     * (i.e. a thread is inside the send() method). This prevents multiple application threads
+     * from calling send() simultaneously and causing a race condition. */
+    std::map<uint32_t, bool> smc_send_in_progress;
     std::vector<uint32_t> committed_sst_index;
     std::vector<uint32_t> num_nulls_queued;
     std::vector<int32_t> first_null_index;
@@ -549,7 +552,6 @@ public:
 	The user function that generates the message is supplied to send */
     bool send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
               const std::function<void(char* buf)>& msg_generator, bool cooked_send);
-    bool check_pending_sst_sends(subgroup_id_t subgroup_num);
 
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
 
