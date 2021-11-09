@@ -336,7 +336,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_message_handler(node_id_t send
 
 template <typename... ReplicatedTypes>
 void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
-    pthread_setname_np(pthread_self(), "request_worker");
+    pthread_setname_np(pthread_self(), "eg_req_wkr");
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
@@ -388,7 +388,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
 
 template <typename... ReplicatedTypes>
 void ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop() {
-    pthread_setname_np(pthread_self(), "rpc_listener");
+    pthread_setname_np(pthread_self(), "eg_rpc_lsnr");
 
     request_worker_thread = std::thread(&ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker, this);
 

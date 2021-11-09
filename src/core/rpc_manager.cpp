@@ -446,7 +446,7 @@ void RPCManager::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_
 }
 
 void RPCManager::p2p_request_worker() {
-    pthread_setname_np(pthread_self(), "request_worker_thread");
+    pthread_setname_np(pthread_self(), "p2p_req_wkr");
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
@@ -499,7 +499,7 @@ void RPCManager::p2p_request_worker() {
 }
 
 void RPCManager::p2p_receive_loop() {
-    pthread_setname_np(pthread_self(), "rpc_listener_thread");
+    pthread_setname_np(pthread_self(), "rpc_lsnr");
 
     // set the thread local rpc_handler context
     _in_rpc_handler = true;
@@ -542,7 +542,7 @@ void RPCManager::p2p_receive_loop() {
             // check if the system has been inactive for enough time to induce sleep
             double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
                                         + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
-            if(time_elapsed_in_ms > 1) {
+            if(time_elapsed_in_ms > 250) {
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
             }
