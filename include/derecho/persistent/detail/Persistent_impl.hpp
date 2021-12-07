@@ -301,7 +301,8 @@ template <typename ObjectType,
           StorageType storageType>
 template <typename DeltaType, typename Func>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
-Persistent<ObjectType, storageType>::getDelta(const version_t ver, const Func& fun, mutils::DeserializationManager* dm) const {
+Persistent<ObjectType, storageType>::getDelta(const version_t ver,
+                                              const Func& fun, mutils::DeserializationManager* dm) const {
     char* pdat = (char*)this->m_pLog->getEntry(ver, true);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
@@ -329,7 +330,8 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
 template <typename ObjectType,
           StorageType storageType>
 template <typename DeltaType>
-std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> Persistent<ObjectType, storageType>::getDelta(
+std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
+Persistent<ObjectType, storageType>::getDelta(
         const version_t ver,
         mutils::DeserializationManager* dm) const {
     int64_t idx = this->m_pLog->getVersionIndex(ver, true);
@@ -338,6 +340,26 @@ std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, 
     }
 
     return mutils::from_bytes<DeltaType>(dm, (const char*)this->m_pLog->getEntryByIndex(idx));
+}
+
+template <typename ObjectType,
+          StorageType storageType>
+template <typename DeltaType, typename DummyObjectType>
+std::enable_if_t<std::is_base_of<IDeltaSupport<DummyObjectType>, DummyObjectType>::value, bool>
+Persistent<ObjectType, storageType>::getDeltaSignature(const version_t ver,
+                                                       const std::function<bool(const DeltaType&)>& search_predicate,
+                                                       unsigned char* signature, version_t& prev_ver,
+                                                       mutils::DeserializationManager* dm) const {
+    int64_t version_index = m_pLog->getVersionIndex(ver, true);
+    if(version_index == INVALID_INDEX) {
+        return false;
+    }
+    char* delta_data = reinterpret_cast<char*>(m_pLog->getEntryByIndex(version_index));
+    if(mutils::deserialize_and_run(dm, delta_data, search_predicate)) {
+        return m_pLog->getSignatureByIndex(version_index, signature, prev_ver);
+    } else {
+        return false;
+    }
 }
 
 template <typename ObjectType,
@@ -530,6 +552,12 @@ template <typename ObjectType,
           StorageType storageType>
 bool Persistent<ObjectType, storageType>::getSignature(version_t ver, unsigned char* signature, version_t& prev_signed_ver) const {
     return this->m_pLog->getSignature(ver, signature, prev_signed_ver);
+}
+
+template <typename ObjectType,
+          StorageType storageType>
+bool Persistent<ObjectType, storageType>::getSignatureByIndex(int64_t index, unsigned char* signature, version_t& prev_signed_ver) const {
+    return this->m_pLog->getSignatureByIndex(index, signature, prev_signed_ver);
 }
 
 template <typename ObjectType,
