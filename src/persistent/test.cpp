@@ -130,6 +130,7 @@ printhelp() {
     cout << "\tgetbyver <version>" << endl;
     cout << "\tgetbytime <timestamp>" << endl;
     cout << "\tset <value> <version>" << endl;
+    cout << "\tverify <version>" << endl;
     cout << "\ttrimbyidx <index>" << endl;
     cout << "\ttrimbyver <version>" << endl;
     cout << "\ttrimbytime <time>" << endl;
@@ -150,6 +151,7 @@ printhelp() {
     cout << "\tdelta-sub <op> <version>" << endl;
     cout << "\tdelta-getbyidx <index>" << endl;
     cout << "\tdelta-getbyver <version>" << endl;
+    cout << "\tdelta-verify <version> <desired-value>" << endl;
     cout << "NOTICE: test can crash if <datasize> is too large(>8MB).\n"
          << "This is probably due to the stack size is limited. Try \n"
          << "  \"ulimit -s unlimited\"\n"
@@ -491,13 +493,43 @@ int main(int argc, char** argv) {
             int op = std::stoi(argv[2]);
             int64_t ver = (int64_t)atoi(argv[3]);
             cout << "add(" << op << ") = " << (*dx).add(op) << endl;
+            version_t prev_ver = dx.getLatestVersion();
             dx.version(ver);
+            if (use_signature) {
+                dx.updateSignature(ver,*signer);
+                if(prev_ver == INVALID_VERSION) {
+                    memset(prev_sig, 0, sig_size);
+                } else {
+                    version_t temp;
+                    dx.getSignature(prev_ver, prev_sig, temp);
+                }
+                signer->add_bytes(prev_sig, sig_size);
+                signer->finalize(sig_buf);
+                std::cout << "signature=" << std::endl;
+                dump_binary_buffer(sig_buf,sig_size);
+                dx.addSignature(ver,sig_buf,prev_ver);
+            }
             dx.persist(ver);
         } else if(strcmp(argv[1], "delta-sub") == 0) {
             int op = std::stoi(argv[2]);
             int64_t ver = (int64_t)atoi(argv[3]);
             cout << "sub(" << op << ") = " << (*dx).sub(op) << endl;
+            version_t prev_ver = dx.getLatestVersion();
             dx.version(ver);
+            if (use_signature) {
+                dx.updateSignature(ver,*signer);
+                if(prev_ver == INVALID_VERSION) {
+                    memset(prev_sig, 0, sig_size);
+                } else {
+                    version_t temp;
+                    dx.getSignature(prev_ver, prev_sig, temp);
+                }
+                signer->add_bytes(prev_sig, sig_size);
+                signer->finalize(sig_buf);
+                std::cout << "signature=" << std::endl;
+                dump_binary_buffer(sig_buf,sig_size);
+                dx.addSignature(ver,sig_buf,prev_ver);
+            }
             dx.persist(ver);
         } else if(strcmp(argv[1], "delta-list") == 0) {
             cout << "Persistent<IntegerWithDelta>:" << endl;
@@ -512,6 +544,37 @@ int main(int argc, char** argv) {
             cout << "dx[ver:" << version << "] = " << dx[version]->value << endl;
             cout << "dx.delta[ver:" << version << "] = " << *dx.template getDelta<int>(version) << "\t- by copy" << endl;
             dx.template getDelta<int>(version, [version](const int& x){ cout << "dx.delta[ver:" << version << "] = " << x << "\t- by lambda" << std::endl;});
+        } else if(strcmp(argv[1], "delta-verify") == 0) {
+            if (!use_signature) {
+                std::cout << "unable to verify without signature...exit." << std::endl;
+            } else {
+                version_t version = atol(argv[2]);
+                int search_value = std::stoi(argv[3]);
+                version_t prev_ver;
+                bool found = dx.getDeltaSignature<int>(version, [search_value](const int& delta_value) {
+                    return delta_value == search_value;
+                }, sig_buf, prev_ver);
+                if(!found) {
+                    std::cout << "version " << version << " did not contain desired value " << search_value << std::endl;
+                } else {
+                    std::cout << "version " << version << " contained delta value " << search_value << std::endl;
+                }
+                dx.updateVerifier(version, *verifier);
+                if(prev_ver == INVALID_VERSION) {
+                    memset(prev_sig, 0, sig_size);
+                } else {
+                    version_t temp;
+                    dx.getSignature(prev_ver, prev_sig, temp);
+                }
+                verifier->add_bytes(prev_sig, sig_size);
+                bool success = verifier->finalize(sig_buf, sig_size);
+                if(success) {
+                    std::cout << "version " << version << " signature verified successfully, with previous version " << prev_ver << std::endl;
+                } else {
+                    std::cout << "version " << version << " signature failed to verify! Error" << openssl::get_error_string(ERR_get_error(), "") << std::endl;
+                }
+            }
+
         } else {
             cout << "unknown command: " << argv[1] << endl;
             printhelp();

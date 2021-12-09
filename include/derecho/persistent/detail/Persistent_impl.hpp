@@ -354,7 +354,7 @@ Persistent<ObjectType, storageType>::getDeltaSignature(const version_t ver,
     if(version_index == INVALID_INDEX) {
         return false;
     }
-    char* delta_data = reinterpret_cast<char*>(m_pLog->getEntryByIndex(version_index));
+    const char* delta_data = reinterpret_cast<const char*>(m_pLog->getEntryByIndex(version_index));
     if(mutils::deserialize_and_run(dm, delta_data, search_predicate)) {
         return m_pLog->getSignatureByIndex(version_index, signature, prev_ver);
     } else {
