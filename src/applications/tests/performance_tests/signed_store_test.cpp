@@ -115,8 +115,8 @@ std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTi
     derecho::ExternalCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
     std::vector<std::vector<node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
-    std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size()-1);
-    std::uniform_int_distribution<> signature_distribution(0, signature_members[0].size()-1);
+    std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size() - 1);
+    std::uniform_int_distribution<> signature_distribution(0, signature_members[0].size() - 1);
     //Choose a random member of each subgroup to contact with the P2P message
     const node_id_t storage_member_to_contact = storage_members[0][storage_distribution(random_engine)];
     const node_id_t signature_member_to_contact = signature_members[0][signature_distribution(random_engine)];
@@ -154,8 +154,8 @@ bool ClientTier::update_batch_test(const int& num_updates) const {
     derecho::ExternalCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
     const std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
     const std::vector<std::vector<node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
-    std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size()-1);
-    std::uniform_int_distribution<> signature_distribution(0, signature_members[0].size()-1);
+    std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size() - 1);
+    std::uniform_int_distribution<> signature_distribution(0, signature_members[0].size() - 1);
     //Choose a random member of each subgroup to contact with the P2P message
     const node_id_t storage_member_to_contact = storage_members[0][storage_distribution(random_engine)];
     const node_id_t signature_member_to_contact = signature_members[0][signature_distribution(random_engine)];
@@ -387,10 +387,10 @@ int main(int argc, char** argv) {
 
     //Figure out which subgroup this node got assigned to
     uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    std::vector<node_id_t> storage_members = group.get_subgroup_members<ObjectStore>(0)[0];
-    std::vector<node_id_t> signature_members = group.get_subgroup_members<SignatureStore>(0)[0];
-    std::vector<std::vector<node_id_t>> client_tier_shards = group.get_subgroup_members<ClientTier>(0);
-    if(member_of_shards(my_id, client_tier_shards)) {
+    int32_t my_storage_shard = group.get_my_shard<ObjectStore>();
+    int32_t my_signature_shard = group.get_my_shard<SignatureStore>();
+    int32_t my_client_shard = group.get_my_shard<ClientTier>();
+    if(my_client_shard != -1) {
         std::cout << "Assigned the ClientTier role" << std::endl;
         derecho::Replicated<ClientTier>& this_subgroup = group.get_subgroup<ClientTier>();
         derecho::ExternalCaller<ObjectStore>& object_store_subgroup = group.get_nonmember_subgroup<ObjectStore>();
@@ -402,11 +402,11 @@ int main(int argc, char** argv) {
             dbg_default_debug("Sending update {}", counter);
             auto self_query_results = this_subgroup.p2p_send<RPC_NAME(submit_update)>(my_id, test_update);
             dbg_default_debug("Awaiting completion on update {}", counter);
-			ClientTier::version_signature response = self_query_results.get().get(my_id);
+            ClientTier::version_signature response = self_query_results.get().get(my_id);
         }
         batch_complete_time = steady_clock::now();
         //Compute throughput as total updates submitted / total time to process all of them
-		//Note: This assumes that all of the client nodes finish at exactly the same time, which isn't quite true
+        //Note: This assumes that all of the client nodes finish at exactly the same time, which isn't quite true
         int64_t batch_complete_nanosec = duration_cast<nanoseconds>(batch_complete_time - begin_time).count();
         double signed_thpt_gbs = (static_cast<double>(num_updates) * num_client_nodes * update_size)
                                  / batch_complete_nanosec;
@@ -417,7 +417,9 @@ int main(int argc, char** argv) {
                     "data_signed_store_test");
         //One node in the client tier should send the "end test" message to all the storage members,
         //which will signal the main thread to call group.leave() and exit
-        if(client_tier_shards[0][0] == my_id) {
+        std::vector<node_id_t> storage_members = group.get_subgroup_members<ObjectStore>(0)[0];
+        std::vector<node_id_t> signature_members = group.get_subgroup_members<SignatureStore>(0)[0];
+        if(group.get_subgroup_members<ClientTier>()[0][0] == my_id) {
             for(node_id_t nid : storage_members) {
                 object_store_subgroup.p2p_send<RPC_NAME(end_test)>(nid);
             }
@@ -425,13 +427,13 @@ int main(int argc, char** argv) {
                 signature_store_subgroup.p2p_send<RPC_NAME(end_test)>(nid);
             }
         }
-    } else if(std::find(signature_members.begin(), signature_members.end(), my_id) != signature_members.end()) {
+    } else if(my_signature_shard != -1) {
         std::cout << "Assigned the SignatureStore role." << std::endl;
         std::cout << "Waiting for the end_test message." << std::endl;
         //Wait for this flag to be flipped by the end_test message handler
         while(!(*experiment_done)) {
         }
-    } else if(std::find(storage_members.begin(), storage_members.end(), my_id) != storage_members.end()) {
+    } else if(my_storage_shard != -1) {
         std::cout << "Assigned the ObjectStore role." << std::endl;
         std::cout << "Waiting for the end_test message." << std::endl;
         while(!(*experiment_done)) {
@@ -441,5 +443,5 @@ int main(int argc, char** argv) {
     }
 
     group.barrier_sync();
-	group.leave();
+    group.leave();
 }
