@@ -200,9 +200,10 @@ public:
     virtual const void* getEntry(const HLC& hlc) override;
     virtual version_t persist(version_t ver,
                               bool preLocked = false) override;
-    virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func);
-    virtual void addSignature(version_t ver, const unsigned char* signature, version_t previous_signed_version);
-    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& previous_signed_version);
+    virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func) override;
+    virtual void addSignature(version_t ver, const unsigned char* signature, version_t previous_signed_version) override;
+    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& previous_signed_version) override;
+    virtual bool getSignatureByIndex(int64_t index, unsigned char* signature, version_t& prev_ver) override;
     virtual void trimByIndex(int64_t eno) override;
     virtual void trim(version_t ver) override;
     virtual void trim(const HLC& hlc) override;

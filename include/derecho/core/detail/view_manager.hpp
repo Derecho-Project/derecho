@@ -816,21 +816,36 @@ public:
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();
+
     /** Returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
+
     /** Returns the order of this node in the sequence of members of the group */
     int32_t get_my_rank();
+
     /** Returns a vector of vectors listing the members of a single subgroup
      * (identified by type and index), organized by shard number. */
     std::vector<std::vector<node_id_t>> get_subgroup_members(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
+
     /** Returns the number of shards in a subgroup, identified by its type and index. */
     std::size_t get_number_of_shards_in_subgroup(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
+
+    /** Returns the number of subgroups (valid indexes) for a subgroup type */
+    uint32_t get_num_subgroups(subgroup_type_id_t subgroup_type);
+
     /**
      * If this node is a member of the given subgroup (identified by its type
      * and index), returns the number of the shard this node belongs to.
      * Otherwise, returns -1.
      */
     int32_t get_my_shard(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
+
+    /**
+     * Returns the subgroup index(es) that this node is a member of for the
+     * specified subgroup type. If this node is not a member of any subgroups
+     * of that type, returns an empty vector.
+     */
+    std::vector<uint32_t> get_my_subgroup_indexes(subgroup_type_id_t subgroup_type);
 
     /**
      * Determines whether a subgroup (identified by its ID) uses persistence.

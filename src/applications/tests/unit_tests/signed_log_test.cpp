@@ -185,11 +185,10 @@ int main(int argc, char** argv) {
             [](persistent::PersistentRegistry* pr, derecho::subgroup_id_t id) { return std::make_unique<TwoFieldObject>(pr); },
             [](persistent::PersistentRegistry* pr, derecho::subgroup_id_t id) { return std::make_unique<UnsignedObject>(pr); });
     //Figure out which subgroup this node got assigned to
-    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    std::vector<node_id_t> subgroup_1_members = group.get_subgroup_members<OneFieldObject>(0)[0];
-    std::vector<node_id_t> subgroup_2_members = group.get_subgroup_members<TwoFieldObject>(0)[0];
-    std::vector<node_id_t> subgroup_unsigned_members = group.get_subgroup_members<UnsignedObject>(0)[0];
-    if(std::find(subgroup_1_members.begin(), subgroup_1_members.end(), my_id) != subgroup_1_members.end()) {
+    int32_t my_shard_subgroup_1 = group.get_my_shard<OneFieldObject>();
+    int32_t my_shard_subgroup_2 = group.get_my_shard<TwoFieldObject>();
+    int32_t my_shard_unsigned_subgroup = group.get_my_shard<UnsignedObject>();
+    if(my_shard_subgroup_1 != -1) {
         std::cout << "In the OneFieldObject subgroup" << std::endl;
         derecho::Replicated<OneFieldObject>& object_handle = group.get_subgroup<OneFieldObject>();
         //Send random updates
@@ -199,7 +198,7 @@ int main(int argc, char** argv) {
                           [&]() { return characters[char_distribution(random_generator)]; });
             object_handle.ordered_send<RPC_NAME(update_state)>(new_string);
         }
-    } else if(std::find(subgroup_2_members.begin(), subgroup_2_members.end(), my_id) != subgroup_2_members.end()) {
+    } else if(my_shard_subgroup_2 != -1) {
         std::cout << "In the TwoFieldObject subgroup" << std::endl;
         derecho::Replicated<TwoFieldObject>& object_handle = group.get_subgroup<TwoFieldObject>();
         //Send random updates
@@ -212,7 +211,7 @@ int main(int argc, char** argv) {
                           [&]() { return characters[char_distribution(random_generator)]; });
             object_handle.ordered_send<RPC_NAME(update)>(new_foo, new_bar);
         }
-    } else if(std::find(subgroup_unsigned_members.begin(), subgroup_unsigned_members.end(), my_id) != subgroup_unsigned_members.end()) {
+    } else if(my_shard_unsigned_subgroup != -1) {
         std::cout << "In the UnsignedObject subgroup" << std::endl;
         derecho::Replicated<UnsignedObject>& object_handle = group.get_subgroup<UnsignedObject>();
         //Send random updates
@@ -224,15 +223,15 @@ int main(int argc, char** argv) {
         }
     }
     //Wait for all updates to finish being verified, using the condition variables updated by the callback
-    if(std::find(subgroup_1_members.begin(), subgroup_1_members.end(), my_id) != subgroup_1_members.end()) {
+    if(my_shard_subgroup_1 != -1) {
         std::cout << "Waiting for final version to be verified" << std::endl;
         std::unique_lock<std::mutex> lock(finish_mutex);
         subgroup_finished_condition[0].wait(lock, [&]() { return subgroup_finished[0]; });
-    } else if(std::find(subgroup_2_members.begin(), subgroup_2_members.end(), my_id) != subgroup_2_members.end()) {
+    } else if(my_shard_subgroup_2 != -1) {
         std::cout << "Waiting for final version to be verified" << std::endl;
         std::unique_lock<std::mutex> lock(finish_mutex);
         subgroup_finished_condition[1].wait(lock, [&]() { return subgroup_finished[1]; });
-    } else if(std::find(subgroup_unsigned_members.begin(), subgroup_unsigned_members.end(), my_id) != subgroup_unsigned_members.end()) {
+    } else if(my_shard_unsigned_subgroup != -1) {
         std::cout << "Waiting for final version to be persisted" << std::endl;
         std::unique_lock<std::mutex> lock(finish_mutex);
         subgroup_finished_condition[2].wait(lock, [&]() { return subgroup_finished[2]; });
