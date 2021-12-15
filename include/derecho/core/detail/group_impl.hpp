@@ -103,7 +103,7 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
 
 template <typename... ReplicatedTypes>
 uint32_t Group<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) {
-    assert_always((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)} || ... || false));
+    assert_always(((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) || ... || false));
     return (((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) ?  //
                      (index_of_type<ReplicatedTypes, ReplicatedTypes...>)
                                                                                : 0)
@@ -378,7 +378,7 @@ ExternalCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(
 
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-uint32_t Group<ReplicatedTypes...>::get_num_subgroups() {
+uint32_t Group<ReplicatedTypes...>::get_num_subgroups() const {
     static_assert(contains<SubgroupType, ReplicatedTypes...>::value, "get_num_subgroups was called with a template parameter that did not match any subgroup type");
     //No need to ask view_manager. This avoids locking the view_mutex.
     try {

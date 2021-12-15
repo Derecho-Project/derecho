@@ -423,7 +423,7 @@ void ExternalGroup<ReplicatedTypes...>::p2p_receive_loop() {
 
 template <typename... ReplicatedTypes>
 uint32_t ExternalGroup<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) const {
-    assert_always((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)} || ... || false));
+    assert_always(((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) || ... || false));
     return (((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) ?  //
                      (index_of_type<ReplicatedTypes, ReplicatedTypes...>)
                                                                                : 0)

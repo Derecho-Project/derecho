@@ -272,8 +272,8 @@ int main(int argc, char** argv) {
 
     if (use_signature) {
         prikey = std::make_unique<openssl::EnvelopeKey>(
-                std::move(openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE))));
-        signer = std::make_unique<openssl::Signer>(*prikey,openssl::DigestAlgorithm::SHA256);
+                openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE)));
+        signer = std::make_unique<openssl::Signer>(*prikey, openssl::DigestAlgorithm::SHA256);
         verifier = std::make_unique<openssl::Verifier>(*prikey, openssl::DigestAlgorithm::SHA256);
         signer->init();
         verifier->init();

@@ -127,8 +127,8 @@ public:
 template <typename... ReplicatedTypes>
 class Group : public virtual _Group, public GroupProjection<ReplicatedTypes>... {
 public:
-    void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
-    void set_external_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
+    void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret) override;
+    void set_external_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret) override;
 
 protected:
     uint32_t get_index_of_type(const std::type_info&) override;
@@ -355,7 +355,7 @@ public:
      * @return The number of subgroups of type SubgroupType
      */
     template <typename SubgroupType>
-    uint32_t get_num_subgroups();
+    uint32_t get_num_subgroups() const;
 
     /**
      * Gets a list of the nodes currently assigned to the subgroup of the
@@ -374,7 +374,7 @@ public:
     std::int32_t get_my_rank();
 
     /** @returns the ID of local node */
-    node_id_t get_my_id();
+    node_id_t get_my_id() override;
 
     /**
      * @returns the shard number that this node is a member of in the specified

@@ -226,9 +226,9 @@ public:
     void updateTemporalFrontierProvider(ITemporalQueryFrontierProvider* tqfp);
 
     /**
-     * Enable move constructor
+     * mutils::RemoteDeserializationContext requires move constructor to be disabled
      */
-    PersistentRegistry(PersistentRegistry&&) = default;
+    PersistentRegistry(PersistentRegistry&&) = delete;
 
     /**
      * Disable copy constructor

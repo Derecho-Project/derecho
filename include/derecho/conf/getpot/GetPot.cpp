@@ -2215,7 +2215,7 @@ GetPot::__constraint_check(const std::string& Value, const char* ConstraintStr,
                            bool ThrowExceptionF) const
 {
     std::string ConstraintString = std::string(ConstraintStr);
-    if( ConstraintStr == (const char *) "" )           return true;
+    if( strcmp(ConstraintStr, (const char *) "") == 0 ) return true;
     if( __constraint_check_OR(Value, &ConstraintStr) ) return true;
 
     if( ThrowExceptionF ) {
