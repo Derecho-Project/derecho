@@ -69,7 +69,7 @@ using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 class _Group {
 private:
 protected:
-    virtual uint32_t get_index_of_type(const std::type_info&) = 0;
+    virtual uint32_t get_index_of_type(const std::type_info&) const = 0;
 
 public:
     virtual ~_Group() = default;
@@ -131,7 +131,7 @@ public:
     void set_external_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret) override;
 
 protected:
-    uint32_t get_index_of_type(const std::type_info&) override;
+    uint32_t get_index_of_type(const std::type_info&) const override;
     ViewManager& get_view_manager() override;
 
 private:
@@ -355,7 +355,7 @@ public:
      * @return The number of subgroups of type SubgroupType
      */
     template <typename SubgroupType>
-    uint32_t get_num_subgroups() const;
+    uint32_t get_num_subgroups();
 
     /**
      * Gets a list of the nodes currently assigned to the subgroup of the
