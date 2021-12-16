@@ -9,5 +9,6 @@ ADD_LIBRARY(openssl_wrapper OBJECT hash.cpp openssl_exception.cpp signature.cpp)
 target_include_directories(openssl_wrapper PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${OPENSSL_INCLUDE_DIR}>
 )
+# OBJECT libraries are not linked, but this command can be used to declare library dependencies
+target_link_libraries(openssl_wrapper OpenSSL::Crypto spdlog::spdlog)
