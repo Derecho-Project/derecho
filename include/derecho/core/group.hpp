@@ -75,7 +75,7 @@ public:
     virtual ~_Group() = default;
 
     template <typename SubgroupType>
-    auto& get_subgroup(uint32_t subgroup_num = 0);
+    auto& get_subgroup(uint32_t subgroup_index = 0);
 
     template <typename SubgroupType>
     auto& get_nonmember_subgroup(uint32_t subgroup_num = 0);
@@ -85,18 +85,20 @@ public:
 
     template <typename SubgroupType>
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
+
+    virtual node_id_t get_my_id() = 0;
 };
 
 template <typename ReplicatedType>
 class GroupProjection : public virtual _Group {
 protected:
     virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
-    virtual void set_external_caller_pointer(std::type_index, uint32_t, void**) = 0;
+    virtual void set_peer_caller_pointer(std::type_index, uint32_t, void**) = 0;
     virtual ViewManager& get_view_manager() = 0;
 
 public:
-    Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num = 0);
-    ExternalCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
+    Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_index = 0);
+    PeerCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
     std::size_t get_number_of_shards(uint32_t subgroup_index = 0);
 };
@@ -122,7 +124,7 @@ template <typename... ReplicatedTypes>
 class Group : public virtual _Group, public GroupProjection<ReplicatedTypes>... {
 public:
     void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
-    void set_external_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
+    void set_peer_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
 
 protected:
     uint32_t get_index_of_type(const std::type_info&) override;
@@ -131,9 +133,9 @@ protected:
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
-    //Same thing for a sparse-vector of ExternalCaller
+    //Type alias for a sparse-vector of PeerCaller
     template <typename T>
-    using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
+    using peer_caller_index_map = std::map<uint32_t, PeerCaller<T>>;
 
     const node_id_t my_id;
     /**
@@ -161,19 +163,19 @@ private:
     /**
      * Maps each type T to a map of (index -> Replicated<T>) for that type's
      * subgroup(s). If this node is not a member of a subgroup for a type, the
-     * map will have no entry for that type and index. (Instead, external_callers
+     * map will have no entry for that type and index. (Instead, peer_callers
      * will have an entry for that type-index pair). If this node is a member
      * of a subgroup, the Replicated<T> will refer to the one shard that this
      * node belongs to.
      */
     mutils::KindMap<replicated_index_map, ReplicatedTypes...> replicated_objects;
     /**
-     * Maps each type T to a map of (index -> ExternalCaller<T>) for the
+     * Maps each type T to a map of (index -> PeerCaller<T>) for the
      * subgroup(s) of that type that this node is not a member of. The
-     * ExternalCaller for subgroup i of type T can be used to contact any member
+     * PeerCaller for subgroup i of type T can be used to contact any member
      * of any shard of that subgroup, so shards are not indexed.
      */
-    mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
+    mutils::KindMap<peer_caller_index_map, ReplicatedTypes...> peer_callers;
     /**
      * Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry
      * at index X is a pointer to the Replicated<T> for this node's shard of
@@ -307,18 +309,18 @@ public:
     /**
      * Gets the "handle" for a subgroup of the specified type and index,
      * assuming this node is not a member of the subgroup. The returned
-     * ExternalCaller can be used to make peer-to-peer RPC calls to a specific
+     * PeerCaller can be used to make peer-to-peer RPC calls to a specific
      * member of the subgroup.
      *
      * @param subgroup_index The index of the subgroup within the set of
      * subgroups that replicate the same type of object.
      * @tparam SubgroupType The object type identifying the subgroup
-     * @return A reference to the ExternalCaller for this subgroup
+     * @return A reference to the PeerCaller for this subgroup
      * @throws invalid_subgroup_exception If this node is actually a member of
      * the requested subgroup, or if no such subgroup exists
      */
     template <typename SubgroupType>
-    ExternalCaller<SubgroupType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
+    PeerCaller<SubgroupType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
 
     template <typename SubgroupType>
     ShardIterator<SubgroupType> get_shard_iterator(uint32_t subgroup_index = 0);

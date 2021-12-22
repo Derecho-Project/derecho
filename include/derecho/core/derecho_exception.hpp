@@ -27,6 +27,15 @@ struct derecho_exception : public std::exception {
 };
 
 /**
+ * Exception that means the user has attempted to fill a fixed-size buffer with
+ * a message that is too large. This usually means the maximum message size for
+ * a subgroup has been configured to too small a size.
+ */
+struct buffer_overflow_exception: public derecho_exception {
+    buffer_overflow_exception(const std::string& message) : derecho_exception(message) {}
+};
+
+/**
  * Exception that means a reference-like type is "empty" (does not contain a
  * valid object).
  */

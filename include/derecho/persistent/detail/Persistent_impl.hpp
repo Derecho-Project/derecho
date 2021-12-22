@@ -586,16 +586,24 @@ std::size_t Persistent<ObjectType, storageType>::to_bytes(char* ret) const {
 template <typename ObjectType,
           StorageType storageType>
 std::size_t Persistent<ObjectType, storageType>::bytes_size() const {
-    return mutils::bytes_size(this->m_pLog->m_sName) + mutils::bytes_size(*this->m_pWrappedObject) + this->m_pLog->bytes_size(PersistentRegistry::getEarliestVersionToSerialize());
+    // object name, wrapped object, signature flag, and log
+    return mutils::bytes_size(this->m_pLog->m_sName)
+           + mutils::bytes_size(*this->m_pWrappedObject)
+           + sizeof(bool)
+           + this->m_pLog->bytes_size(PersistentRegistry::getEarliestVersionToSerialize());
 }
 
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::post_object(const std::function<void(char const* const, std::size_t)>& f)
         const {
+    // object name
     mutils::post_object(f, this->m_pLog->m_sName);
+    // wrapped object
     mutils::post_object(f, *this->m_pWrappedObject);
+    // flag to indicate whether the log has signatures
     mutils::post_object(f, (this->m_pLog->signature_size > 0));
+    // and the log
     this->m_pLog->post_object(f, PersistentRegistry::getEarliestVersionToSerialize());
 }
 

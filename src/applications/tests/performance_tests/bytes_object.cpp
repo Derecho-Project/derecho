@@ -102,4 +102,8 @@ mutils::context_ptr<const Bytes> Bytes::from_bytes_noalloc_const(mutils::Deseria
                                                       ((std::size_t*)(buffer))[0],
                                                       true)};
 }
+
+char* Bytes::get() const {
+    return bytes;
+}
 }  // namespace test

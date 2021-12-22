@@ -13,37 +13,39 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
+#include "sample_objects.hpp"
 #include <derecho/conf/conf.hpp>
 #include <derecho/core/derecho.hpp>
-#include "sample_objects.hpp"
 
 using derecho::PeerCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;
+using json = nlohmann::json;
 
 int main(int argc, char** argv) {
     // Read configurations from the command line options as well as the default config file
     derecho::Conf::initialize(argc, argv);
 
     //Define subgroup membership using the default subgroup allocator function
-    //Each Replicated type will have one subgroup and one shard, with three members in the shard
-    derecho::SubgroupInfo subgroup_function {derecho::DefaultSubgroupAllocator({
-        {std::type_index(typeid(Foo)), derecho::one_subgroup_policy(derecho::fixed_even_shards(1,3))},
-        {std::type_index(typeid(Bar)), derecho::one_subgroup_policy(derecho::fixed_even_shards(1,3))}
-    })};
+    //When constructed using make_subgroup_allocator with no arguments, this will check the config file
+    //for either the json_layout or json_layout_file options, and use whichever one is present to define
+    //the mapping from types to subgroup allocation parameters.
+    derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<Foo, Bar>()};
+
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state. These must take a PersistentRegistry* argument, but
     //in this case we ignore it because the replicated objects aren't persistent.
-    auto foo_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Foo>(-1); };
-    auto bar_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Bar>(); };
+    auto foo_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<Foo>(-1); };
+    auto bar_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<Bar>(); };
 
     derecho::Group<Foo, Bar> group(derecho::UserMessageCallbacks{}, subgroup_function, {},
-                                          std::vector<derecho::view_upcall_t>{},
-                                          foo_factory, bar_factory);
+                                   std::vector<derecho::view_upcall_t>{},
+                                   foo_factory, bar_factory);
 
     cout << "Finished constructing/joining Group" << endl;
 

@@ -103,18 +103,19 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) const {
         }
         //Convert the user's desired tag into an "internal" function tag for a P2P function
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
+                //Invoke the sending function with a buffer-allocator that uses the P2P request buffers
                 [this, &dest_node](size_t size) -> char* {
                     const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_p2p_request_payload_size) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
-                        throw derecho_exception("The size of serialized args exceeds the maximum message size.");
+                        throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
         group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
-        return std::move(return_pair.results);
+        return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
     }
@@ -124,28 +125,28 @@ template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto Replicated<T>::ordered_send(Args&&... args) {
     if(is_valid()) {
-        size_t payload_size_for_multicast_send = wrapped_this->
-        template get_size_for_ordered_send<rpc::to_internal_tag<false>(tag)>(std::forward<Args>(args)...);
+        size_t payload_size_for_multicast_send = wrapped_this->template get_size_for_ordered_send<rpc::to_internal_tag<false>(tag)>(std::forward<Args>(args)...);
 
         using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<rpc::to_internal_tag<false>(tag)>(
                 std::forward<Args>(args)...))>::type;
         //These pointers help "return" the PendingResults/QueryResults out of the lambda
-        rpc::QueryResults<Ret>* results_ptr;
-        rpc::PendingResults<Ret>* pending_ptr;
+        std::unique_ptr<rpc::QueryResults<Ret>> results_ptr;
+        std::weak_ptr<rpc::PendingResults<Ret>> pending_ptr;
         auto serializer = [&](char* buffer) {
             //By the time this lambda runs, the current thread will be holding a read lock on view_mutex
             const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
             auto send_return_struct = wrapped_this->template send<rpc::to_internal_tag<false>(tag)>(
+                    //Invoke the sending function with a buffer-allocator that uses the buffer supplied as an argument to the serializer
                     [&buffer, &max_payload_size](size_t size) -> char* {
                         if(size <= max_payload_size) {
                             return buffer;
                         } else {
-                            throw derecho_exception("The size of serialized args exceeds the maximum message size.");
+                            throw buffer_overflow_exception("The size of an ordered_send message exceeds the maximum message size.");
                         }
                     },
                     std::forward<Args>(args)...);
-            results_ptr = new rpc::QueryResults<Ret>(std::move(send_return_struct.results));
-            pending_ptr = &send_return_struct.pending;
+            results_ptr = std::move(send_return_struct.results);
+            pending_ptr = send_return_struct.pending;
         };
 
         std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
@@ -153,9 +154,7 @@ auto Replicated<T>::ordered_send(Args&&... args) {
             return group_rpc_manager.view_manager.curr_view
                     ->multicast_group->send(subgroup_id, payload_size_for_multicast_send, serializer, true);
         });
-        group_rpc_manager.finish_rpc_send(subgroup_id, *pending_ptr);
-        //Warning: Even though the move-constructor will clean up all the state in *results_ptr, this
-        //still leaks the memory allocated on the heap by new QueryResults<Ret>() in the serializer lambda
+        group_rpc_manager.finish_rpc_send(subgroup_id, pending_ptr);
         return std::move(*results_ptr);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -178,7 +177,9 @@ void Replicated<T>::send_object(tcp::socket& receiver_socket) const {
     auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
         receiver_socket.write(bytes, size);
     };
+    dbg_default_trace("send_object sending object size {} to {}", object_size(), receiver_socket.get_remote_ip());
     mutils::post_object(bind_socket_write, object_size());
+    dbg_default_trace("send_object starting send to {}", receiver_socket.get_remote_ip());
     send_object_raw(receiver_socket);
 }
 
@@ -280,8 +281,8 @@ const uint64_t Replicated<T>::compute_global_stability_frontier() {
 }
 
 template <typename T>
-ExternalCaller<T>::ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id,
-                                  rpc::RPCManager& group_rpc_manager)
+PeerCaller<T>::PeerCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id,
+                          rpc::RPCManager& group_rpc_manager)
         : node_id(nid),
           subgroup_id(subgroup_id),
           group_rpc_manager(group_rpc_manager),
@@ -292,7 +293,7 @@ ExternalCaller<T>::ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t
 //but I'm afraid that will introduce unnecessary overheads.
 template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
-auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
+auto PeerCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
         assert(dest_node != node_id);
         if(group_rpc_manager.view_manager.get_current_view().get().rank_of(dest_node) == -1) {
@@ -306,12 +307,12 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
-                        throw derecho_exception("The size of serialized args exceeds the maximum message size.");
+                        throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
         group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
-        return std::move(return_pair.results);
+        return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
     }
@@ -321,11 +322,11 @@ template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto ShardIterator<T>::p2p_send(Args&&... args) {
     // shard_reps should have at least one member
-    auto send_result = EC.template p2p_send<tag>(shard_reps.at(0), std::forward<Args>(args)...);
+    auto send_result = caller.template p2p_send<tag>(shard_reps.at(0), std::forward<Args>(args)...);
     std::vector<decltype(send_result)> send_result_vec;
     send_result_vec.emplace_back(std::move(send_result));
     for(uint i = 1; i < shard_reps.size(); ++i) {
-        send_result_vec.emplace_back(EC.template p2p_send<tag>(shard_reps[i], std::forward<Args>(args)...));
+        send_result_vec.emplace_back(caller.template p2p_send<tag>(shard_reps[i], std::forward<Args>(args)...));
     }
     return send_result_vec;
 }

@@ -133,15 +133,32 @@ inline bool operator==(const Opcode& lhs, const Opcode& rhs) {
 using node_list_t = std::vector<node_id_t>;
 
 /**
+ * A simple serializable struct that contains two strings, one for the typename
+ * of an exception and one for its what() value. This is used to send exception
+ * information back to a caller if an RPC function throws an exception.
+ */
+struct remote_exception_info : public mutils::ByteRepresentable {
+    std::string exception_name;
+    std::string exception_what;
+    remote_exception_info(const std::string& exception_name, const std::string& exception_what)
+            : exception_name(exception_name), exception_what(exception_what) {}
+    DEFAULT_SERIALIZATION_SUPPORT(remote_exception_info, exception_name, exception_what);
+};
+
+/**
  * Indicates that an RPC call failed because executing the RPC function on the
  * remote node resulted in an exception.
  */
 struct remote_exception_occurred : public derecho_exception {
     node_id_t who;
-    remote_exception_occurred(node_id_t who)
-            : derecho_exception(std::string("An exception occurred at node with ID ")
-                                + std::to_string(who)),
-              who(who) {}
+    std::string exception_name;
+    std::string exception_what;
+    remote_exception_occurred(node_id_t who, const std::string& name, const std::string& what)
+            : derecho_exception(std::string("Node ID ") + std::to_string(who) + std::string(" encountered an exception of type ")
+                                + name + std::string(". what(): ") + what),
+              who(who),
+              exception_name(name),
+              exception_what(what) {}
 };
 
 /**
@@ -190,6 +207,10 @@ struct recv_ret {
 using receive_fun_t = std::function<recv_ret(
         mutils::RemoteDeserialization_v* rdv, const node_id_t&, const char* recv_buf,
         const std::function<char*(int)>& out_alloc)>;
+
+//Forward declaration of PendingResults, to be used by QueryResults
+template <typename Ret>
+class PendingResults;
 
 /**
  * The type of map contained in a QueryResults::ReplyMap. The template parameter
@@ -276,22 +297,31 @@ private:
     std::future<void> global_persistence_done;
     /** This signals that the signature has been verified at all replicas on the version assigned to this RPC function call */
     std::future<void> signature_done;
+    /**
+     * An owning pointer to the PendingResults that is paired with this QueryResults
+     * (i.e. the one that constructed this QueryResults). It ensures that the
+     * PendingResults has the same lifetime as the QueryResults.
+     */
+    std::shared_ptr<PendingResults<Ret>> paired_pending_results;
 
 public:
     /**
      * Constructs a QueryResults from a future for a reply-map (which is itself
      * a map of futures), and the futures for the persistent events it will also
      * track. The promise ends of these futures should reside in a corresponding
-     * PendingResults that constructed this QueryResults.
+     * PendingResults that constructed this QueryResults, and the first parameter
+     * should be a shared_ptr to that PendingResults.
      */
-    QueryResults(map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
+    QueryResults(std::shared_ptr<PendingResults<Ret>> paired_pending_results,
+                 map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
                  std::future<void> local_persistence_done, std::future<void> global_persistence_done,
                  std::future<void> signature_done)
             : pending_rmap(std::move(reply_map_future)),
               persistent_version(std::move(persistent_version)),
               local_persistence_done(std::move(local_persistence_done)),
               global_persistence_done(std::move(global_persistence_done)),
-              signature_done(std::move(signature_done)) {}
+              signature_done(std::move(signature_done)),
+              paired_pending_results(paired_pending_results) {}
     /** Move constructor for QueryResults. */
     QueryResults(QueryResults&& o)
             : pending_rmap{std::move(o.pending_rmap)},
@@ -299,7 +329,8 @@ public:
               persistent_version{std::move(o.persistent_version)},
               local_persistence_done{std::move(o.local_persistence_done)},
               global_persistence_done{std::move(o.global_persistence_done)},
-              signature_done{std::move(o.signature_done)} {}
+              signature_done{std::move(o.signature_done)},
+              paired_pending_results{std::move(o.paired_pending_results)} {}
     /** QueryResults, like std::future, is not copyable. */
     QueryResults(const QueryResults&) = delete;
 
@@ -331,6 +362,25 @@ public:
                 return *rmap;
             }
         }
+    }
+
+    /**
+     * Test if all the future entries are ready.
+     * A true return value indicates that get() will not block.
+     *
+     * @return true/false
+     */
+    bool is_ready() {
+        if(replies.rmap.size() != 0) {
+            for(auto& reply : replies) {
+                using namespace std::chrono;
+                if(reply.second.wait_for(std::chrono::seconds(0s)) != std::future_status::ready) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -387,6 +437,30 @@ public:
     void await_signature_verification() {
         signature_done.get();
     }
+
+    /**
+     * Checks if a call to await_local_persistence() would succeed without
+     * blocking; returns true if so.
+     */
+    bool local_persistence_is_ready() const {
+        return local_persistence_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+
+    /**
+     * Checks if a call to await_global_persistence() would succeed without
+     * blocking; returns true if so.
+     */
+    bool global_persistence_is_ready() const {
+        return global_persistence_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+
+    /**
+     * Checks if a call to await_signature_verification() would succeed without
+     * blocking; returns true if so.
+     */
+    bool global_verification_is_ready() const {
+        return signature_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
 };
 
 /**
@@ -441,23 +515,32 @@ private:
     std::future<void> global_persistence_done;
     /** This signals that the signature has been verified at all replicas on the version assigned to this RPC function call */
     std::future<void> signature_done;
+    /**
+     * An owning pointer to the PendingResults that is paired with this QueryResults
+     * (i.e. the one that constructed this QueryResults). It ensures that the
+     * PendingResults has the same lifetime as the QueryResults.
+     */
+    std::shared_ptr<PendingResults<void>> paired_pending_results;
 
 public:
-    QueryResults(map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
+    QueryResults(std::shared_ptr<PendingResults<void>> paired_pending_results,
+                 map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
                  std::future<void> local_persistence_done, std::future<void> global_persistence_done,
                  std::future<void> signature_done)
             : pending_rmap(std::move(reply_map_future)),
               persistent_version(std::move(persistent_version)),
               local_persistence_done(std::move(local_persistence_done)),
               global_persistence_done(std::move(global_persistence_done)),
-              signature_done(std::move(signature_done)) {}
+              signature_done(std::move(signature_done)),
+              paired_pending_results(paired_pending_results) {}
     QueryResults(QueryResults&& o)
             : pending_rmap{std::move(o.pending_rmap)},
               replies{std::move(o.replies)},
               persistent_version{std::move(o.persistent_version)},
               local_persistence_done{std::move(o.local_persistence_done)},
               global_persistence_done{std::move(o.global_persistence_done)},
-              signature_done{std::move(o.signature_done)} {}
+              signature_done{std::move(o.signature_done)},
+              paired_pending_results{std::move(o.paired_pending_results)} {}
     QueryResults(const QueryResults&) = delete;
 
     /**
@@ -488,6 +571,16 @@ public:
                 return *rmap;
             }
         }
+    }
+
+    /**
+     * Test if all the future entries are ready.
+     * A true return value indicates that get() will not block.
+     *
+     * @return true/false
+     */
+    bool is_ready() {
+        return (replies.rmap.size() != 0);
     }
 
     /**
@@ -540,6 +633,30 @@ public:
     void await_signature_verification() {
         signature_done.get();
     }
+
+    /**
+     * Checks if a call to await_local_persistence() would succeed without
+     * blocking; returns true if so.
+     */
+    bool local_persistence_is_ready() const {
+        return local_persistence_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+
+    /**
+     * Checks if a call to await_global_persistence() would succeed without
+     * blocking; returns true if so.
+     */
+    bool global_persistence_is_ready() const {
+        return global_persistence_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+
+    /**
+     * Checks if a call to await_signature_verification() would succeed without
+     * blocking; returns true if so.
+     */
+    bool global_verification_is_ready() const {
+        return signature_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
 };
 
 /**
@@ -547,18 +664,18 @@ public:
  * any template specialization of PendingResults without knowing the template
  * parameter.
  */
-class PendingBase {
+class AbstractPendingResults {
 public:
     virtual void fulfill_map(const node_list_t&) = 0;
+    virtual void delete_self_ptr() = 0;
     virtual void set_persistent_version(persistent::version_t, uint64_t) = 0;
     virtual void set_local_persistence() = 0;
     virtual void set_global_persistence() = 0;
     virtual void set_signature_verified() = 0;
     virtual void set_exception_for_removed_node(const node_id_t&) = 0;
     virtual void set_exception_for_caller_removed() = 0;
-    virtual bool all_responded() const = 0;
-    virtual void reset() = 0;
-    virtual ~PendingBase() {}
+    virtual bool all_responded() = 0;
+    virtual ~AbstractPendingResults() {}
 };
 
 /**
@@ -570,7 +687,7 @@ public:
  * response's value.
  */
 template <typename Ret>
-class PendingResults : public PendingBase {
+class PendingResults : public AbstractPendingResults, public std::enable_shared_from_this<PendingResults<Ret>> {
 private:
     /** A promise for a map containing one future for each reply to the RPC function
      * call. The future end of this promise lives in QueryResults, and is fulfilled
@@ -583,6 +700,10 @@ private:
      * function call was actually sent and the set of destination nodes is known. */
     std::future<std::map<node_id_t, std::promise<Ret>>> reply_promises_are_ready;
     std::mutex reply_promises_are_ready_mutex;
+    /**
+     * Contains one promise for each node that the RPC function call was sent to,
+     * which will be fulfilled when that node replies. Indexed by the node's ID.
+     */
     std::map<node_id_t, std::promise<Ret>> reply_promises;
     /**
      * True if the reply map has been fulfilled, i.e. fulfill_map() has been
@@ -591,7 +712,23 @@ private:
      * called on it.
     */
     bool map_fulfilled = false;
-    std::set<node_id_t> dest_nodes, responded_nodes;
+    /**
+     * The set of nodes that the RPC function call was sent to; equal to the
+     * key set of reply_promises.
+     */
+    std::set<node_id_t> dest_nodes;
+    /**
+     * The set of nodes that have responded to the RPC function call, either by
+     * delivering a reply or by failing. If a node ID is in this set, its future
+     * in reply_promises has been fulfilled with either set_value or set_exception.
+     */
+    std::set<node_id_t> responded_nodes;
+    /**
+     * Controls access to responded_nodes because std::set isn't thread-safe.
+     * Both the predicates thread and the P2P worker thread may access
+     * responded_nodes at the same time (especially during view changes).
+     */
+    std::mutex responded_nodes_mutex;
 
     /**
      * A promise for a persistent version (which is actually a pair of a version
@@ -620,9 +757,35 @@ private:
      */
     std::promise<void> signature_verified_promise;
 
+    /**
+     * A flag set to true the first time delete_self_ptr() is called, to
+     * prevent it from attempting to delete the pointer again if it is
+     * mistakenly called twice on the same object.
+     */
+    bool heap_pointer_deleted;
+
+    /**
+     * A raw pointer to a heap-allocated shared_ptr to this PendingResults object,
+     * which is used by RemoteInvoker to locate this object when a reply arrives.
+     * Stored here so that the shared_ptr can still be deleted by RPCManager if
+     * a node fails before sending its reply; RemoteInvoker will lose the
+     * shared_ptr if it doesn't get all the replies to a given invocation.
+     */
+    std::shared_ptr<PendingResults<Ret>>* self_heap_ptr;
+
+    /**
+     * A mutex that can be used to control access to this object "as a whole,"
+     * in order to make a sequence of method invocations atomic. This is
+     * necessary to make receive_response thread-safe, since the sequence
+     * "set_value()/set_exception() then all_responded()" needs to be atomic.
+     */
+    std::mutex this_object_mutex;
+
 public:
     PendingResults()
-            : reply_promises_are_ready(promise_for_reply_promises.get_future()) {}
+            : reply_promises_are_ready(promise_for_reply_promises.get_future()),
+              heap_pointer_deleted(false),
+              self_heap_ptr(nullptr) {}
     virtual ~PendingResults() {}
 
     /**
@@ -630,12 +793,13 @@ public:
      * the response promises in this PendingResults.
      * @return A new QueryResults holding a set of futures for this RPC function call
      */
-    QueryResults<Ret> get_future() {
-        return QueryResults<Ret>{promise_for_pending_map.get_future(),
-                                 version_promise.get_future(),
-                                 local_persistence_promise.get_future(),
-                                 global_persistence_promise.get_future(),
-                                 signature_verified_promise.get_future()};
+    std::unique_ptr<QueryResults<Ret>> get_future() {
+        return std::make_unique<QueryResults<Ret>>(this->shared_from_this(),
+                                                   promise_for_pending_map.get_future(),
+                                                   version_promise.get_future(),
+                                                   local_persistence_promise.get_future(),
+                                                   global_persistence_promise.get_future(),
+                                                   signature_verified_promise.get_future());
     }
 
     /**
@@ -658,6 +822,30 @@ public:
     }
 
     /**
+     * Stores the address of a heap-allocated shared_ptr to this PendingResults
+     * object, which was allocated by RemoteInvoker and used as an invocation ID.
+     * @param heap_ptr A pointer to a shared_ptr to this PendingResults object.
+     */
+    void set_self_ptr(std::shared_ptr<PendingResults<Ret>>* heap_ptr) {
+        self_heap_ptr = heap_ptr;
+    }
+
+    /**
+     * Deletes RemoteInvoker's heap-allocated shared_ptr to this PendingResults
+     * object, assuming it was previously set with set_self_ptr(). This should
+     * only be called by RemoteInvoker or RPCManager. It is safe to call this
+     * method more than once, and it will have no effect after the first call.
+     */
+    void delete_self_ptr() {
+        if(!heap_pointer_deleted) {
+            dbg_default_trace("delete_self_ptr() deleting the shared_ptr at {}", fmt::ptr(self_heap_ptr));
+            heap_pointer_deleted = true;
+            //This must be the last statement in the method, since it might result in this object getting deleted
+            delete self_heap_ptr;
+        }
+    }
+
+    /**
      * Sets exceptions to indicate to the sender of this RPC call that it has been
      * removed from its subgroup/shard, and can no longer expect responses.
      */
@@ -671,6 +859,7 @@ public:
             }
             //Set exceptions for any nodes that have not yet responded
             for(auto& node_and_promise : reply_promises) {
+                std::lock_guard<std::mutex> lock(responded_nodes_mutex);
                 if(responded_nodes.find(node_and_promise.first)
                    == responded_nodes.end()) {
                     node_and_promise.second.set_exception(
@@ -688,13 +877,16 @@ public:
      */
     void set_exception_for_removed_node(const node_id_t& removed_nid) {
         assert(map_fulfilled);
+        if(reply_promises.size() == 0) {
+            reply_promises = std::move(reply_promises_are_ready.get());
+        }
+        std::lock_guard<std::mutex> lock(responded_nodes_mutex);
         if(dest_nodes.find(removed_nid) != dest_nodes.end()
            && responded_nodes.find(removed_nid) == responded_nodes.end()) {
             //Mark the node as "responded" for the purposes of the other methods
             responded_nodes.insert(removed_nid);
-            set_exception(removed_nid,
-                          std::make_exception_ptr(
-                                  node_removed_from_group_exception{removed_nid}));
+            reply_promises.at(removed_nid).set_exception(
+                std::make_exception_ptr(node_removed_from_group_exception{removed_nid}));
         }
     }
 
@@ -706,10 +898,12 @@ public:
      */
     void set_value(const node_id_t& nid, const Ret& v) {
         std::lock_guard<std::mutex> lock(reply_promises_are_ready_mutex);
-        responded_nodes.insert(nid);
+        {
+            std::lock_guard<std::mutex> lock(responded_nodes_mutex);
+            responded_nodes.insert(nid);
+        }
         if(reply_promises.size() == 0) {
             dbg_default_trace("PendingResults<{}>::set_value about to wait on reply_promises_are_ready", typeid(Ret).name());
-            dbg_default_flush();
             reply_promises = std::move(reply_promises_are_ready.get());
         }
         reply_promises.at(nid).set_value(v);
@@ -722,7 +916,10 @@ public:
      * @param e The exception_ptr that the RPC function call returned
      */
     void set_exception(const node_id_t& nid, const std::exception_ptr e) {
-        responded_nodes.insert(nid);
+        {
+            std::lock_guard<std::mutex> lock(responded_nodes_mutex);
+            responded_nodes.insert(nid);
+        }
         if(reply_promises.size() == 0) {
             reply_promises = std::move(reply_promises_are_ready.get());
         }
@@ -733,7 +930,8 @@ public:
      * @return True if all destination nodes for this RPC function call have
      * responded, either by sending a reply or by being removed from the group
      */
-    bool all_responded() const {
+    bool all_responded() {
+        std::lock_guard<std::mutex> lock(responded_nodes_mutex);
         return map_fulfilled && (responded_nodes == dest_nodes);
     }
 
@@ -774,21 +972,12 @@ public:
     }
 
     /**
-     * reset this object.
+     * @return A reference to the "object mutex" stored in this PendingResults.
+     * Callers should lock this mutex before performing a sequence of multiple
+     * method calls to prevent threads from interleaving between them.
      */
-    void reset() {
-        promise_for_pending_map = std::promise<std::unique_ptr<futures_map<Ret>>>();
-        promise_for_reply_promises = std::promise<std::map<node_id_t, std::promise<Ret>>>();
-        reply_promises_are_ready = promise_for_reply_promises.get_future();
-        // reply_promises_are_ready_mutex
-        reply_promises.clear();
-        map_fulfilled = false;
-        dest_nodes.clear();
-        responded_nodes.clear();
-        version_promise = std::promise<std::pair<persistent::version_t, uint64_t>>();
-        local_persistence_promise = std::promise<void>();
-        global_persistence_promise = std::promise<void>();
-        signature_verified_promise = std::promise<void>();
+    std::mutex& object_mutex() {
+        return this_object_mutex;
     }
 };
 
@@ -800,7 +989,7 @@ public:
  * cause new persistent versions to be generated.
  */
 template <>
-class PendingResults<void> : public PendingBase {
+class PendingResults<void> : public AbstractPendingResults, public std::enable_shared_from_this<PendingResults<void>> {
 private:
     std::promise<std::unique_ptr<std::set<node_id_t>>> promise_for_pending_map;
     bool map_fulfilled = false;
@@ -810,12 +999,21 @@ private:
     std::promise<void> signature_verified_promise;
 
 public:
-    QueryResults<void> get_future() {
-        return QueryResults<void>(promise_for_pending_map.get_future(),
-                                  version_promise.get_future(),
-                                  local_persistence_promise.get_future(),
-                                  global_persistence_promise.get_future(),
-                                  signature_verified_promise.get_future());
+    std::unique_ptr<QueryResults<void>> get_future() {
+        return std::make_unique<QueryResults<void>>(shared_from_this(),
+                                                    promise_for_pending_map.get_future(),
+                                                    version_promise.get_future(),
+                                                    local_persistence_promise.get_future(),
+                                                    global_persistence_promise.get_future(),
+                                                    signature_verified_promise.get_future());
+    }
+
+    void set_self_ptr(std::shared_ptr<PendingResults<void>>* heap_ptr) {
+        //Does nothing because RemoteInvoker doesn't create a heap-allocated pointer for PendingResults<void>
+    }
+
+    void delete_self_ptr() {
+        //Also does nothing for the above reason
     }
 
     void fulfill_map(const node_list_t& sent_nodes) {
@@ -836,7 +1034,7 @@ public:
         }
     }
 
-    bool all_responded() const {
+    bool all_responded() {
         return map_fulfilled;
     }
 
@@ -874,15 +1072,6 @@ public:
      */
     void set_signature_verified() {
         signature_verified_promise.set_value();
-    }
-
-    void reset() {
-        promise_for_pending_map = std::promise<std::unique_ptr<std::set<node_id_t>>>();
-        map_fulfilled = false;
-        version_promise = std::promise<std::pair<persistent::version_t, uint64_t>>();
-        local_persistence_promise = std::promise<void>();
-        global_persistence_promise = std::promise<void>();
-        signature_verified_promise = std::promise<void>();
     }
 };
 

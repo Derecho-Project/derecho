@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
     uint32_t node_rank = group.get_my_rank();
 
     if(node_rank == 1) {
-        derecho::ExternalCaller<Cache>& cache_handle = group.get_nonmember_subgroup<Cache>();
+        derecho::PeerCaller<Cache>& cache_handle = group.get_nonmember_subgroup<Cache>();
         node_id_t who = 3;
         std::this_thread::sleep_for(std::chrono::seconds(1));
         derecho::rpc::QueryResults<std::string> cache_results = cache_handle.p2p_send<RPC_NAME(get)>(who, "6");

@@ -1,0 +1,37 @@
+diff --git a/configure.ac b/configure.ac
+index 5236181b8..14700fcf9 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -180,9 +180,20 @@ dnl Checks for libraries
+ AC_CHECK_LIB(pthread, pthread_mutex_init, [],
+     AC_MSG_ERROR([pthread_mutex_init() not found.  libfabric requires libpthread.]))
+ 
+-AC_CHECK_FUNC([pthread_spin_init],
+-	[have_spinlock=1],
+-	[have_spinlock=0])
++AC_ARG_ENABLE([spinlock],
++    [AS_HELP_STRING([--disable-spinlock],
++                    [Disable spinlock if available@<:@default=no@:>@])],
++    [],
++    [enable_spinlock=auto]
++)
++
++AS_IF([test x"$enable_spinlock" != x"no"],
++      [AC_CHECK_FUNCS([pthread_spin_init],
++                      [use_spinlock=1],
++                      [use_spinlock=0])
++      ],
++      [use_spinlock=0]
++)
+ 
+ dnl shm_open not used in the common code on os-x
+ 
+@@ -193,7 +204,7 @@ AC_CHECK_FUNC([shm_open],
+ 	 [AC_MSG_ERROR([shm_open() not found.  libfabric requires shm_open.])])])
+ fi
+ 
+-AC_DEFINE_UNQUOTED([PT_LOCK_SPIN], [$have_spinlock],
++AC_DEFINE_UNQUOTED([PT_LOCK_SPIN], [$use_spinlock],
+ 	[Define to 1 if pthread_spin_init is available.])
+ 
+ AC_ARG_ENABLE([epoll],

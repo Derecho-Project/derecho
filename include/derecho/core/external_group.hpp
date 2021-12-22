@@ -9,10 +9,15 @@
 namespace derecho {
 
 template <typename... ReplicatedTypes>
-class ExternalGroup;
+class ExternalGroupClient;
 
 using namespace rpc;
 
+/**
+ * This class represents a "handle" for communicating with a specific type of
+ * subgroup using its RPC functions. It can be used to send P2P RPC messages to
+ * a node in that subgroup using the P2P connections in ExternalGroupClient.
+ */
 template <typename T, typename ExternalGroupType>
 class ExternalClientCaller {
 private:
@@ -20,22 +25,56 @@ private:
     const node_id_t node_id;
     /** The internally-generated subgroup ID of the subgroup that this ExternalClientCaller will contact. */
     subgroup_id_t subgroup_id;
-    ExternalGroupType& group;
+    /** A reference to the ExternalGroupClient that this ExternalClientCaller will use to send P2P messages */
+    ExternalGroupType& group_client;
     /** The actual implementation of ExternalCaller, which has lots of ugly template parameters */
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
 
 public:
-    ExternalClientCaller(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroupType& group);
+    /**
+     * Constructs an ExternalClientCaller that can communicate with members of
+     * a specific subgroup, identified by its subgroup type and subgroup ID.
+     * @param type_id A number uniquely identifying the type of the subgroup
+     * (i.e. the subgroup type's index in the group's template parameters)
+     * @param nid The "node ID" of this external client. Should match the ID in
+     * ExternalGroupClient.
+     * @param subgroup_id The ID of the particular subgroup that this client
+     * will communicate with
+     * @param group_client A reference back to the ExternalGroupClient that
+     * created this ExternalClientCaller
+     */
+    ExternalClientCaller(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroupType& group_client);
 
     ExternalClientCaller(ExternalClientCaller&&) = default;
     ExternalClientCaller(const ExternalClientCaller&) = delete;
 
+    /**
+     * Sends a peer-to-peer message to a single member of the subgroup that
+     * this ExternalClientCaller connects to, invoking the RPC function
+     * identified by the FunctionTag template parameter.
+     * @param dest_node The ID of the node that the P2P message should be sent to
+     * @param args The arguments to the RPC function being invoked
+     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
+     * of the RPC function being invoked
+     */
     template <rpc::FunctionTag tag, typename... Args>
     auto p2p_send(node_id_t dest_node, Args&&... args);
 };
 
+/**
+ * This class acts as an external (non-group-member) client for a Derecho group
+ * with the specified subgroup types. It maintains a local copy of the group's
+ * current View and a set of P2P RDMA connections to some of the group's
+ * members - specifically, the members that it has recently communicated with.
+ * It also runs a P2P listening thread to listen for responses to the messages
+ * it sends to group members.
+ *
+ * @tparam ReplicatedTypes A list of subgroup types that matches the Derecho
+ * group this client will contact. To communicate with a Group<A, B, C>, you
+ * must construct an ExternalGroupClient<A, B, C>
+ */
 template <typename... ReplicatedTypes>
-class ExternalGroup {
+class ExternalGroupClient {
 private:
     template <typename T, typename ExternalGroupType>
     friend class ExternalClientCaller;
@@ -44,11 +83,11 @@ private:
     std::unique_ptr<View> curr_view;
     std::unique_ptr<sst::P2PConnectionManager> p2p_connections;
     std::unique_ptr<std::map<rpc::Opcode, rpc::receive_fun_t>> receivers;
-    std::map<subgroup_id_t, std::list<rpc::PendingBase_ref>> fulfilled_pending_results;
+    std::map<subgroup_id_t, std::list<std::weak_ptr<AbstractPendingResults>>> fulfilled_pending_results;
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
 
     template <typename T>
-    using external_caller_index_map = std::map<uint32_t, ExternalClientCaller<T, ExternalGroup<ReplicatedTypes...>>>;
+    using external_caller_index_map = std::map<uint32_t, ExternalClientCaller<T, ExternalGroupClient<ReplicatedTypes...>>>;
     mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
 
     /**
@@ -59,7 +98,7 @@ private:
     bool get_view(const node_id_t nid);
     void clean_up();
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
-    void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, rpc::PendingBase& pending_results_handle);
+    void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
     uint32_t get_index_of_type(const std::type_info& ti) const;
 
 
@@ -73,13 +112,10 @@ private:
         char* msg_buf;
         uint32_t buffer_size;
         p2p_req() : sender_id(0),
-                     msg_buf(nullptr),
-                     buffer_size(0) {}
+                    msg_buf(nullptr) {}
         p2p_req(node_id_t _sender_id,
-                 char* _msg_buf,
-                 uint32_t _buffer_size) : sender_id(_sender_id),
-                                          msg_buf(_msg_buf),
-                                          buffer_size(_buffer_size) {}
+                 char* _msg_buf) : sender_id(_sender_id),
+                                   msg_buf(_msg_buf) {}
     };
     std::queue<p2p_req> p2p_request_queue;
     std::mutex request_queue_mutex;
@@ -87,15 +123,15 @@ private:
     mutils::RemoteDeserialization_v rdv;
     void p2p_receive_loop();
     void p2p_request_worker();
-    void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
+    void p2p_message_handler(node_id_t sender_id, char* msg_buf);
     std::exception_ptr receive_message(const rpc::Opcode& indx, const node_id_t& received_from,
                                        char const* const buf, std::size_t payload_size,
                                        const std::function<char*(int)>& out_alloc);
     /** ======================== copy/paste from rpc_manager ======================== **/
 
 public:
-    ExternalGroup(std::vector<DeserializationContext*> deserialization_contexts = {});
-    virtual ~ExternalGroup();
+    ExternalGroupClient(std::vector<DeserializationContext*> deserialization_contexts = {});
+    virtual ~ExternalGroupClient();
 
     /**
      * Get a handle for external client calls to a specific subgroup.
@@ -104,7 +140,7 @@ public:
      * @return      An external client caller handle for the given subgroup
      */
     template <typename SubgroupType>
-    ExternalClientCaller<SubgroupType, ExternalGroup<ReplicatedTypes...>>& get_subgroup_caller(uint32_t subgroup_index = 0);
+    ExternalClientCaller<SubgroupType, ExternalGroupClient<ReplicatedTypes...>>& get_subgroup_caller(uint32_t subgroup_index = 0);
     /**
      * Pull a new view from derecho members
      * @return      true for success, false for failure.

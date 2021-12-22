@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.15.4)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
@@ -33,3 +33,9 @@ target_link_libraries(openssl_test derecho)
 
 add_executable(signature_chain_test signature_chain_test.cpp)
 target_link_libraries(signature_chain_test derecho)
+
+add_executable(client_callback_mockup client_callback_mockup.cpp)
+target_link_libraries(client_callback_mockup derecho)
+
+add_executable(view_change_test view_change_test.cpp)
+target_link_libraries(view_change_test derecho)

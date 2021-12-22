@@ -7,7 +7,7 @@
 #include "test_objects.hpp"
 #include <derecho/conf/conf.hpp>
 
-using derecho::ExternalCaller;
+using derecho::PeerCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
 
     if(node_rank == 0) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
-        ExternalCaller<Bar>& bar_rpc_handle = group.get_nonmember_subgroup<Bar>();
+        PeerCaller<Bar>& bar_rpc_handle = group.get_nonmember_subgroup<Bar>();
         foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(0);
         cout << "Reading Foo's state from the group" << endl;
         derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     }
     if(node_rank == 2) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
-        ExternalCaller<Bar>& bar_rpc_handle = group.get_nonmember_subgroup<Bar>();
+        PeerCaller<Bar>& bar_rpc_handle = group.get_nonmember_subgroup<Bar>();
         foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(node_rank);
         cout << "Reading Foo's state from the group" << endl;
         derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
@@ -103,7 +103,7 @@ int main(int argc, char** argv) {
     }
     if(node_rank > 2 && node_rank < 6) {
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>(0);
-        ExternalCaller<Foo>& foo_p2p_handle = group.get_nonmember_subgroup<Foo>();
+        PeerCaller<Foo>& foo_p2p_handle = group.get_nonmember_subgroup<Foo>();
         cout << "Sending updates to Bar object, subgroup 0" << endl;
         for(int i = 0; i < 10; ++i) {
             std::stringstream text;

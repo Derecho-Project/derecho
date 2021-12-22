@@ -1,6 +1,5 @@
 /**
  * @file group_impl.h
- * @brief Contains implementations of all the ManagedGroup functions
  * @date Apr 22, 2016
  */
 
@@ -10,9 +9,9 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "../group.hpp"
-#include "container_template_functions.hpp"
 #include "derecho_internal.hpp"
 #include "make_kind_map.hpp"
+#include <derecho/utils/container_template_functions.hpp>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {
@@ -59,12 +58,12 @@ GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
 }
 
 template <typename ReplicatedType>
-ExternalCaller<ReplicatedType>&
+PeerCaller<ReplicatedType>&
 GroupProjection<ReplicatedType>::get_nonmember_subgroup(uint32_t subgroup_num) {
     void* ret{nullptr};
-    set_external_caller_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
+    set_peer_caller_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
                                 &ret);
-    return *((ExternalCaller<ReplicatedType>*)ret);
+    return *((PeerCaller<ReplicatedType>*)ret);
 }
 
 template <typename ReplicatedType>
@@ -105,7 +104,7 @@ ViewManager& Group<ReplicatedTypes...>::get_view_manager() {
 }
 
 template <typename... ReplicatedTypes>
-void Group<ReplicatedTypes...>::set_external_caller_pointer(std::type_index type,
+void Group<ReplicatedTypes...>::set_peer_caller_pointer(std::type_index type,
                                                             uint32_t subgroup_num,
                                                             void** ret) {
     ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
@@ -304,10 +303,10 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 objects_by_subgroup_id.erase(subgroup_id);
                 replicated_objects.template get<FirstType>().erase(old_object);
             }
-            // Create an ExternalCaller for the subgroup if we don't already have one
-            external_callers.template get<FirstType>().emplace(
-                    subgroup_index, ExternalCaller<FirstType>(subgroup_type_id,
-                                                              my_id, subgroup_id, rpc_manager));
+            // Create a PeerCaller for the subgroup if we don't already have one
+            peer_callers.template get<FirstType>().emplace(
+                    subgroup_index, PeerCaller<FirstType>(subgroup_type_id,
+                                                          my_id, subgroup_id, rpc_manager));
         }
     }
     return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders, in_restart));
@@ -322,8 +321,8 @@ void Group<ReplicatedTypes...>::set_up_components() {
         rpc_manager.notify_persistence_finished(subgroup_id, version);
     });
     //Connect ViewManager's external_join_handler to RPCManager
-    view_manager.register_add_external_connection_upcall([this](const std::vector<uint32_t>& node_ids) {
-        rpc_manager.add_connections(node_ids);
+    view_manager.register_add_external_connection_upcall([this](uint32_t node_id) {
+        rpc_manager.add_external_connection(node_id);
     });
     //Give RPCManager a standard "new view callback" on every View change
     view_manager.add_view_upcall([this](const View& new_view) {
@@ -354,11 +353,11 @@ Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgr
 
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-ExternalCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(uint32_t subgroup_index) {
+PeerCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(uint32_t subgroup_index) {
     try {
-        return external_callers.template get<SubgroupType>().at(subgroup_index);
+        return peer_callers.template get<SubgroupType>().at(subgroup_index);
     } catch(std::out_of_range& ex) {
-        throw invalid_subgroup_exception("No ExternalCaller exists for the requested subgroup; this node may be a member of the subgroup");
+        throw invalid_subgroup_exception("No PeerCaller exists for the requested subgroup; this node may be a member of the subgroup");
     }
 }
 
@@ -366,7 +365,7 @@ template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 ShardIterator<SubgroupType> Group<ReplicatedTypes...>::get_shard_iterator(uint32_t subgroup_index) {
     try {
-        auto& EC = external_callers.template get<SubgroupType>().at(subgroup_index);
+        auto& caller = peer_callers.template get<SubgroupType>().at(subgroup_index);
         SharedLockedReference<View> curr_view = view_manager.get_current_view();
         auto subgroup_id = curr_view.get().subgroup_ids_by_type_id.at(index_of_type<SubgroupType, ReplicatedTypes...>).at(subgroup_index);
         const auto& shard_subviews = curr_view.get().subgroup_shard_views.at(subgroup_id);
@@ -375,9 +374,9 @@ ShardIterator<SubgroupType> Group<ReplicatedTypes...>::get_shard_iterator(uint32
             // for shard iteration to be possible, each shard must contain at least one member
             shard_reps[i] = shard_subviews[i].members.at(0);
         }
-        return ShardIterator<SubgroupType>(EC, shard_reps);
+        return ShardIterator<SubgroupType>(caller, shard_reps);
     } catch(std::out_of_range& ex) {
-        throw invalid_subgroup_exception("No ExternalCaller exists for the requested subgroup; this node may be a member of the subgroup");
+        throw invalid_subgroup_exception("No PeerCaller exists for the requested subgroup; this node may be a member of the subgroup");
     }
 }
 
@@ -401,13 +400,15 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
             leader_socket.get().read(buffer_size);
             std::unique_ptr<char[]> buffer = std::make_unique<char[]>(buffer_size);
             leader_socket.get().read(buffer.get(), buffer_size);
+            dbg_default_trace("Deserializing Replicated Object from buffer of size {}", buffer_size);
             subgroup_object->receive_object(buffer.get());
         } catch(tcp::socket_error& e) {
             //Convert socket exceptions to a more readable error message, since this will cause a crash
             throw derecho_exception("Fatal error: Node " + std::to_string(subgroup_and_leader.second) + " failed during state transfer!");
         }
     }
-    dbg_default_debug("Done receiving all Replicated Objects from subgroup leaders");
+
+    dbg_default_debug("Done receiving all Replicated Objects from subgroup leaders {}", subgroups_and_leaders.empty() ? "(there were none to receive)" : "");
 }
 
 template <typename... ReplicatedTypes>
