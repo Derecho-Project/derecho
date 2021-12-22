@@ -24,6 +24,7 @@
 #include "detail/view_manager.hpp"
 #include "replicated.hpp"
 #include "subgroup_info.hpp"
+#include "notification.hpp"
 
 #include <derecho/conf/conf.hpp>
 #include <mutils-containers/KindMap.hpp>
@@ -137,6 +138,9 @@ private:
     template <typename T>
     using peer_caller_index_map = std::map<uint32_t, PeerCaller<T>>;
 
+    template <typename T>
+    using external_client_callback_map = std::map<uint32_t, ExternalClientCallback<T>>;
+
     const node_id_t my_id;
     /**
      * The shared pointer holding deserialization context is obsolete. I (Weijia)
@@ -176,6 +180,10 @@ private:
      * of any shard of that subgroup, so shards are not indexed.
      */
     mutils::KindMap<peer_caller_index_map, ReplicatedTypes...> peer_callers;
+    /**
+     * Same thing with PeerCaller
+     */
+    mutils::KindMap<external_client_callback_map, ReplicatedTypes...> external_client_callbacks;
     /**
      * Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry
      * at index X is a pointer to the Replicated<T> for this node's shard of
@@ -321,6 +329,9 @@ public:
      */
     template <typename SubgroupType>
     PeerCaller<SubgroupType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
+
+    template <typename SubgroupType>
+    ExternalClientCallback<SubgroupType>& get_client_callback(uint32_t subgroup_index = 0);
 
     template <typename SubgroupType>
     ShardIterator<SubgroupType> get_shard_iterator(uint32_t subgroup_index = 0);

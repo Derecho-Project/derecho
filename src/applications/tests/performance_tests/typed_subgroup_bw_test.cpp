@@ -110,13 +110,14 @@ int main(int argc, char* argv[]) {
             total_num_messages = count;
             break;
     }
+
     // variable 'done' tracks the end of the test
     volatile bool done = false;
     // callback into the application code at each message delivery
     auto stability_callback = [&done,
-                               &send_complete_time,
                                total_num_messages,
-                               num_delivered = 0u](uint32_t subgroup,
+                               num_delivered = 0u,
+    			       &send_complete_time](uint32_t subgroup,
                                                    uint32_t sender_id,
                                                    long long int index,
                                                    std::optional<std::pair<char*, long long int>> data,
@@ -125,7 +126,7 @@ int main(int argc, char* argv[]) {
         ++num_delivered;
         // Check for completion
         if(num_delivered == total_num_messages) {
-            send_complete_time = std::chrono::steady_clock::now();
+	    send_complete_time = std::chrono::steady_clock::now();
             done = true;
         }
     };
@@ -172,23 +173,32 @@ int main(int argc, char* argv[]) {
     bzero(bbuf, max_msg_size);
     Bytes bytes(bbuf, max_msg_size);
 
+    // this function sends all the messages
+    auto send_all = [&]() {
+        for(uint i = 0; i < count; i++) {
+	derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
+        handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
+    }
+    };
+
     int node_rank = group.get_my_rank();
-
-    bool is_sending = true;
-    if((senders_mode == PartialSendMode::HALF_SENDERS) && (node_rank <= (num_nodes - 1) / 2)) {
-        is_sending = false;
-    }
-    if((senders_mode == PartialSendMode::ONE_SENDER) && (node_rank != num_nodes - 1)) {
-        is_sending = false;
-    }
-
+    
+    // Begin Clock Timer
     begin_time = std::chrono::steady_clock::now();
-    if (is_sending){
-        derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
-        for (uint i = 0; i < count; i++){
-            handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
+
+
+    if(senders_mode == PartialSendMode::ALL_SENDERS) {
+        send_all();
+    } else if(senders_mode == PartialSendMode::HALF_SENDERS) {
+        if(node_rank > (num_nodes - 1) / 2) {
+            send_all();
+        }
+    } else {
+        if(node_rank == num_nodes - 1) {
+            send_all();
         }
     }
+
     /*
     if(node_rank == 0) {
         derecho::rpc::QueryResults<bool> results = handle.ordered_send<RPC_NAME(finishing_call)>(0);
@@ -204,12 +214,11 @@ int main(int argc, char* argv[]) {
 
     free(bbuf);
 
-    int64_t nsec = duration_cast<nanoseconds>(send_complete_time - begin_time).count(); 
+    int64_t nsec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
 
     double thp_gbps = (static_cast<double>(total_num_messages) * max_msg_size) / nsec;
-    double thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / nsec;
-
-    double msec = static_cast<double>(nsec) / 1000000;
+    double msec = (double)nsec / 1000000;
+    double thp_ops = ((double)count * 1000000000) / nsec;
     std::cout << "timespan:" << msec << " millisecond." << std::endl;
     std::cout << "throughput:" << thp_gbps << "GB/s." << std::endl;
     std::cout << "throughput:" << thp_ops << "ops." << std::endl;

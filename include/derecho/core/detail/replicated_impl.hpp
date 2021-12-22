@@ -319,6 +319,45 @@ auto PeerCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
 }
 
 template <typename T>
+ExternalClientCallback<T>::ExternalClientCallback(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id,
+                          rpc::RPCManager& group_rpc_manager)
+        : node_id(nid),
+          subgroup_id(subgroup_id),
+          group_rpc_manager(group_rpc_manager),
+          wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
+                                                   T::register_functions(), *group_rpc_manager.receivers)) {}
+
+//This is literally copied and pasted from PeerCaller<T>, except that this does not check if the receiver 
+// is in the subgroup.
+
+template <typename T>
+template <rpc::FunctionTag tag, typename... Args>
+auto ExternalClientCallback<T>::p2p_send(node_id_t dest_node, Args&&... args) {
+    if(is_valid()) {
+        std::cout << "starting to send notification! " << dest_node << " " << node_id << std::endl;
+        assert(dest_node != node_id);
+        auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
+                [this, &dest_node](size_t size) -> char* {
+                    std::cout << "Running in the lambda haha" << std::endl;
+                    const std::size_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
+                    if(size <= max_payload_size) {
+                        return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
+                                                                           sst::REQUEST_TYPE::P2P_REQUEST);
+                    } else {
+                        throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
+                    }
+                },
+                std::forward<Args>(args)...);
+        std::cout << "Finishing p2p send..." << std::endl;
+        // 0xffff is the "destination subgroup ID", since there is no subgroup at the destination
+        group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
+        return std::move(*return_pair.results);
+    } else {
+        throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+    }
+}
+
+template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto ShardIterator<T>::p2p_send(Args&&... args) {
     // shard_reps should have at least one member

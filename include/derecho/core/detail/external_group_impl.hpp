@@ -11,8 +11,32 @@ ExternalClientCaller<T, ExternalGroupType>::ExternalClientCaller(subgroup_type_i
                                                    T::register_functions(), *group_client.receivers)) {}
 
 template <typename T, typename ExternalGroupType>
-template <rpc::FunctionTag tag, typename... Args>
-auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, Args&&... args) {
+void ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<void(const derecho::Bytes&)> func, node_id_t nid){
+    // Dirty fix for adding a p2p connection
+    add_p2p_connections(nid);
+    if (support_map.find(nid) == support_map.end()){
+        // Create the support pointer
+        support_map[nid] = std::make_unique<T>();
+        
+        // We have to store this pointer in ExternalClientCaller, although it is of no use to us in the future. This is to 
+        // keep it as well as the lambda inside alive throughout the entire program
+        remote_invocable_ptr_map[nid] = mutils::callFunc([&](const auto&... unpacked_functions) {
+            // 0xffff should be changed to concrete subgroup index that this node wants to connect to
+                return build_remote_invocable_class<T>(node_id, 0, subgroup_id, *group_client.receivers,
+                                                                    bind_to_instance(&support_map[nid], unpacked_functions)...);
+            },T::register_functions());
+    }
+    // for (auto it = (*group_client.receivers).begin(); it != (*group_client.receivers).end(); it++){
+    //     std::cout << nid << " " << it->first.class_id << " " << it->first.subgroup_id << " " << it->first.function_id << " " << it->first.is_reply << std::endl;
+    // }
+    // Register client handle
+    support_map[nid]->add_notification_handler(func);
+}
+
+
+// Factor out add_p2p_connections out of p2p_send()
+template <typename T, typename ExternalGroupType>
+void ExternalClientCaller<T, ExternalGroupType>::add_p2p_connections(node_id_t dest_node){
     if(!group_client.p2p_connections->contains_node(dest_node)) {
         dbg_default_info("p2p connection to {} is not established yet, establishing right now.", dest_node);
         int rank = group_client.curr_view->rank_of(dest_node);
@@ -48,6 +72,13 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
                                            group_client.curr_view->member_ips_and_ports[rank].external_port});
         group_client.p2p_connections->add_connections({dest_node});
     }
+}
+
+
+template <typename T, typename ExternalGroupType>
+template <rpc::FunctionTag tag, typename... Args>
+auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, Args&&... args) {
+    add_p2p_connections(dest_node);
 
     auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
             [this, &dest_node](size_t size) -> char* {
@@ -275,7 +306,7 @@ std::exception_ptr ExternalGroupClient<ReplicatedTypes...>::receive_message(
     assert(payload_size);
     auto receiver_function_entry = receivers->find(indx);
     if(receiver_function_entry == receivers->end()) {
-        dbg_default_error("Received an RPC message with an invalid RPC opcode! Opcode was ({}, {}, {}, {}).",
+        dbg_default_error("In External Group, Received an RPC message with an invalid RPC opcode! Opcode was ({}, {}, {}, {}).",
                           indx.class_id, indx.subgroup_id, indx.function_id, indx.is_reply);
         //TODO: We should reply with some kind of "no such method" error in this case
         return std::exception_ptr{};
