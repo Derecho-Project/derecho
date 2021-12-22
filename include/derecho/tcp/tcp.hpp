@@ -25,7 +25,7 @@ struct socket_error : public std::runtime_error {
 };
 
 /**
- * An exception that reports that a socket operation failed because the socket 
+ * An exception that reports that a socket operation failed because the socket
  * was closed.
  */
 struct socket_closed_error : public socket_error {
@@ -33,8 +33,8 @@ struct socket_closed_error : public socket_error {
 };
 
 /**
- * An exception that reports that a socket operation failed because of an I/O 
- * error reported by the underlying OS socket system. Contains the "errno" 
+ * An exception that reports that a socket operation failed because of an I/O
+ * error reported by the underlying OS socket system. Contains the "errno"
  * value reported by the socket operation.
  */
 struct socket_io_error : public socket_error {
@@ -44,7 +44,7 @@ struct socket_io_error : public socket_error {
 };
 
 /**
- * An exception that reports that a socket read failed because the socket was 
+ * An exception that reports that a socket read failed because the socket was
  * closed before the expected number of bytes could be read.
  */
 struct incomplete_read_error : public socket_error {
@@ -62,7 +62,7 @@ struct connection_reset_error : public socket_io_error {
 
 /**
  * An exception that reports that a socket operation failed because of the error
- * "the local end of a connection-oriented socket has been shut down" (which 
+ * "the local end of a connection-oriented socket has been shut down" (which
  * happens when the remote end terminates the TCP session). This is a subclass
  * of socket_io_error with the errno value EPIPE.
  */
@@ -73,18 +73,20 @@ struct remote_closed_connection_error : public socket_io_error {
 class socket {
     int sock;
 
-    explicit socket(int _sock) : sock(_sock), remote_ip() {}
-    explicit socket(int _sock, std::string remote_ip)
-            : sock(_sock), remote_ip(remote_ip) {}
+    explicit socket(int _sock) : sock(_sock), remote_ip(), remote_port(0) {}
+    /** A special constructor for connection_listener that wraps an existing C socket with this class. */
+    explicit socket(int _sock, std::string remote_ip, uint16_t remote_port)
+            : sock(_sock), remote_ip(remote_ip), remote_port(remote_port) {}
 
     friend class connection_listener;
     std::string remote_ip;
+    uint16_t remote_port;
 
 public:
     /**
      * Constructs an empty, unconnected socket.
      */
-    socket() : sock(-1), remote_ip() {}
+    socket() : sock(-1), remote_ip(), remote_port(0) {}
     /**
      * Constructs a socket connected to the specified address and port,
      * blocking until the connection succeeds.
@@ -96,7 +98,7 @@ public:
     socket(std::string server_ip, uint16_t server_port, bool retry = true);
     socket(socket&& s);
 
-    socket& operator=(socket& s) = delete;
+    socket& operator=(const socket& s) = delete;
     socket& operator=(socket&& s);
 
     ~socket();
@@ -104,6 +106,7 @@ public:
     bool is_empty() const;
     std::string get_self_ip();
     std::string get_remote_ip() const { return remote_ip; }
+    uint16_t get_remote_port() const { return remote_port; }
 
     /**
      * Attempts to connect the socket to the specified address and port, but
@@ -118,7 +121,7 @@ public:
      * the set defined in sys/socket.h) that resulted from a failed connect()
      * system call.
      */
-    int try_connect(std::string servername, int port, int timeout_ms = 20000);
+    int try_connect(std::string servername, uint16_t port, int timeout_ms = 20000);
 
     /**
      * Reads size bytes from the socket and writes them to the given buffer.
@@ -129,7 +132,7 @@ public:
      * bytes could be read. The type of exception indicates the type of error:
      * socket_closed_error means the socket cannot be read from because it is
      * closed, incomplete_read_error means the connection was terminated (i.e.
-     * read returned EOF) before all size bytes could be read, and 
+     * read returned EOF) before all size bytes could be read, and
      * socket_io_error means some other error occurred during the read() call.
      */
     void read(char* buffer, size_t size);
@@ -155,9 +158,9 @@ public:
      * the socket.
      * @param size The number of bytes from the buffer to send.
      * @throw a subclass of socket_error if there was an error before all size
-     * bytes could be written. The type of exception indicates the type of 
+     * bytes could be written. The type of exception indicates the type of
      * error: socket_closed_error means the socket cannot be written to because
-     * it is closed, while socket_io_error or one of its subclasses means an 
+     * it is closed, while socket_io_error or one of its subclasses means an
      * error occurred during the write() call.
      */
     void write(const char* buffer, size_t size);
@@ -198,6 +201,7 @@ public:
 
 class connection_listener {
     std::unique_ptr<int, std::function<void(int*)>> fd;
+    uint16_t port;
 
 public:
     /**
@@ -208,6 +212,9 @@ public:
      * for the server socket. Defaults to 50.
      */
     explicit connection_listener(uint16_t port, int queue_depth = 50);
+
+    uint16_t get_listening_port() const { return port; }
+
     /**
      * Blocks until a remote client makes a connection to this connection
      * listener, then returns a new socket connected to that client.

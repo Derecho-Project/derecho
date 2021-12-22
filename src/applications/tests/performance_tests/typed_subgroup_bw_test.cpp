@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
 
     if((argc - dashdash_pos) < 4) {
         std::cout << "Invalid command line arguments." << std::endl;
-        std::cout << "USAGE: " << argv[0] << " [ derecho-config-list -- ] <num_nodes> <count> <num_senders_selector>[proc_name]" << std::endl;
+        std::cout << "USAGE: " << argv[0] << " [ derecho-config-list -- ] <num_nodes> <count> <num_senders_selector> [proc_name]" << std::endl;
         std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
@@ -136,7 +136,31 @@ int main(int argc, char* argv[]) {
         pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
     }
 
-    derecho::SubgroupInfo subgroup_info(PartialSendersAllocator(num_nodes,senders_mode)); 
+    /*******************
+    derecho::SubgroupInfo subgroup_info{[num_nodes](
+                                                const std::vector<std::type_index>& subgroup_type_order,
+                                                const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+        if(curr_view.num_members < num_nodes) {
+            std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_nodes << std::endl;
+            throw derecho::subgroup_provisioning_exception();
+        }
+        derecho::subgroup_shard_layout_t subgroup_layout(1);
+
+        std::vector<uint32_t> members(num_nodes);
+        for(int i = 0; i < num_nodes; i++) {
+            members[i] = i;
+        }
+
+        subgroup_layout[0].emplace_back(curr_view.make_subview(members));
+        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_nodes);
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(TestObject)), std::move(subgroup_layout));
+        return subgroup_allocation;
+    }};
+    *****************/
+
+    auto membership_function = PartialSendersAllocator(num_nodes, senders_mode, derecho::Mode::ORDERED);
+    derecho::SubgroupInfo subgroup_info(membership_function);
 
     auto ba_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
 

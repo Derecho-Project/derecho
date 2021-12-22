@@ -44,7 +44,7 @@ private:
     std::unique_ptr<View> curr_view;
     std::unique_ptr<sst::P2PConnectionManager> p2p_connections;
     std::unique_ptr<std::map<rpc::Opcode, rpc::receive_fun_t>> receivers;
-    std::map<subgroup_id_t, std::list<rpc::PendingBase_ref>> fulfilled_pending_results;
+    std::map<subgroup_id_t, std::list<std::weak_ptr<AbstractPendingResults>>> fulfilled_pending_results;
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
 
     template <typename T>
@@ -59,7 +59,7 @@ private:
     bool get_view(const node_id_t nid);
     void clean_up();
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
-    void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, rpc::PendingBase& pending_results_handle);
+    void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
     uint32_t get_index_of_type(const std::type_info& ti) const;
 
 
@@ -73,13 +73,10 @@ private:
         char* msg_buf;
         uint32_t buffer_size;
         p2p_req() : sender_id(0),
-                     msg_buf(nullptr),
-                     buffer_size(0) {}
+                    msg_buf(nullptr) {}
         p2p_req(node_id_t _sender_id,
-                 char* _msg_buf,
-                 uint32_t _buffer_size) : sender_id(_sender_id),
-                                          msg_buf(_msg_buf),
-                                          buffer_size(_buffer_size) {}
+                 char* _msg_buf) : sender_id(_sender_id),
+                                   msg_buf(_msg_buf) {}
     };
     std::queue<p2p_req> p2p_request_queue;
     std::mutex request_queue_mutex;
@@ -87,7 +84,7 @@ private:
     mutils::RemoteDeserialization_v rdv;
     void p2p_receive_loop();
     void p2p_request_worker();
-    void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
+    void p2p_message_handler(node_id_t sender_id, char* msg_buf);
     std::exception_ptr receive_message(const rpc::Opcode& indx, const node_id_t& received_from,
                                        char const* const buf, std::size_t payload_size,
                                        const std::function<char*(int)>& out_alloc);

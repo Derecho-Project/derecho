@@ -45,7 +45,7 @@ class P2PConnection {
     REQUEST_TYPE last_type;
     uint64_t getOffsetSeqNum(REQUEST_TYPE type, uint64_t seq_num);
     uint64_t getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num);
-    
+
 protected:
     friend class P2PConnectionManager;
     resources* get_res();
@@ -54,11 +54,31 @@ protected:
 public:
     P2PConnection(uint32_t my_node_id, uint32_t remote_id, uint64_t p2p_buf_size, const RequestParams& request_params);
     ~P2PConnection();
-    
+
+    /**
+     * Returns a pointer into an incoming message buffer if there is a new
+     * incoming message from the remote node, or a null pointer if there are
+     * no new messages.
+     */
     char* probe();
+    /**
+     * Increments the sequence number of the incoming message type last
+     * retrieved by probe(). This assumes that it is called immediately
+     * after a successful call to probe().
+     */
     void update_incoming_seq_num();
+    /**
+     * Returns a pointer to the beginning of the next available message buffer
+     * for the specified request type, or a null pointer if no message buffer
+     * is available.
+     */
     char* get_sendbuffer_ptr(REQUEST_TYPE type);
+    /**
+     * Sends the next outgoing message, i.e. the one populated by the most
+     * recent call to get_sendbuffer_ptr. This assumes the message's
+     * REQUEST_TYPE is the same as the one supplied to the most recent call
+     * to get_sendbuffer_ptr.
+     */
     void send();
-    
 };
 }  // namespace sst

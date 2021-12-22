@@ -7,11 +7,27 @@
 #include <vector>
 
 #include <derecho/core/derecho.hpp>
+#include <derecho/utils/time.h>
 
 #include "bytes_object.hpp"
 #include "partial_senders_allocator.hpp"
 #include "aggregate_latency.hpp"
 #include "log_results.hpp"
+
+
+/**
+ * This latency test will timestamp the following events to measure the breakdown latencies
+ * ts1 - when a message is sent
+ * ts2 - message stablized
+ * ts3 - locally persisted
+ * ts4 - globally persisted
+ * (ts4-ts1): end-to-end latency
+ * (ts2-ts1): stablizing latency
+ * (ts3-ts2): local persistence latency
+ * (ts4-ts3): global persistence latency
+ *
+ * We assume that the clock on all nodes are percisely synchronized, for example, synchronized by PTP.
+ */
 
 using std::cout;
 using std::endl;
@@ -22,10 +38,7 @@ using namespace persistent;
 
 //the payload is used to identify the user timestamp
 struct PayLoad {
-    uint32_t node_rank;  // rank of the sender
-    uint32_t msg_seqno;  // sequence of the message sent by the same sender
-    uint64_t tv_sec;     // second
-    uint64_t tv_nsec;    // nano second
+    uint64_t send_timestamp_us;       // message sending time stamp
 };
 
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
@@ -100,17 +113,8 @@ int main(int argc, char* argv[]) {
 
     bool is_sending = true;
     uint32_t node_rank = -1;
-    // message_pers_ts_us[] is the time when a message with version 'ver' is persisted.
-    uint64_t* message_pers_ts_us = (uint64_t*)malloc(sizeof(uint64_t) * num_msgs * num_of_nodes);
-    if(message_pers_ts_us == NULL) {
-        std::cerr << "allocate memory error!" << std::endl;
-        return -1;
-    }
-    // the total span:
-    struct timespec t_begin;
-    // is only for local
-    uint64_t* local_message_ts_us = (uint64_t*)malloc(sizeof(uint64_t) * num_msgs);
-    long total_num_messages;
+
+
     uint32_t num_sender = 0;
     switch(sender_selector) {
         case PartialSendMode::ALL_SENDERS:
@@ -123,61 +127,92 @@ int main(int argc, char* argv[]) {
             num_sender = 1;
             break;
     }
-    total_num_messages = num_sender * num_msgs;
+    size_t total_number_of_messages = num_sender * num_msgs;
 
-    // variable 'done' tracks the end of the test
-    volatile bool done = false;
+    // Timing instruments
+    uint64_t* t1_us = (uint64_t*)malloc(sizeof(uint64_t)*total_number_of_messages);
+    uint64_t* t2_us = (uint64_t*)malloc(sizeof(uint64_t)*total_number_of_messages);
+    uint64_t* t3_us = (uint64_t*)malloc(sizeof(uint64_t)*total_number_of_messages);
+    uint64_t* t4_us = (uint64_t*)malloc(sizeof(uint64_t)*total_number_of_messages);
+    if (t1_us == nullptr || t2_us == nullptr || t3_us == nullptr || t4_us == nullptr) {
+        std::cerr << "allocate memory error!" << std::endl;
+        return -1;
+    }
+    std::memset(t1_us,0,sizeof(uint64_t)*total_number_of_messages);
+    std::memset(t2_us,0,sizeof(uint64_t)*total_number_of_messages);
+    std::memset(t3_us,0,sizeof(uint64_t)*total_number_of_messages);
+    std::memset(t4_us,0,sizeof(uint64_t)*total_number_of_messages);
+    std::map<persistent::version_t,size_t> version_to_index;
+    std::mutex version_to_index_mutex;
+    size_t number_of_stable_messages = 0;
 
     // last_version and its flag is shared between the stability callback and persistence callback.
     // This is a clumsy hack to figure out what version number is assigned to the last delivered message.
     persistent::version_t last_version;
     std::atomic<bool> last_version_set = false;
+    std::atomic<bool> local_persistence_done = false;
+    std::atomic<bool> global_persistence_done = false;
 
-    auto stability_callback = [&last_version,
-                               &last_version_set,
-                               total_num_messages,
-                               num_delivered = 0u](uint32_t subgroup,
+    auto stability_callback = [&](uint32_t subgroup,
                                                    uint32_t sender_id,
                                                    long long int index,
                                                    std::optional<std::pair<char*, long long int>> data,
                                                    persistent::version_t ver) mutable {
+        t2_us[number_of_stable_messages] = get_walltime()/1000;
+        {
+            std::lock_guard<std::mutex> lck(version_to_index_mutex);
+            version_to_index[ver] = number_of_stable_messages;
+        }
+        if (!data) {
+            throw derecho::derecho_exception("Critical: stability_callback got no data.");
+        }
+        if (data->second < static_cast<long long int>(sizeof (PayLoad))) {
+            throw derecho::derecho_exception("Critical: stability_callback got invalid data size.");
+        }
+        // 35 is the size of cooked header -- TODO: find a better way to index the parameters.
+        t1_us[number_of_stable_messages] = reinterpret_cast<PayLoad*>(data->first + 35)->send_timestamp_us; 
         //Count the total number of messages delivered
-        ++num_delivered;
-        if(num_delivered == total_num_messages) {
+        ++number_of_stable_messages;
+        if(number_of_stable_messages == total_number_of_messages) {
             last_version = ver;
             last_version_set = true;
         }
     };
 
+    auto local_persistence_callback = [&](derecho::subgroup_id_t, persistent::version_t ver) {
+        size_t index = 0;
+        uint64_t now_us = get_walltime()/1000;
+        {
+            std::lock_guard<std::mutex> lck(version_to_index_mutex);
+            index = version_to_index.at(ver);
+        }
+        while (index >= 0 && t3_us[index] == 0) {
+            t3_us[index--] = now_us;
+        }
+
+        if (last_version_set && ver == last_version) {
+            local_persistence_done = true;
+        }
+    };
+
     auto global_persistence_callback = [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
-        struct timespec ts;
-        static persistent::version_t pers_ver = 0;
-        if(pers_ver > ver) return;
-
-        clock_gettime(CLOCK_REALTIME, &ts);
-        uint64_t tsus = ts.tv_sec * 1e6 + ts.tv_nsec / 1e3;
-
-        while(pers_ver <= ver) {
-            message_pers_ts_us[pers_ver++] = tsus;
+        size_t index = 0;
+        uint64_t now_us = get_walltime()/1000;
+        {
+            std::lock_guard<std::mutex> lck(version_to_index_mutex);
+            index = version_to_index.at(ver);
+        }
+        while (index >= 0 && t4_us[index] == 0) {
+            t4_us[index--] = now_us;
         }
 
         if(last_version_set && ver == last_version) {
-            if(is_sending) {
-                for(uint32_t i = 0; i < num_msgs; i++) {
-                    // std::cout << "[" << i << "]" << local_message_ts_us[i] << " "
-                    //           << message_pers_ts_us[num_sender * i + node_rank] << " "
-                    //           << (message_pers_ts_us[num_sender * i + node_rank] - local_message_ts_us[i]) << " us" << std::endl;
-                }
-            }
-            double thp_mbps = (double)total_num_messages * msg_size / DELTA_T_US(t_begin, ts);
-            std::cout << "throughput(pers): " << thp_mbps << " MBps" << std::endl;
-            std::cout << std::flush;
-            done = true;
+            global_persistence_done = true;
         }
     };
     derecho::UserMessageCallbacks callback_set{
             stability_callback,
-            nullptr,
+            local_persistence_callback,
             global_persistence_callback};
 
     derecho::SubgroupInfo subgroup_info{PartialSendersAllocator(num_of_nodes, sender_selector)};
@@ -203,8 +238,6 @@ int main(int argc, char* argv[]) {
 
     std::cout << "my rank is:" << node_rank << ", and I'm sending: " << std::boolalpha << is_sending << std::endl;
 
-    clock_gettime(CLOCK_REALTIME, &t_begin);
-
     derecho::Replicated<ByteArrayObject>& handle = group.get_subgroup<ByteArrayObject>();
 
     if(is_sending) {
@@ -222,7 +255,9 @@ int main(int argc, char* argv[]) {
                     clock_gettime(CLOCK_REALTIME, &cur);
                 } while(DELTA_T_US(start, cur) < i * (double)si_us);
                 {
-                    local_message_ts_us[i] = cur.tv_sec * 1e6 + cur.tv_nsec / 1e3;
+
+                    memset(bs.get(),0xcc,msg_size);
+                    reinterpret_cast<PayLoad*>(bs.get())->send_timestamp_us = get_walltime()/1000;
                     handle.ordered_send<RPC_NAME(change_pers_bytes)>(bs);
                 }
             }
@@ -233,7 +268,14 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    while(!done) {
+    while(!local_persistence_done || !global_persistence_done);
+    std::cout << "#index\t#end-to-end(us)\t#t2-t1(us)\t#t3-t2(us)\t#t4-t3(us)" << std::endl;
+    for (size_t i=0; i < total_number_of_messages; i++) {
+        std::cout << i << "\t"
+                  << (t4_us[i] - t1_us[i]) << "\t"
+                  << (t2_us[i] - t1_us[i]) << "\t"
+                  << (t3_us[i] - t2_us[i]) << "\t"
+                  << (t4_us[i] - t3_us[i]) << std::endl;
     }
 
     std::cout << "Done!" << std::endl;

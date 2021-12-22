@@ -165,15 +165,15 @@ public:
 
     //This class has no serialized state, so DEFAULT_SERIALIZATION_SUPPORT won't work.
     //We must still provide trivial implementations of these functions.
-    std::size_t to_bytes(char* v) const { return 0; };
+    std::size_t to_bytes(char* v) const { return 0; }
 
-    std::size_t bytes_size() const { return 0; };
+    std::size_t bytes_size() const { return 0; }
 
-    void post_object(const std::function<void(char const* const, std::size_t)>& f) const {};
+    void post_object(const std::function<void(char const* const, std::size_t)>& f) const {}
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
     static std::unique_ptr<ClientTier> from_bytes(mutils::DeserializationManager*, const char* const v) {
         return std::make_unique<ClientTier>();
-    };
+    }
 };

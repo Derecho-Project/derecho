@@ -21,6 +21,7 @@
 #include "rpc_utils.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/utils/logger.hpp>
+#include <derecho/persistent/Persistent.hpp>
 
 namespace derecho {
 
@@ -38,8 +39,6 @@ class ViewManager;
 using DeserializationContext = mutils::RemoteDeserializationContext;
 
 namespace rpc {
-
-using PendingBase_ref = std::reference_wrapper<PendingBase>;
 
 /**
  * Given a subgroup ID and a list of functions, constructs a
@@ -92,9 +91,20 @@ class RPCManager {
     friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
 
-    /** Contains an RDMA connection to each member of the group. */
+    /**
+     * Manages an RDMA connection to each member of the group, and to each
+     * external client that has not yet failed or disconnected. These are used
+     * for receiving P2P request messages and sending replies (to both P2P and
+     * ordered RPC messages).
+     */
     std::unique_ptr<sst::P2PConnectionManager> connections;
 
+    /**
+     * Contains all the node IDs that currently correspond to external clients,
+     * rather than Derecho group members. Needed only because the external
+     * clients are treated differently when they fail.
+     */
+    std::set<node_id_t> external_client_ids;
 
     /**
      * This mutex guards all the pending_results maps.
@@ -115,21 +125,21 @@ class RPCManager {
      * one to be received in rpc_message_handler()). Note that the PendingResults
      * objects themselves live in the RemoteInvocableClass that sent the message.
      */
-    std::map<subgroup_id_t, std::queue<PendingBase_ref>> pending_results_to_fulfill;
+    std::map<subgroup_id_t, std::queue<std::weak_ptr<AbstractPendingResults>>> pending_results_to_fulfill;
     /**
      * For each subgroup, contains a map from version number to the PendingResults
      * for that version's RPC call (i.e., a set of PendingResults indexed by
      * version number). These RPC messages have been delivered locally but RPCManager
      * still needs to use the PendingResults to report that persistence has finished.
      */
-    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_local_persistence;
+    std::map<subgroup_id_t, std::map<persistent::version_t, std::weak_ptr<AbstractPendingResults>>> results_awaiting_local_persistence;
     /**
      * For each subgroup, contains a map from version number to the PendingResults
      * for that version's RPC call (i.e., a set of PendingResults indexed by
      * version number). These RPC messages have been persisted locally but RPCManager
      * still needs to use the PendingResults to report that global persistence has finished.
      */
-    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_global_persistence;
+    std::map<subgroup_id_t, std::map<persistent::version_t, std::weak_ptr<AbstractPendingResults>>> results_awaiting_global_persistence;
     /**
      * For each subgroup, contains a map from version number to the PendingResults
      * for that version's RPC call (i.e., a set of PendingResults indexed by
@@ -138,17 +148,17 @@ class RPCManager {
      * needs to use the PendingResults to report that the signature
      * verification has finished.
      */
-    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_signature;
+    std::map<subgroup_id_t, std::map<persistent::version_t, std::weak_ptr<AbstractPendingResults>>> results_awaiting_signature;
     /**
      * For each subgroup, contains a list of PendingResults references for RPC
-     * messages that have completed all of their promise events (fulfilling
-     * ReplyMaps, persistence, etc.) and are only being kept around in case
-     * RPCManager needs to notify them of a removed node on a View change. (I
-     * think the only useful members of this list are the P2P-message-related
-     * PendingResults, since an ordered message that reaches global persistence
-     * can't possibly get a removed_node_exception)
+     * messages that have completed all of their promise events (ReplyMap has
+     * been fulfilled and there is no persistence to track) and are only being
+     * kept around in case RPCManager needs to notify them of a removed node on
+     * a View change. Note that if View changes are rare, each list can grow
+     * very large, since it will not be garbage-collected at any time other than
+     * a View change.
      */
-    std::map<subgroup_id_t, std::list<PendingBase_ref>> completed_pending_results;
+    std::map<subgroup_id_t, std::list<std::weak_ptr<AbstractPendingResults>>> completed_pending_results;
 
     bool thread_start = false;
     /** Mutex for thread_start_cv. */
@@ -165,15 +175,12 @@ class RPCManager {
     struct p2p_req {
         node_id_t sender_id;
         char* msg_buf;
-        uint32_t buffer_size;
         p2p_req() : sender_id(0),
-                    msg_buf(nullptr),
-                    buffer_size(0) {}
+                    msg_buf(nullptr) {}
         p2p_req(node_id_t _sender_id,
-                char* _msg_buf,
-                uint32_t _buffer_size) : sender_id(_sender_id),
-                                         msg_buf(_msg_buf),
-                                         buffer_size(_buffer_size) {}
+                char* _msg_buf)
+                : sender_id(_sender_id),
+                  msg_buf(_msg_buf) {}
     };
     /** P2P requests that need to be handled by the worker thread. */
     std::queue<p2p_req> p2p_request_queue;
@@ -191,13 +198,13 @@ class RPCManager {
      * Handler to be called by p2p_receive_loop each time it receives a
      * peer-to-peer message over an RDMA P2P connection.
      * @param sender_id The ID of the node that sent the message
-     * @param msg_buf A buffer containing the message
-     * @param buffer_size The size of the buffer, in bytes
+     * @param msg_buf A pointer to a buffer containing the message
      */
-    void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
+    void p2p_message_handler(node_id_t sender_id, char* msg_buf);
 
-    /** Reports to the view manager that the given node has failed if it's internal member.
-     * Otherwise clean up p2p_connections and external sockets in lf.cpp
+    /**
+     * Reports to the view manager that the given node has failed if it's an
+     * internal member, or removes its global SST connection if it's an external member.
      */
     void report_failure(const node_id_t who);
 
@@ -246,9 +253,17 @@ public:
 
     ~RPCManager();
 
+    /**
+     * Post-constructor setup method that creates the set of P2P connections
+     * (i.e. the P2PConnectionManager object).
+     */
     void create_connections();
 
-    void add_connections(const std::vector<uint32_t>& node_ids);
+    /**
+     * Sets up a new P2P connection to an external client. Normally, P2P connections
+     * are set up in the new-view callback, but external clients can join at any time.
+     */
+    void add_external_connection(node_id_t node_id);
 
     /**
      * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P
@@ -336,22 +351,32 @@ public:
      * @param subgroup_id The subgroup in which persistence has finished for a
      * version
      * @param version The latest version number that PersistenceManager has
-     * finished persisting in that subgroup
+     * finished persisting on all replicas in that subgroup
      */
     void notify_global_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version);
 
+    /**
+     * Callback to be called by MulticastGroup when it detects that a version
+     * has been (globally) verified. This will deliver "signature verified"
+     * events to the PendingResults objects of all RPC messages with version
+     * numbers lower than the provided version (assuming they have already
+     * received their global persistence notification).
+     * @param subgroup_id The subgroup in which global verification has finished
+     * for a version
+     * @param version The latest version number that PersistenceManager has
+     * finished verifying on all replicas in that subgroup
+     */
     void notify_verification_finished(subgroup_id_t subgroup_id, persistent::version_t version);
 
     /**
-     * Sends the next message in the MulticastGroup's send buffer (which is
-     * assumed to be an RPC message prepared by earlier functions) and registers
-     * the "promise object" in pending_results_handle to await replies.
-     * @param subgroup_id The subgroup in which this message is being sent
-     * @param pending_results_handle A reference to the "promise object" in the
-     * send_return for this send.
-     * @return True if the send was successful, false if the current view is wedged
+     * Notifies RPCManager that an (ordered) RPC message was just sent, which
+     * registers the "promise object" pointed to by pending_results_handle for
+     * delivering reply and persistence events.
+     * @param subgroup_id The subgroup in which the message was sent.
+     * @param pending_results_handle A non-owning pointer to the "promise object"
+     * created by RemoteInvoker for this send.
      */
-    bool finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending_results_handle);
+    void finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
 
     /**
      * Retrieves a buffer for sending P2P messages from the RPCManager's pool of
@@ -364,13 +389,14 @@ public:
 
     /**
      * Sends the next P2P message buffer over an RDMA connection to the specified node,
-     * and registers the "promise object" in pending_results_handle to await its reply.
+     * and registers the "promise object" pointed to by pending_results_handle in case
+     * RPCManager needs to deliver a node_removed_from_group_exception.
      * @param dest_node The node to send the message to
      * @param dest_subgroup_id The subgroup ID of the subgroup that node is in
-     * @param pending_results_handle A reference to the "promise object" in the
-     * send_return for this send.
+     * @param pending_results_handle A non-owning pointer to the "promise object"
+     * created by RemoteInvoker for this send.
      */
-    void finish_p2p_send(node_id_t dest_node, subgroup_id_t dest_subgroup_id, PendingBase& pending_results_handle);
+    void finish_p2p_send(node_id_t dest_node, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types

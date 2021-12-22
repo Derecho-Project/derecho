@@ -226,9 +226,9 @@ public:
     void updateTemporalFrontierProvider(ITemporalQueryFrontierProvider* tqfp);
 
     /**
-     * Enable move constructor
+     * mutils::RemoteDeserializationContext requires move constructor to be disabled
      */
-    PersistentRegistry(PersistentRegistry&&) = default;
+    PersistentRegistry(PersistentRegistry&&) = delete;
 
     /**
      * Disable copy constructor
@@ -293,24 +293,34 @@ protected:
     static thread_local int64_t earliest_version_to_serialize;
 };
 
+/* ---------------------------- DeltaSupport Interface ---------------------------- */
 // If the type T in persistent<T> is a big object and the operations are small
-// updates, for example, an object store or a file system, then T would better
-// implement the IDeltaSupport interface. This interface allows persistent<T>
-// only store the delta in the log, avoiding huge duplicated data wasting
-// storage space as well as I/O bandwidth.
+// updates, for example, an object store or a file system, then T should prefer
+// to implement the IDeltaSupport interface. This interface allows persistent<T>
+// to only store the delta of each update in the log, rather than an entire copy
+// of each new version, which avoids wasteful duplication of a huge amount of data.
 //
-// The idea is that T is responsible of keeping track of the updates in the form
-// of a byte array - the DELTA, as long as the update should be persisted. Each
-// time Persistent<T> trying to make a version, it collects the DELTA and write
-// it to the log. On reloading data from persistent storage, the DELTAs in the
-// log entries are applied in order. TODO: use checkpointing to accelerate it!
+// The idea is that T is responsible for keeping track of the data that should be
+// persisted for each update in the form of a byte array called the DELTA. Each
+// time Persistent<T> tries to make a version, it collects the DELTA from T and
+// writes it to the log. Upon reloading data from persistent storage, the DELTAs in
+// the log entries are applied in order. TODO: use checkpointing to accelerate it!
 //
-// There are three method included in this interface:
-// - 'finalizeCurrentDelta'     This method is called when Persistent<T> trying to
-//   make a version. Once done, the delta needs to be cleared.
-// - 'applyDelta' This method is called on object construction from the disk
-// - 'create' This static method is used to create an empty object from deserialization
+// There are three methods included in this interface:
+// - 'finalizeCurrentDelta'     This method is called when Persistent<T> wants to
+//   make a version. Its argument is a DeltaFinalizer function; T should invoke this
+//   function to give Persistent<T> the Delta data.
+// - 'applyDelta' This method is called on object construction from the disk. Its argument
+//   is a single Delta data buffer that should be applied.
+// - 'create' This static method is used to create an empty object from a deserialization
 //   manager.
+
+/**
+ * Type of a function that receives a Delta data buffer from an object with Delta support,
+ * for the purpose of writing the Delta to a persistent log.
+ * @param arg1 a pointer to the buffer
+ * @param arg2 the buffer's size
+ */
 using DeltaFinalizer = std::function<void(char const* const, std::size_t)>;
 
 template <typename DeltaObjectType>
@@ -625,7 +635,8 @@ public:
      * @throws PERSIST_EXP_INV_INDEX, when the index 'idx' does not exists.
      */
     template <typename DeltaType>
-    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> getDeltaByIndex(
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
+    getDeltaByIndex(
             int64_t idx,
             mutils::DeserializationManager* dm = nullptr) const;
 
@@ -674,6 +685,36 @@ public:
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
     getDelta(const version_t ver,
+             mutils::DeserializationManager* dm = nullptr) const;
+
+    /**
+     * getDeltaSignature(const version_t,const Func&,unsigned char*,version_t&,mutils::DeserializationManager*)
+     *
+     * Gets the signature associated with the delta at the given version, but only if it matches
+     * the provided predicate. The user-provided search predicate should be a function that is called
+     * with a delta as input, and returns true if that delta contains the desired data.
+     *
+     * @tparam DeltaType        User-specified DeltaType
+     * @tparam DummyObjectType  A copy of the class's ObjectType template parameter, which is necessary for
+     *                          std::enable_if_t to work on this function -- std::enable_if_t is only supposed
+     *                          to work on templates of the function, not templates of the class. See
+     *                          https://stackoverflow.com/questions/13401716/
+     *
+     * @param ver               Version to retrieve a signature for
+     * @param search_predicate  User-provided function that determines if a DeltaType& is the desired one
+     * @param signature         A byte buffer that will be filled with the signature on the Delta at this version
+     * @param prev_ver          A variable which will be updated to equal the previous version whose signature is
+     *                          included in this version's signature, or INVALID_VERSION if the Delta at this version
+     *                          fails the search predicate
+     *
+     * @return True if a signature was placed in the signature buffer, false if there was no log entry at the
+     * requested version or the delta at that entry did not pass the user-provided search predicate
+     */
+    template <typename DeltaType, typename DummyObjectType = ObjectType>
+    std::enable_if_t<std::is_base_of<IDeltaSupport<DummyObjectType>, DummyObjectType>::value, bool>
+    getDeltaSignature(const version_t ver,
+             const std::function<bool(const DeltaType&)>& search_predicate,
+             unsigned char* signature, version_t& prev_ver,
              mutils::DeserializationManager* dm = nullptr) const;
 
     /**
@@ -930,6 +971,19 @@ public:
      * no version in the log with the requested version number
      */
     virtual bool getSignature(version_t ver, unsigned char* signature, version_t& prev_ver) const;
+
+    /**
+     * Retrieves the signature associated with the specified log index and copies
+     * it into the provided buffer, which must be of the correct length. This is only
+     * useful if the caller already knows the log index, so it's more likely to be used
+     * internally by other Persistant methods than by a client.
+     * @param index The log index to get the signature for
+     * @param signature A byte buffer into which the signature will be placed
+     * @param prev_ver A variable which will be updated to equal the previous
+     * version whose signature is included in this version's signature
+     * @return true if a signature was successfully retrieved, false if the index is invalid.
+     */
+    virtual bool getSignatureByIndex(int64_t index, unsigned char* signature, version_t& prev_ver) const;
 
     /**
      * Update the provided Verifier with the state of T at the specified version.

@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.1)
+cmake_minimum_required(VERSION 3.15.4)
 project (persistent)
 
 # CXX FLAGS
@@ -11,8 +11,8 @@ add_library(persistent OBJECT Persistent.cpp PersistLog.cpp FilePersistLog.cpp H
 target_include_directories(persistent PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${OPENSSL_INCLUDE_DIR}>
 )
+target_link_libraries(persistent OpenSSL::Crypto spdlog::spdlog)
 
 add_executable(persistent_test test.cpp
     $<TARGET_OBJECTS:persistent>
@@ -24,8 +24,7 @@ add_executable(persistent_test test.cpp
 target_include_directories(persistent_test PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${OPENSSL_INCLUDE_DIR}>
 )
-target_link_libraries(persistent_test pthread mutils stdc++fs ${OPENSSL_LIBRARIES})
+target_link_libraries(persistent_test pthread mutils stdc++fs OpenSSL::Crypto spdlog::spdlog)
 
 add_custom_target(format_persistent clang-format-3.8 -i *.cpp *.hpp)

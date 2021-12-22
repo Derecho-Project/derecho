@@ -1,6 +1,5 @@
 /**
  * @file group_impl.h
- * @brief Contains implementations of all the ManagedGroup functions
  * @date Apr 22, 2016
  */
 
@@ -10,9 +9,9 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "../group.hpp"
-#include "container_template_functions.hpp"
 #include "derecho_internal.hpp"
 #include "make_kind_map.hpp"
+#include <derecho/utils/container_template_functions.hpp>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {
@@ -49,6 +48,14 @@ std::size_t _Group::get_number_of_shards(uint32_t subgroup_index) {
         throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
 }
 
+template <typename SubgroupType>
+uint32_t _Group::get_num_subgroups() {
+    if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_num_subgroups();
+    } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
 template <typename ReplicatedType>
 Replicated<ReplicatedType>&
 GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
@@ -79,6 +86,11 @@ GroupProjection<ReplicatedType>::get_number_of_shards(uint32_t subgroup_index) {
     return get_view_manager().get_number_of_shards_in_subgroup(get_index_of_type(typeid(ReplicatedType)), subgroup_index);
 }
 
+template <typename ReplicatedType>
+uint32_t GroupProjection<ReplicatedType>::get_num_subgroups() {
+    return get_view_manager().get_num_subgroups(get_index_of_type(typeid(ReplicatedType)));
+}
+
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
                                                        uint32_t subgroup_num,
@@ -90,8 +102,8 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
 }
 
 template <typename... ReplicatedTypes>
-uint32_t Group<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) {
-    assert_always((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)} || ... || false));
+uint32_t Group<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) const {
+    assert_always(((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) || ... || false));
     return (((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) ?  //
                      (index_of_type<ReplicatedTypes, ReplicatedTypes...>)
                                                                                : 0)
@@ -322,8 +334,8 @@ void Group<ReplicatedTypes...>::set_up_components() {
         rpc_manager.notify_persistence_finished(subgroup_id, version);
     });
     //Connect ViewManager's external_join_handler to RPCManager
-    view_manager.register_add_external_connection_upcall([this](const std::vector<uint32_t>& node_ids) {
-        rpc_manager.add_connections(node_ids);
+    view_manager.register_add_external_connection_upcall([this](uint32_t node_id) {
+        rpc_manager.add_external_connection(node_id);
     });
     //Give RPCManager a standard "new view callback" on every View change
     view_manager.add_view_upcall([this](const View& new_view) {
@@ -342,6 +354,7 @@ void Group<ReplicatedTypes...>::set_up_components() {
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgroup_index) {
+    static_assert(contains<SubgroupType, ReplicatedTypes...>::value, "get_subgroup was called with a template parameter that does not match any subgroup type");
     if(!view_manager.get_current_view().get().is_adequately_provisioned) {
         throw subgroup_provisioning_exception("View is inadequately provisioned because subgroup provisioning failed!");
     }
@@ -355,10 +368,24 @@ Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgr
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 ExternalCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(uint32_t subgroup_index) {
+    static_assert(contains<SubgroupType, ReplicatedTypes...>::value, "get_nonmember_subgroup was called with a template parameter that does not match any subgroup type");
     try {
         return external_callers.template get<SubgroupType>().at(subgroup_index);
     } catch(std::out_of_range& ex) {
         throw invalid_subgroup_exception("No ExternalCaller exists for the requested subgroup; this node may be a member of the subgroup");
+    }
+}
+
+template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+uint32_t Group<ReplicatedTypes...>::get_num_subgroups() {
+    static_assert(contains<SubgroupType, ReplicatedTypes...>::value, "get_num_subgroups was called with a template parameter that did not match any subgroup type");
+    //No need to ask view_manager. This avoids locking the view_mutex.
+    try {
+        return replicated_objects.template get<SubgroupType>().size();
+    } catch(std::out_of_range& ex) {
+        //The SubgroupType must either be in replicated_objects or external_callers
+        return external_callers.template get<SubgroupType>().size();
     }
 }
 
@@ -401,13 +428,15 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
             leader_socket.get().read(buffer_size);
             std::unique_ptr<char[]> buffer = std::make_unique<char[]>(buffer_size);
             leader_socket.get().read(buffer.get(), buffer_size);
+            dbg_default_trace("Deserializing Replicated Object from buffer of size {}", buffer_size);
             subgroup_object->receive_object(buffer.get());
         } catch(tcp::socket_error& e) {
             //Convert socket exceptions to a more readable error message, since this will cause a crash
             throw derecho_exception("Fatal error: Node " + std::to_string(subgroup_and_leader.second) + " failed during state transfer!");
         }
     }
-    dbg_default_debug("Done receiving all Replicated Objects from subgroup leaders");
+
+    dbg_default_debug("Done receiving all Replicated Objects from subgroup leaders {}", subgroups_and_leaders.empty() ? "(there were none to receive)" : "");
 }
 
 template <typename... ReplicatedTypes>
@@ -438,6 +467,12 @@ template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 int32_t Group<ReplicatedTypes...>::get_my_shard(uint32_t subgroup_index) {
     return view_manager.get_my_shard(index_of_type<SubgroupType, ReplicatedTypes...>, subgroup_index);
+}
+
+template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+std::vector<uint32_t> Group<ReplicatedTypes...>::get_my_subgroup_indexes() {
+    return view_manager.get_my_subgroup_indexes(index_of_type<SubgroupType, ReplicatedTypes...>);
 }
 
 template <typename... ReplicatedTypes>

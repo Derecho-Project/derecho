@@ -13,52 +13,54 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
+#include "sample_objects.hpp"
 #include <derecho/conf/conf.hpp>
 #include <derecho/core/derecho.hpp>
-#include "sample_objects.hpp"
 
 using derecho::ExternalCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;
+using json = nlohmann::json;
 
 int main(int argc, char** argv) {
     // Read configurations from the command line options as well as the default config file
     derecho::Conf::initialize(argc, argv);
 
     //Define subgroup membership using the default subgroup allocator function
-    //Each Replicated type will have one subgroup and one shard, with three members in the shard
-    derecho::SubgroupInfo subgroup_function {derecho::DefaultSubgroupAllocator({
-        {std::type_index(typeid(Foo)), derecho::one_subgroup_policy(derecho::fixed_even_shards(1,3))},
-        {std::type_index(typeid(Bar)), derecho::one_subgroup_policy(derecho::fixed_even_shards(1,3))}
-    })};
+    //When constructed using make_subgroup_allocator with no arguments, this will check the config file
+    //for either the json_layout or json_layout_file options, and use whichever one is present to define
+    //the mapping from types to subgroup allocation parameters.
+    derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<Foo, Bar>()};
+
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state. These must take a PersistentRegistry* argument, but
     //in this case we ignore it because the replicated objects aren't persistent.
-    auto foo_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Foo>(-1); };
-    auto bar_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Bar>(); };
+    auto foo_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<Foo>(-1); };
+    auto bar_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<Bar>(); };
 
     derecho::Group<Foo, Bar> group(derecho::UserMessageCallbacks{}, subgroup_function, {},
-                                          std::vector<derecho::view_upcall_t>{},
-                                          foo_factory, bar_factory);
+                                   std::vector<derecho::view_upcall_t>{},
+                                   foo_factory, bar_factory);
 
     cout << "Finished constructing/joining Group" << endl;
 
     uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    //Now have each node send some updates to the Replicated objects.
-    //The code must be different depending on which subgroup this node is in,
-    //which we can determine by attempting to locate its shard in each subgroup.
-    //Note that since there is only one subgroup of each type we can omit the
-    //subgroup_index parameter to many of the group.get_X() methods
-    int32_t my_foo_shard = group.get_my_shard<Foo>();
-    int32_t my_bar_shard = group.get_my_shard<Bar>();
-    if(my_foo_shard != -1) {
-        std::vector<node_id_t> foo_members = group.get_subgroup_members<Foo>()[my_foo_shard];
-        uint32_t rank_in_foo = derecho::index_of(foo_members, my_id);
-        Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
+    //Now have each node send some updates to the Replicated objects
+    //The code must be different depending on which subgroup this node is in
+    std::vector<uint32_t> my_foo_subgroups = group.get_my_subgroup_indexes<Foo>();
+    std::vector<uint32_t> my_bar_subgroups = group.get_my_subgroup_indexes<Bar>();
+    //There should only be one subgroup of each type, but if not, make each one behave exactly the same
+    //Note that this loop will do nothing if this node is not in a Foo subgroup.
+    for(const uint32_t foo_subgroup_index : my_foo_subgroups) {
+        int32_t my_foo_shard = group.get_my_shard<Foo>(foo_subgroup_index);
+        std::vector<node_id_t> shard_members = group.get_subgroup_members<Foo>(foo_subgroup_index)[my_foo_shard];
+        uint32_t rank_in_foo = derecho::index_of(shard_members, my_id);
+        Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>(foo_subgroup_index);
         //Each member within the shard sends a different multicast
         if(rank_in_foo == 0) {
             int new_value = 1;
@@ -88,10 +90,13 @@ int main(int argc, char** argv) {
                 cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
             }
         }
-    } else if(my_bar_shard != -1) {
-        std::vector<node_id_t> bar_members = group.get_subgroup_members<Bar>()[my_bar_shard];
+    }
+    //This loop does nothing if this node is not in a Bar subgroup
+    for(const uint32_t bar_subgroup_index : my_bar_subgroups) {
+        int32_t my_bar_shard = group.get_my_shard<Bar>(bar_subgroup_index);
+        std::vector<node_id_t> bar_members = group.get_subgroup_members<Bar>(bar_subgroup_index)[my_bar_shard];
         uint32_t rank_in_bar = derecho::index_of(bar_members, my_id);
-        Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
+        Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>(bar_subgroup_index);
         if(rank_in_bar == 0) {
             cout << "Appending to Bar." << endl;
             derecho::rpc::QueryResults<void> void_future = bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 0...");
@@ -104,8 +109,8 @@ int main(int argc, char** argv) {
         } else if(rank_in_bar == 1) {
             cout << "Appending to Bar" << endl;
             bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 1...");
-            //Send to node rank 2 in shard 0 of the Foo subgroup
-            node_id_t p2p_target = group.get_subgroup_members<Foo>()[0][2];
+            //Send to node rank 2 in shard 0 of the same Foo subgroup index as this Bar subgroup
+            node_id_t p2p_target = group.get_subgroup_members<Foo>(bar_subgroup_index)[0][2];
             cout << "Reading Foo's state from node " << p2p_target << endl;
             ExternalCaller<Foo>& p2p_foo_handle = group.get_nonmember_subgroup<Foo>();
             derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_send<RPC_NAME(read_state)>(p2p_target);
@@ -121,10 +126,10 @@ int main(int argc, char** argv) {
             cout << "Clearing Bar's log" << endl;
             derecho::rpc::QueryResults<void> void_future = bar_rpc_handle.ordered_send<RPC_NAME(clear)>();
         }
-    } else {
+    }
+    if(my_bar_subgroups.size() == 0 && my_foo_subgroups.size() == 0) {
         std::cout << "This node was not assigned to any subgroup!" << std::endl;
     }
-
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
     while(true) {
     }
