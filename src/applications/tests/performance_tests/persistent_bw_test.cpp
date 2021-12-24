@@ -30,7 +30,7 @@ public:
     ByteArrayObject(Persistent<test::Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {}
     // default constructor
     ByteArrayObject(PersistentRegistry* pr)
-            : pers_bytes(std::make_unique<test::Bytes>, nullptr, pr) {}
+            : pers_bytes(pr) {}
 
     REGISTER_RPC_FUNCTIONS(ByteArrayObject, ORDERED_TARGETS(change_pers_bytes));
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);

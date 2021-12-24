@@ -182,6 +182,17 @@ Persistent<ObjectType, storageType>::Persistent(
 
 template <typename ObjectType,
           StorageType storageType>
+Persistent<ObjectType, storageType>::Persistent(
+        PersistentRegistry* persistent_registry,
+        bool enable_signatures)
+        : Persistent(std::make_unique<ObjectType>,
+                     nullptr,
+                     persistent_registry,
+                     enable_signatures,
+                     {{}}) {}
+
+template <typename ObjectType,
+          StorageType storageType>
 Persistent<ObjectType, storageType>::~Persistent() noexcept(true) {
     // destroy the in-memory log:
     // We don't need this anymore. m_pLog is managed by smart pointer
@@ -351,11 +362,13 @@ Persistent<ObjectType, storageType>::getDeltaSignature(const version_t ver,
                                                        unsigned char* signature, version_t& prev_ver,
                                                        mutils::DeserializationManager* dm) const {
     int64_t version_index = m_pLog->getVersionIndex(ver, true);
+    dbg_default_debug("getDeltaSignature: Converted version {} to index {}", ver, version_index);
     if(version_index == INVALID_INDEX) {
         return false;
     }
     const char* delta_data = reinterpret_cast<const char*>(m_pLog->getEntryByIndex(version_index));
     if(mutils::deserialize_and_run(dm, delta_data, search_predicate)) {
+        dbg_default_debug("getDeltaSignature: Search predicate was true, getting signature from index {}", version_index);
         return m_pLog->getSignatureByIndex(version_index, signature, prev_ver);
     } else {
         return false;

@@ -53,7 +53,7 @@ public:
     ByteArrayObject(Persistent<Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {}
     // the default constructor
     ByteArrayObject(PersistentRegistry* pr)
-            : pers_bytes([]() { return std::make_unique<Bytes>(); }, nullptr, pr) {}
+            : pers_bytes(pr) {}
 };
 
 #define DEFAULT_PROC_NAME   "pers_lat_test"
@@ -151,7 +151,7 @@ int main(int argc, char* argv[]) {
             throw derecho::derecho_exception("Critical: stability_callback got invalid data size.");
         }
         // 35 is the size of cooked header -- TODO: find a better way to index the parameters.
-        t1_us[number_of_stable_messages] = reinterpret_cast<PayLoad*>(data->first + 35)->send_timestamp_us; 
+        t1_us[number_of_stable_messages] = reinterpret_cast<PayLoad*>(data->first + 35)->send_timestamp_us;
         //Count the total number of messages delivered
         ++number_of_stable_messages;
         if(number_of_stable_messages == total_number_of_messages) {
