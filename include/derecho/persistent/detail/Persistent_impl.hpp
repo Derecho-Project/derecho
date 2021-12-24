@@ -362,13 +362,13 @@ Persistent<ObjectType, storageType>::getDeltaSignature(const version_t ver,
                                                        unsigned char* signature, version_t& prev_ver,
                                                        mutils::DeserializationManager* dm) const {
     int64_t version_index = m_pLog->getVersionIndex(ver, true);
-    dbg_default_debug("getDeltaSignature: Converted version {} to index {}", ver, version_index);
+    dbg_default_trace("getDeltaSignature: Converted version {} to index {}", ver, version_index);
     if(version_index == INVALID_INDEX) {
         return false;
     }
     const char* delta_data = reinterpret_cast<const char*>(m_pLog->getEntryByIndex(version_index));
     if(mutils::deserialize_and_run(dm, delta_data, search_predicate)) {
-        dbg_default_debug("getDeltaSignature: Search predicate was true, getting signature from index {}", version_index);
+        dbg_default_trace("getDeltaSignature: Search predicate was true, getting signature from index {}", version_index);
         return m_pLog->getSignatureByIndex(version_index, signature, prev_ver);
     } else {
         return false;
