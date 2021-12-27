@@ -374,6 +374,7 @@ Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgr
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 PeerCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(uint32_t subgroup_index) {
+    static_assert(contains<SubgroupType, ReplicatedTypes...>::value, "get_nonmember_subgroup was called with a template parameter that does not match any subgroup type");
     try {
         return peer_callers.template get<SubgroupType>().at(subgroup_index);
     } catch(std::out_of_range& ex) {
@@ -399,8 +400,8 @@ uint32_t Group<ReplicatedTypes...>::get_num_subgroups() {
     try {
         return replicated_objects.template get<SubgroupType>().size();
     } catch(std::out_of_range& ex) {
-        //The SubgroupType must either be in replicated_objects or external_callers
-        return external_callers.template get<SubgroupType>().size();
+        //The SubgroupType must either be in replicated_objects or peer_callers
+        return peer_callers.template get<SubgroupType>().size();
     }
 }
 

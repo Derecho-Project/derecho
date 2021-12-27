@@ -128,8 +128,8 @@ public:
 template <typename... ReplicatedTypes>
 class Group : public virtual _Group, public GroupProjection<ReplicatedTypes>... {
 public:
-    void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
-    void set_peer_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
+    void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret) override;
+    void set_peer_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret) override;
 
 protected:
     uint32_t get_index_of_type(const std::type_info&) const override;
@@ -334,6 +334,15 @@ public:
     template <typename SubgroupType>
     PeerCaller<SubgroupType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
 
+    /**
+     * Get a ShardIterator object that can be used to send P2P messages to every
+     * shard within a specific subgroup.
+     * @tparam SubgroupType The subgroup type to communicate with
+     * @param subgroup_index The index of the subgroup within SubgroupType
+     * to communicate with
+     * @return A ShardIterator that will contact one member of each shard in
+     * the subgroup identified by (SubgroupType, subgroup_index)
+     */
     template <typename SubgroupType>
     ExternalClientCallback<SubgroupType>& get_client_callback(uint32_t subgroup_index = 0);
 
