@@ -10,6 +10,7 @@
 #include <memory>
 #include <tuple>
 #include <type_traits>
+#include <iostream>
 
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
@@ -417,6 +418,41 @@ public:
 
     bool is_valid() const { return true; }
 };
+
+template <typename T>
+class ExternalClientCallback {
+private:
+    /** The ID of this node */
+    const node_id_t node_id;
+    /** The internally-generated subgroup ID of the subgroup that this ExternalClientCallback will contact. */
+    subgroup_id_t subgroup_id;
+    /** Reference to the RPCManager for the Group this ExternalClientCallback is in */
+    rpc::RPCManager& group_rpc_manager;
+    /** The actual implementation of ExternalClientCallback, which has lots of ugly template parameters */
+    std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
+
+public:
+    ExternalClientCallback(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager);
+
+    ExternalClientCallback(ExternalClientCallback&&) = default;
+    ExternalClientCallback(const ExternalClientCallback&) = delete;
+
+    /**
+     * Sends a peer-to-peer message to a single member of the subgroup that
+     * this ExternalClientCallback<T> connects to, invoking the RPC function identified
+     * by the FunctionTag template parameter.
+     * @param dest_node The ID of the node that the P2P message should be sent to
+     * @param args The arguments to the RPC function being invoked
+     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
+     * of the RPC function being invoked
+     */
+    template <rpc::FunctionTag tag, typename... Args>
+    auto p2p_send(node_id_t dest_node, Args&&... args);
+
+    bool is_valid() const { return true; }
+};
+
+
 
 template <typename T>
 class ShardIterator {

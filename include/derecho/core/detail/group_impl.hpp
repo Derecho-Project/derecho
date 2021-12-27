@@ -321,7 +321,13 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                     subgroup_index, PeerCaller<FirstType>(subgroup_type_id,
                                                           my_id, subgroup_id, rpc_manager));
         }
+        // create the external client callback object if we don't have one
+        external_client_callbacks.template get<FirstType>().emplace(
+                    subgroup_index, ExternalClientCallback<FirstType>(subgroup_type_id,
+                                                          my_id, subgroup_id, rpc_manager));
     }
+    // add the client callback object
+    // client_callback = std::make_unique<ExternalClientCallback<NotificationSupport>>(subgroup_type_id, my_id, rpc_manager);
     return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders, in_restart));
 }
 
@@ -373,6 +379,16 @@ PeerCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(uint
         return peer_callers.template get<SubgroupType>().at(subgroup_index);
     } catch(std::out_of_range& ex) {
         throw invalid_subgroup_exception("No PeerCaller exists for the requested subgroup; this node may be a member of the subgroup");
+    }
+}
+
+template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+ExternalClientCallback<SubgroupType>& Group<ReplicatedTypes...>::get_client_callback(uint32_t subgroup_index){
+    try {
+        return external_client_callbacks.template get<SubgroupType>().at(subgroup_index);
+    } catch(std::out_of_range& ex) {
+        throw invalid_subgroup_exception("No ExternalClientCallback exists for the requested subgroup; this node may be a member of the subgroup");
     }
 }
 

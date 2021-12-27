@@ -4,6 +4,9 @@
 #include "detail/p2p_connection_manager.hpp"
 #include "group.hpp"
 #include "view.hpp"
+#include "notification.hpp"
+#include <functional>
+#include <iostream>
 
 #include <derecho/conf/conf.hpp>
 namespace derecho {
@@ -30,6 +33,9 @@ private:
     /** The actual implementation of ExternalCaller, which has lots of ugly template parameters */
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
 
+    std::unordered_map<node_id_t, std::unique_ptr<T>> support_map;
+    std::unordered_map<node_id_t, std::unique_ptr<rpc::RemoteInvocableOf<T>>> remote_invocable_ptr_map;
+
 public:
     /**
      * Constructs an ExternalClientCaller that can communicate with members of
@@ -48,6 +54,8 @@ public:
     ExternalClientCaller(ExternalClientCaller&&) = default;
     ExternalClientCaller(const ExternalClientCaller&) = delete;
 
+    void register_notification(std::function<void(const derecho::Bytes&)>, node_id_t nid);
+    void add_p2p_connections(node_id_t dest_node);
     /**
      * Sends a peer-to-peer message to a single member of the subgroup that
      * this ExternalClientCaller connects to, invoking the RPC function

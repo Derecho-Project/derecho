@@ -5,7 +5,6 @@
 #include <derecho/core/derecho.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/Persistent.hpp>
-#include "bytes_object.hpp"
 
 using derecho::ExternalClientCaller;
 using derecho::Replicated;

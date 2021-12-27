@@ -30,6 +30,8 @@ template <typename T>
 class Replicated;
 template <typename T>
 class PeerCaller;
+template <typename T>
+class ExternalClientCallback;
 
 class ViewManager;
 
@@ -89,6 +91,8 @@ class RPCManager {
     friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
     template <typename T>
     friend class ::derecho::PeerCaller;
+    template <typename T>
+    friend class ::derecho::ExternalClientCallback;
     ViewManager& view_manager;
 
     /**
