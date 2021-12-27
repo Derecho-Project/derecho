@@ -398,13 +398,13 @@ protected:
 
 public:
     /**
-     * Persistent(std::unqieu_ptr<ObjectType>&,const char*,PersistentRegistry*,mutils::DeserializationManager)
+     * Persistent(std::function<std::unique_ptr<ObjectType>(void)>&,const char*,PersistentRegistry*,bool,mutils::DeserializationManager)
      *
-     * constructor 1 is for building a persistent<T> locally, load/create a
-     * log and register itself to a persistent registry.
+     * Constructor 1 is for building a persistent<T> locally. It loads/creates a
+     * log and registers itself to a persistent registry.
      *
      * @param object_factory        A factory to create an empty Object.
-     * @param object_name           This name is used for persistent data in file.
+     * @param object_name           This name is used for the persistent data file.
      * @param persistent_registry   A normal pointer to the registry.
      * @param enable_signatures     True if each update to this Persistent<T> should be signed, false otherwise
      * @param dm                    The deserialization manager for deserializing local log entries.
@@ -419,19 +419,19 @@ public:
     /**
      * Persistent(Persistent&&)
      *
-     * constructor 2 is move constructor. It "steals" the resource from
-     * another object.
+     * Constructor 2 is the move constructor. It "steals" the resources from
+     * another Persistent object.
      *
      * @param other The other object.
      */
     Persistent(Persistent&& other);
 
     /**
-     * Persistent(const char*,std::unqieu_ptr<ObjectType>&,const char*,
+     * Persistent(const char*,std::unique_ptr<ObjectType>&,const char*,
      *            PersistentRegistry*,mutils::DeserializationManager)
      *
-     * constructor 3 is for deserialization. It builds a Persistent<T> from
-     * the object name, a unique_ptr to the wrapped object, a unique_ptr to
+     * Constructor 3 is for deserialization. It builds a Persistent<T> from
+     * the object name, a unique_ptr to the wrapped object, and a unique_ptr to
      * the log.
      * @param object_name           The name is used for persistent data in file.
      * @param wrapped_obj_ptr       A unique pointer to the wrapped object.
@@ -449,9 +449,24 @@ public:
             mutils::DeserializationManager dm = {{}});
 
     /**
+     * Persistent(PersistentRegistry*,bool)
+     *
+     * Constructor 4 is a convenience constructor for use in Replicated Objects
+     * where the underlying data type has a default constructor. It uses
+     * std::make_unique as the "object factory" and uses the default values for
+     * all the other parameters except for persistent_registry, which is required.
+     *
+     * @param persistent_registry   A pointer to the persistent registry for the Replicated Object
+     * @param enable_signatures     True if each update to this Persistent<T> should be signed, false otherwise
+     */
+    Persistent(
+            PersistentRegistry* persistent_registry,
+            bool enable_signatures = false);
+
+    /**
      * Persistent(const Persistent&)
      *
-     * constructor 4, the default copy constructor, is disabled
+     * constructor 5, the default copy constructor, is disabled
      */
     Persistent(const Persistent&) = delete;
 
@@ -1079,7 +1094,19 @@ public:
             mutils::DeserializationManager dm = {{}})
             : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, false, log_tail, persistent_registry, std::move(dm)) {}
 
-    /** constructor 4, the default copy constructor, is disabled
+
+    /**
+     * Constructor 4 is a convenience constructor for use in Replicated Objects
+     * where the underlying data type has a default constructor. It uses
+     * std::make_unique as the "object factory" and uses the default values for
+     * all the other parameters except for persistent_registry, which is required.
+     *
+     * @param persistent_registry A pointer to the persistent registry for the Replicated Object
+     */
+    Volatile(PersistentRegistry* persistent_registry)
+            : Persistent<ObjectType, ST_MEM>(persistent_registry) {};
+
+    /** constructor 5, the default copy constructor, is disabled
      */
     Volatile(const Volatile&) = delete;
 
