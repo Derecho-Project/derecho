@@ -48,6 +48,14 @@ std::size_t _Group::get_number_of_shards(uint32_t subgroup_index) {
         throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
 }
 
+template <typename SubgroupType>
+uint32_t _Group::get_num_subgroups() {
+    if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_num_subgroups();
+    } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
 template <typename ReplicatedType>
 Replicated<ReplicatedType>&
 GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
@@ -78,6 +86,11 @@ GroupProjection<ReplicatedType>::get_number_of_shards(uint32_t subgroup_index) {
     return get_view_manager().get_number_of_shards_in_subgroup(get_index_of_type(typeid(ReplicatedType)), subgroup_index);
 }
 
+template <typename ReplicatedType>
+uint32_t GroupProjection<ReplicatedType>::get_num_subgroups() {
+    return get_view_manager().get_num_subgroups(get_index_of_type(typeid(ReplicatedType)));
+}
+
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
                                                        uint32_t subgroup_num,
@@ -89,8 +102,8 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
 }
 
 template <typename... ReplicatedTypes>
-uint32_t Group<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) {
-    assert_always((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)} || ... || false));
+uint32_t Group<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) const {
+    assert_always(((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) || ... || false));
     return (((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) ?  //
                      (index_of_type<ReplicatedTypes, ReplicatedTypes...>)
                                                                                : 0)
@@ -347,6 +360,7 @@ void Group<ReplicatedTypes...>::set_up_components() {
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgroup_index) {
+    static_assert(contains<SubgroupType, ReplicatedTypes...>::value, "get_subgroup was called with a template parameter that does not match any subgroup type");
     if(!view_manager.get_current_view().get().is_adequately_provisioned) {
         throw subgroup_provisioning_exception("View is inadequately provisioned because subgroup provisioning failed!");
     }
@@ -374,6 +388,19 @@ ExternalClientCallback<SubgroupType>& Group<ReplicatedTypes...>::get_client_call
         return external_client_callbacks.template get<SubgroupType>().at(subgroup_index);
     } catch(std::out_of_range& ex) {
         throw invalid_subgroup_exception("No ExternalClientCallback exists for the requested subgroup; this node may be a member of the subgroup");
+    }
+}
+
+template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+uint32_t Group<ReplicatedTypes...>::get_num_subgroups() {
+    static_assert(contains<SubgroupType, ReplicatedTypes...>::value, "get_num_subgroups was called with a template parameter that did not match any subgroup type");
+    //No need to ask view_manager. This avoids locking the view_mutex.
+    try {
+        return replicated_objects.template get<SubgroupType>().size();
+    } catch(std::out_of_range& ex) {
+        //The SubgroupType must either be in replicated_objects or external_callers
+        return external_callers.template get<SubgroupType>().size();
     }
 }
 
@@ -455,6 +482,12 @@ template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 int32_t Group<ReplicatedTypes...>::get_my_shard(uint32_t subgroup_index) {
     return view_manager.get_my_shard(index_of_type<SubgroupType, ReplicatedTypes...>, subgroup_index);
+}
+
+template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+std::vector<uint32_t> Group<ReplicatedTypes...>::get_my_subgroup_indexes() {
+    return view_manager.get_my_subgroup_indexes(index_of_type<SubgroupType, ReplicatedTypes...>);
 }
 
 template <typename... ReplicatedTypes>

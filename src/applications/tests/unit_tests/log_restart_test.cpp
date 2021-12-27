@@ -127,10 +127,9 @@ int main(int argc, char** argv) {
         return 1;
     }
     //Determine whether the running process is in the persistent or non-persistent subgroup
-    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    std::vector<node_id_t> non_persistent_members = group.get_subgroup_members<NonPersistentThing>(0)[0];
-    if(std::find(non_persistent_members.begin(), non_persistent_members.end(), my_id)
-       == non_persistent_members.end()) {
+    std::vector<uint32_t> my_persistent_subgroups = group.get_my_subgroup_indexes<PersistentThing>();
+    if(my_persistent_subgroups.size() > 0) {
+        assert(my_persistent_subgroups.size() == 1);
         //"Main" code for the members of PersistentThing shards
         std::cout << "In the PersistentThing subgroup" << std::endl;
         Replicated<PersistentThing>& persistent_handle = group.get_subgroup<PersistentThing>();
@@ -150,7 +149,7 @@ int main(int argc, char** argv) {
                 std::cout << "Done with counter = " << counter << std::endl;
             }
         }
-    } else {
+    } else if(group.get_my_subgroup_indexes<NonPersistentThing>().size() > 0) {
         //"Main" code for the members of the NonPersistentThing subgroup
         std::cout << "In the NonPersistentThing subgroup" << std::endl;
         Replicated<NonPersistentThing>& thing_handle = group.get_subgroup<NonPersistentThing>();
@@ -170,6 +169,8 @@ int main(int argc, char** argv) {
                 std::cout << "Done with counter = " << counter << std::endl;
             }
         }
+    } else {
+        std::cout << "This node was not assigned to any subgroup!" << std::endl;
     }
     std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
     while(true) {

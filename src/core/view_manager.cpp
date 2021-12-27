@@ -949,10 +949,10 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
         gmssst::set(gmsSST.changes[my_rank][last_change_index].end_of_view, false);
     } else {
         //Push all the proposed changes, including joiner information if any joins were proposed
-        gmsSST.put(gmsSST.changes);
+        gmsSST.put_with_completion(gmsSST.changes);
         if(!proposed_join_sockets.empty()) {
-            gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
-                       gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+            gmsSST.put_with_completion(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
+                                       gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
         }
         gmsSST.put(gmsSST.num_changes);
     }
@@ -1078,8 +1078,8 @@ void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
         make_subgroup_maps(subgroup_info, curr_view, *next_view);
         //Push the entire new changes vector and the associated joiner_ip vectors
         gmsSST.put(gmsSST.changes);
-        gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
-                   gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+        gmsSST.put_with_completion(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
+                                   gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
         gmsSST.put(gmsSST.num_changes);
     }
     //Allow this node to advance num_committed as the active leader
@@ -1133,7 +1133,7 @@ void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
         //This pushes the contiguous set of joiner_xxx_ports fields all at once
         gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
                    gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
-        gmsSST.put(gmsSST.num_changes);
+        gmsSST.put_with_completion(gmsSST.num_changes);
         gmsSST.put(gmsSST.num_committed);
     }
     gmsSST.put(gmsSST.num_acked);
@@ -2270,7 +2270,7 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
 
     dbg_default_debug("Shard leader for subgroup {} finished computing global_min", subgroup_num);
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
-    Vc.gmsSST->put(
+    Vc.gmsSST->put_with_completion(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
             (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
@@ -2298,7 +2298,7 @@ void ViewManager::follower_ragged_edge_cleanup(
                 &Vc.gmsSST->global_min[shard_leader_rank][num_received_offset],
                 num_shard_senders);
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
-    Vc.gmsSST->put(
+    Vc.gmsSST->put_with_completion(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
             (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
@@ -2448,6 +2448,11 @@ std::size_t ViewManager::get_number_of_shards_in_subgroup(subgroup_type_id_t sub
     return curr_view->subgroup_shard_views.at(subgroup_id).size();
 }
 
+uint32_t ViewManager::get_num_subgroups(subgroup_type_id_t subgroup_type) {
+    shared_lock_t read_lock(view_mutex);
+    return curr_view->subgroup_ids_by_type_id.at(subgroup_type).size();
+}
+
 int32_t ViewManager::get_my_shard(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
     shared_lock_t read_lock(view_mutex);
     subgroup_id_t subgroup_id = curr_view->subgroup_ids_by_type_id.at(subgroup_type).at(subgroup_index);
@@ -2457,6 +2462,19 @@ int32_t ViewManager::get_my_shard(subgroup_type_id_t subgroup_type, uint32_t sub
     } else {
         return find_id_result->second;
     }
+}
+
+std::vector<uint32_t> ViewManager::get_my_subgroup_indexes(subgroup_type_id_t subgroup_type) {
+    std::vector<uint32_t> my_indexes;
+    shared_lock_t read_lock(view_mutex);
+    //The indexes of this vector are the subgroup indexes for the type
+    const std::vector<subgroup_id_t>& subgroup_ids_of_type = curr_view->subgroup_ids_by_type_id.at(subgroup_type);
+    for(uint32_t subgroup_index = 0; subgroup_index < subgroup_ids_of_type.size(); ++subgroup_index) {
+        if(curr_view->my_subgroups.find(subgroup_ids_of_type[subgroup_index]) != curr_view->my_subgroups.end()) {
+            my_indexes.push_back(subgroup_index);
+        }
+    }
+    return my_indexes;
 }
 
 bool ViewManager::subgroup_is_persistent(subgroup_id_t subgroup_id) const {
