@@ -190,6 +190,21 @@ public:
                               version_t& prev_signed_ver) = 0;
 
     /**
+     * Retrieve a signature from a specific log index, assuming signatures are enabled.
+     * This is more efficient than getSignature, but only works if you already know the
+     * log index number, which is an implementation detail.
+     * @param index - log index number
+     * @param signature - A byte buffer into which the signature will be copied.
+     * Must be at least signature_size bytes.
+     * @param prev_ver A variable which will be updated to equal the previous
+     * version whose signature is included in this version's signature, or
+     * INVALID_VERSION if the index is invalid or signatures are disabled (in
+     * this case, no signature will be returned either)
+     * @return true if a signature was successfully retrieved, false if the index is
+     * invalid or signatures are disabled.
+     */
+    virtual bool getSignatureByIndex(int64_t index, unsigned char* signature, version_t& prev_ver) = 0;
+    /**
      * Trim the log till entry number eno, inclusively.
      * For exmaple, there is a log: [7,8,9,4,5,6]. After trim(3), it becomes [5,6]
      * @param eno -  the log number to be trimmed

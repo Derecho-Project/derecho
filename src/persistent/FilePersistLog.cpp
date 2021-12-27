@@ -423,6 +423,32 @@ bool FilePersistLog::getSignature(version_t version, unsigned char* signature, v
     return false;
 }
 
+bool FilePersistLog::getSignatureByIndex(int64_t index, unsigned char* signature, version_t& previous_signed_version) {
+    if(signature_size == 0) {
+        return false;
+    }
+
+    LogEntry* entry_ptr;
+
+    //Logic copied from getEntryByIndex. I'm not sure what ridx means.
+    FPL_RDLOCK;
+
+    int64_t ridx = (index < 0) ? (m_currMetaHeader.fields.tail + index) : index;
+
+    if(m_currMetaHeader.fields.tail <= ridx || ridx < m_currMetaHeader.fields.head) {
+        FPL_UNLOCK;
+        return false;
+        // throw PERSIST_EXP_INV_ENTRY_IDX(index);
+    }
+    FPL_UNLOCK;
+
+    entry_ptr = LOG_ENTRY_AT(ridx);
+    memcpy(signature, LOG_ENTRY_SIGNATURE(entry_ptr), signature_size);
+    previous_signed_version = entry_ptr->fields.prev_signed_ver;
+    return true;
+}
+
+
 int64_t FilePersistLog::getLength() {
     FPL_RDLOCK;
     int64_t len = NUM_USED_SLOTS;

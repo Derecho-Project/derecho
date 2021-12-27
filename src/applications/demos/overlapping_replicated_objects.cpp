@@ -76,15 +76,17 @@ int main(int argc, char** argv) {
 
     cout << "Finished constructing/joining Group" << endl;
 
+    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     //Now have each node send some updates to the Replicated objects
     //The code must be different depending on which subgroup this node is in,
-    //which we can determine based on which membership list it appears in
-    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    std::vector<node_id_t> foo_members = group.get_subgroup_members<Foo>(0)[0];
-    std::vector<node_id_t> cache_members = group.get_subgroup_members<Cache>(0)[0];
-    auto find_in_foo_results = std::find(foo_members.begin(), foo_members.end(), my_id);
-    if(find_in_foo_results != foo_members.end()) {
-        uint32_t rank_in_foo_and_bar = std::distance(foo_members.begin(), find_in_foo_results);
+    //which we can determine by attempting to locate its shard in each subgroup.
+    //Note that there is only one subgroup of each type.
+    int32_t my_foo_shard = group.get_my_shard<Foo>();
+    int32_t my_cache_shard = group.get_my_shard<Cache>();
+    if(my_foo_shard != -1) {
+        std::vector<node_id_t> foo_members = group.get_subgroup_members<Foo>()[my_foo_shard];
+        //Any node in subgroup foo is also in subgroup bar
+        uint32_t rank_in_foo_and_bar = derecho::index_of(foo_members, my_id);
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         if(rank_in_foo_and_bar == 0) {
@@ -125,7 +127,8 @@ int main(int argc, char** argv) {
             cout << "Clearing Bar's log" << endl;
             derecho::rpc::QueryResults<void> void_future = bar_rpc_handle.ordered_send<RPC_NAME(clear)>();
         }
-    } else {
+    } else if(my_cache_shard != -1) {
+        std::vector<node_id_t> cache_members = group.get_subgroup_members<Cache>()[my_cache_shard];
         uint32_t rank_in_cache = derecho::index_of(cache_members, my_id);
         Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         if(rank_in_cache == 0) {
@@ -153,7 +156,8 @@ int main(int argc, char** argv) {
             //Do it twice just to send more messages, so that the "contains" and "get" calls can go through
             cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
             cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
-            node_id_t p2p_target = foo_members[2];
+            //Send to node rank 2 in shard 0 of the Foo subgroup
+            node_id_t p2p_target = group.get_subgroup_members<Foo>()[0][2];
             cout << "Reading Foo's state from node " << p2p_target << endl;
             PeerCaller<Foo>& p2p_foo_handle = group.get_nonmember_subgroup<Foo>();
             derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_send<RPC_NAME(read_state)>(p2p_target);
@@ -164,6 +168,8 @@ int main(int argc, char** argv) {
             cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
             cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
         }
+    } else {
+        std::cout << "This node was not assigned to any subgroup!" << std::endl;
     }
 
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

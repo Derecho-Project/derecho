@@ -27,7 +27,7 @@ public:
 
     // default constructor
     ByteArrayObject(PersistentRegistry* pr)
-            : pers_bytes(std::make_unique<test::Bytes>, nullptr, pr, true) {}
+            : pers_bytes(pr, true) {}
 
     // deserialization constructor
     ByteArrayObject(Persistent<test::Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {}

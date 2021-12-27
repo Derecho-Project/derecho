@@ -277,12 +277,12 @@ int main(int argc, char** argv) {
             signature_subgroup_factory);
 
     //Figure out which subgroup this node got assigned to
-    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    std::vector<node_id_t> storage_members = group.get_subgroup_members<ObjectStore>(0)[0];
-    std::vector<node_id_t> signature_members = group.get_subgroup_members<SignatureStore>(0)[0];
-    std::vector<std::vector<node_id_t>> client_tier_shards = group.get_subgroup_members<ClientTier>(0);
-    if(member_of_shards(my_id, client_tier_shards)) {
-        std::cout << "Assigned the ClientTier role" << std::endl;
+    int32_t my_storage_shard = group.get_my_shard<ObjectStore>();
+    int32_t my_signature_shard = group.get_my_shard<SignatureStore>();
+    int32_t my_client_shard = group.get_my_shard<ClientTier>();
+    if(my_client_shard != -1) {
+        std::cout << "Assigned the ClientTier role, in shard " << my_client_shard << std::endl;
+        uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
         //Simulate getting a bunch of updates from a client and submitting them to the object store
         Blob test_update(nullptr, update_size);
         derecho::Replicated<ClientTier>& this_subgroup = group.get_subgroup<ClientTier>();
@@ -304,11 +304,11 @@ int main(int argc, char** argv) {
             }
             std::cout << std::dec << std::endl;
         }
-    } else if(std::find(signature_members.begin(), signature_members.end(), my_id) != signature_members.end()) {
+    } else if(my_signature_shard != -1) {
         std::cout << "Assigned the SignatureStore role." << std::endl;
         std::cout << "Press enter when finished with test." << std::endl;
         std::cin.get();
-    } else if(std::find(storage_members.begin(), storage_members.end(), my_id) != storage_members.end()) {
+    } else if(my_storage_shard != -1) {
         std::cout << "Assigned the ObjectStore role." << std::endl;
         std::cout << "Press enter when finished with test." << std::endl;
         std::cin.get();

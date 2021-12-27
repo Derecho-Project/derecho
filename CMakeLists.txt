@@ -7,7 +7,7 @@ project(derecho CXX)
 set(derecho_VERSION 2.2)
 set(derecho_build_VERSION 2.2.2)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z -fPIC")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if (${USE_VERBS_API})
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_VERBS_API")
 endif()
@@ -24,7 +24,14 @@ if ( NOT DEFINED CMAKE_INSTALL_LIBDIR )
     set( CMAKE_INSTALL_LIBDIR lib )
 endif ( )
 
+if ( NOT DEFINED CMAKE_INSTALL_INCLUDEDIR )
+    set( CMAKE_INSTALL_INCLUDEDIR include )
+endif ( )
+
 include(GetGitRevisionDescription)
+
+# These packages export their location information in the "old" way,
+# with INCLUDE_DIRS and LIBRARIES variables
 
 # mutils_FOUND
 # mutils_INCLUDE_DIRS
@@ -32,6 +39,9 @@ include(GetGitRevisionDescription)
 find_package(mutils)
 if (NOT ${mutils_FOUND})
     message(FATAL_ERROR "mutils not found. Please install from https://github.com/mpmilano/mutils.git")
+else()
+    message(STATUS "Found mutils in: ${mutils_INCLUDE_DIRS}")
+    include_directories(${mutils_INCLUDE_DIRS})
 endif()
 
 # mutils-tasks_FOUND
@@ -40,6 +50,9 @@ endif()
 find_package(mutils-tasks)
 if (NOT ${mutils-tasks_FOUND})
     message(FATAL_ERROR "mutils not found. Please install from https://github.com/mpmilano/mutils-tasks.git")
+else()
+    message(STATUS "Found mutils-tasks in: ${mutils-tasks_INCLUDE_DIRS}")
+    include_directories(${mutils-tasks_INCLUDE_DIRS})
 endif()
 
 # mutils-containers_FOUND
@@ -48,6 +61,9 @@ endif()
 find_package(mutils-containers)
 if (NOT ${mutils-containers_FOUND})
     message(FATAL_ERROR "mutils-containers not found. Please install from https://github.com/mpmilano/mutils-containers.git")
+else()
+    message(STATUS "Found mutils-containers in: ${mutils-containers_INCLUDE_DIRS}")
+    include_directories(${mutils-containers_INCLUDE_DIRS})
 endif()
 
 # libfabric_FOUND
@@ -55,15 +71,18 @@ endif()
 # libfabric_LIBRARIES
 find_package(libfabric 1.12.1 REQUIRED)
 
-# spdlog is a packaged system library, so this probably isn't necessary, but
-# it helps ensure that the right version is installed
-# spdlog_FOUND
+# These packages export their location information in the "new" way,
+# by providing an IMPORT-type CMake target that you can use as a
+# dependency. Placing this target in target_link_libraries will
+# automatically ensure its headers are included.
+
+# Target: spdlog::spdlog
 find_package(spdlog 1.3.1 REQUIRED)
 
-# find openssl
+# Target: OpenSSL::Crypto and OpenSSL::ssl
 find_package(OpenSSL 1.1.1 REQUIRED)
 
-# json
+# Target: nlohmann_json::nlohmann_json
 find_package(nlohmann_json 3.9.0 REQUIRED)
 
 add_subdirectory(src/mutils-serialization)
@@ -88,12 +107,13 @@ add_library(derecho SHARED
     $<TARGET_OBJECTS:persistent>
     $<TARGET_OBJECTS:openssl_wrapper>)
 target_link_libraries(derecho
-    rdmacm ibverbs rt pthread atomic
-    stdc++fs ${libfabric_LIBRARIES}
+    rdmacm ibverbs rt pthread atomic stdc++fs
+    spdlog::spdlog
+    ${libfabric_LIBRARIES}
     ${mutils_LIBRARIES}
     ${mutils-containers_LIBRARIES}
     ${mutils-tasks_LIBRARIES}
-    ${OPENSSL_LIBRARIES}
+    OpenSSL::Crypto
     nlohmann_json::nlohmann_json)
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}
@@ -104,8 +124,9 @@ add_dependencies(derecho
     rdmc sst tcp persistent openssl_wrapper)
 
 # make install
-install(TARGETS derecho EXPORT derecho
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS derecho EXPORT derechoTargets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY
         include/derecho/conf
         include/derecho/core
@@ -125,17 +146,17 @@ write_basic_package_version_file(
     COMPATIBILITY AnyNewerVersion
 )
 
-export (EXPORT derecho
-    FILE "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoTargets.cmake"
-)
-
-configure_file (derechoConfig.cmake
-    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
-)
-
 set(ConfigPackageLocation lib/cmake/derecho)
-install(EXPORT derecho
+
+configure_package_config_file(derechoConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
+    INSTALL_DESTINATION ${ConfigPackageLocation}
+    PATH_VARS CMAKE_INSTALL_LIBDIR CMAKE_INSTALL_INCLUDEDIR ConfigPackageLocation
+)
+
+install(EXPORT derechoTargets
     FILE derechoTargets.cmake
+    NAMESPACE derecho::
     DESTINATION ${ConfigPackageLocation}
 )
 

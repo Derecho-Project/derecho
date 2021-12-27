@@ -760,7 +760,7 @@ void post_object(const std::function<void(char const* const, std::size_t)>& f,
 /**
  * Special to_bytes for POD types, which just uses memcpy
  */
-template <typename T, restrict(std::is_pod<T>::value)>
+template <typename T, typename>
 std::size_t to_bytes(const T& t, char* v) {
     auto res = std::memcpy(v, &t, sizeof(T));
     assert(res);

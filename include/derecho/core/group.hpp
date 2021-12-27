@@ -69,7 +69,7 @@ using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 class _Group {
 private:
 protected:
-    virtual uint32_t get_index_of_type(const std::type_info&) = 0;
+    virtual uint32_t get_index_of_type(const std::type_info&) const = 0;
 
 public:
     virtual ~_Group() = default;
@@ -82,6 +82,9 @@ public:
 
     template <typename SubgroupType>
     std::size_t get_number_of_shards(uint32_t subgroup_index = 0);
+
+    template <typename SubgroupType>
+    uint32_t get_num_subgroups();
 
     template <typename SubgroupType>
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
@@ -101,6 +104,7 @@ public:
     PeerCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
     std::size_t get_number_of_shards(uint32_t subgroup_index = 0);
+    uint32_t get_num_subgroups();
 };
 
 class GroupReference {
@@ -123,11 +127,11 @@ public:
 template <typename... ReplicatedTypes>
 class Group : public virtual _Group, public GroupProjection<ReplicatedTypes>... {
 public:
-    void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
-    void set_peer_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
+    void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret) override;
+    void set_peer_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret) override;
 
 protected:
-    uint32_t get_index_of_type(const std::type_info&) override;
+    uint32_t get_index_of_type(const std::type_info&) const override;
     ViewManager& get_view_manager() override;
 
 private:
@@ -322,33 +326,77 @@ public:
     template <typename SubgroupType>
     PeerCaller<SubgroupType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
 
+    /**
+     * Get a ShardIterator object that can be used to send P2P messages to every
+     * shard within a specific subgroup.
+     * @tparam SubgroupType The subgroup type to communicate with
+     * @param subgroup_index The index of the subgroup within SubgroupType
+     * to communicate with
+     * @return A ShardIterator that will contact one member of each shard in
+     * the subgroup identified by (SubgroupType, subgroup_index)
+     */
     template <typename SubgroupType>
     ShardIterator<SubgroupType> get_shard_iterator(uint32_t subgroup_index = 0);
 
-    /** Causes this node to cleanly leave the group by setting itself to "failed."
+    /**
+     * Causes this node to cleanly leave the group by setting itself to "failed."
      * @param group_shutdown True if all nodes in the group are going to leave.
      */
     void leave(bool group_shutdown = true);
 
-    /** Returns a vector listing the nodes that are currently members of the group. */
+    /** @returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
+
+    /**
+     * Returns the number of subgroups of the specified type. This information
+     * is also in the configuration file or SubgroupInfo function, but this method
+     * is provided for convenience.
+     * @tparam SubgroupType the subgroup type
+     * @return The number of subgroups of type SubgroupType
+     */
+    template <typename SubgroupType>
+    uint32_t get_num_subgroups();
+
     /**
      * Gets a list of the nodes currently assigned to the subgroup of the
      * specified type and index, organized by shard. The outer vector has an
      * entry for each shard in the subgroup, and the vector at each position
      * contains the IDs of the nodes in that shard.
+     * @tparam SubgroupType the subgroup type
+     * @param subgroup_index The index of the subgroup (of the same type)
+     * @return A vector of vectors, where the outer index represents a shard
+     * number, and the inner index counts individual nodes in that shard.
      */
     template <typename SubgroupType>
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
-    /** Returns the order of this node in the sequence of members of the group */
+
+    /** @returns the order of this node in the sequence of members of the group */
     std::int32_t get_my_rank();
-    /** Returns the id of local node */
-    node_id_t get_my_id();
-    /** Returns the shard number that this node is a member of in the specified
+
+    /** @returns the ID of local node */
+    node_id_t get_my_id() override;
+
+    /**
+     * @returns the shard number that this node is a member of in the specified
      * subgroup (by subgroup type and index), or -1 if this node is not a member
-     * of any shard in the specified subgroup. */
+     * of any shard in the specified subgroup.
+     * @tparam SubgroupType the subgroup type
+     */
     template <typename SubgroupType>
     std::int32_t get_my_shard(uint32_t subgroup_index = 0);
+
+    /**
+     * Lists the subgroup index(es) that this node is a member of for the
+     * specified subgroup type. Note that a node may be a member of more than
+     * one subgroup of the same type. If this node is not a member of any
+     * subgroups of this type, the returned vector will be empty.
+     * @tparam SubgroupType The type of subgroup to check for membership in
+     * @return a vector of subgroup indexes, or an empty vector if this node
+     * is not a member of any subgroup of type SubgroupType
+     */
+    template<typename SubgroupType>
+    std::vector<uint32_t> get_my_subgroup_indexes();
+
     /** Reports to the GMS that the given node has failed. */
     void report_failure(const node_id_t who);
     /** Waits until all members of the group have called this function. */

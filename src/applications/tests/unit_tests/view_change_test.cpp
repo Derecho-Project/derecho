@@ -111,6 +111,7 @@ void nonpersistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t n
 
     derecho::Group<TestObject> group({}, layout, {}, {&new_view_callback}, test_object_factory);
 
+    std::cout << "In shard " << group.get_my_shard<TestObject>() << std::endl;
     std::cout << "Sending " << num_updates << " multicast updates" << std::endl;
     derecho::Replicated<TestObject>& replica_group = group.get_subgroup<TestObject>();
     for(uint32_t counter = 0; counter < num_updates ; ++counter) {
@@ -150,6 +151,7 @@ void persistent_test(uint32_t num_shards, uint32_t max_shard_size, uint32_t num_
 
     derecho::Group<PersistentTestObject> group({}, layout, {}, {&new_view_callback}, test_object_factory);
 
+    std::cout << "In shard " << group.get_my_shard<PersistentTestObject>() << std::endl;
     std::cout << "Sending " << num_updates << " multicast updates" << std::endl;
     derecho::Replicated<PersistentTestObject>& replica_group = group.get_subgroup<PersistentTestObject>();
     for(uint32_t counter = 0; counter < num_updates; ++counter) {

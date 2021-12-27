@@ -2448,6 +2448,11 @@ std::size_t ViewManager::get_number_of_shards_in_subgroup(subgroup_type_id_t sub
     return curr_view->subgroup_shard_views.at(subgroup_id).size();
 }
 
+uint32_t ViewManager::get_num_subgroups(subgroup_type_id_t subgroup_type) {
+    shared_lock_t read_lock(view_mutex);
+    return curr_view->subgroup_ids_by_type_id.at(subgroup_type).size();
+}
+
 int32_t ViewManager::get_my_shard(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
     shared_lock_t read_lock(view_mutex);
     subgroup_id_t subgroup_id = curr_view->subgroup_ids_by_type_id.at(subgroup_type).at(subgroup_index);
@@ -2457,6 +2462,19 @@ int32_t ViewManager::get_my_shard(subgroup_type_id_t subgroup_type, uint32_t sub
     } else {
         return find_id_result->second;
     }
+}
+
+std::vector<uint32_t> ViewManager::get_my_subgroup_indexes(subgroup_type_id_t subgroup_type) {
+    std::vector<uint32_t> my_indexes;
+    shared_lock_t read_lock(view_mutex);
+    //The indexes of this vector are the subgroup indexes for the type
+    const std::vector<subgroup_id_t>& subgroup_ids_of_type = curr_view->subgroup_ids_by_type_id.at(subgroup_type);
+    for(uint32_t subgroup_index = 0; subgroup_index < subgroup_ids_of_type.size(); ++subgroup_index) {
+        if(curr_view->my_subgroups.find(subgroup_ids_of_type[subgroup_index]) != curr_view->my_subgroups.end()) {
+            my_indexes.push_back(subgroup_index);
+        }
+    }
+    return my_indexes;
 }
 
 bool ViewManager::subgroup_is_persistent(subgroup_id_t subgroup_id) const {
