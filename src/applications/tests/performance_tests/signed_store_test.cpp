@@ -111,8 +111,8 @@ ClientTier::ClientTier(std::size_t test_data_size)
         : test_data(nullptr, test_data_size){};
 
 std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTier::submit_update(const Blob& data) const {
-    derecho::ExternalCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
-    derecho::ExternalCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
+    derecho::PeerCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
+    derecho::PeerCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
     std::vector<std::vector<node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
     std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size() - 1);
@@ -150,8 +150,8 @@ bool ClientTier::update_batch_test(const int& num_updates) const {
     using derecho::rpc::QueryResults;
     using persistent::version_t;
     using namespace std::chrono;
-    derecho::ExternalCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
-    derecho::ExternalCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
+    derecho::PeerCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
+    derecho::PeerCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
     const std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
     const std::vector<std::vector<node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
     std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size() - 1);
@@ -393,8 +393,8 @@ int main(int argc, char** argv) {
     if(my_client_shard != -1) {
         std::cout << "Assigned the ClientTier role" << std::endl;
         derecho::Replicated<ClientTier>& this_subgroup = group.get_subgroup<ClientTier>();
-        derecho::ExternalCaller<ObjectStore>& object_store_subgroup = group.get_nonmember_subgroup<ObjectStore>();
-        derecho::ExternalCaller<SignatureStore>& signature_store_subgroup = group.get_nonmember_subgroup<SignatureStore>();
+        derecho::PeerCaller<ObjectStore>& object_store_subgroup = group.get_nonmember_subgroup<ObjectStore>();
+        derecho::PeerCaller<SignatureStore>& signature_store_subgroup = group.get_nonmember_subgroup<SignatureStore>();
         Blob test_update(nullptr, update_size);
         std::vector<derecho::rpc::QueryResults<ClientTier::version_signature>> update_query_results;
         begin_time = steady_clock::now();

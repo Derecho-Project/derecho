@@ -22,6 +22,9 @@ enum REQUEST_TYPE {
     P2P_REQUEST,
     RPC_REPLY
 };
+
+std::ostream& operator<<(std::ostream& os, REQUEST_TYPE rt);
+
 static const REQUEST_TYPE p2p_request_types[] = {P2P_REPLY,
                                                  P2P_REQUEST,
                                                  RPC_REPLY};

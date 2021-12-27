@@ -20,7 +20,7 @@
 #include <derecho/core/derecho.hpp>
 #include "sample_objects.hpp"
 
-using derecho::ExternalCaller;
+using derecho::PeerCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;
@@ -159,7 +159,7 @@ int main(int argc, char** argv) {
             //Send to node rank 2 in shard 0 of the Foo subgroup
             node_id_t p2p_target = group.get_subgroup_members<Foo>()[0][2];
             cout << "Reading Foo's state from node " << p2p_target << endl;
-            ExternalCaller<Foo>& p2p_foo_handle = group.get_nonmember_subgroup<Foo>();
+            PeerCaller<Foo>& p2p_foo_handle = group.get_nonmember_subgroup<Foo>();
             derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_send<RPC_NAME(read_state)>(p2p_target);
             int response = foo_results.get().get(p2p_target);
             cout << "  Response: " << response << endl;

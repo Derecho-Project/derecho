@@ -155,7 +155,7 @@ public:
     using version_signature = std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>>;
     /**
      * RPC function that submits an update to the object store and gets its hash signed;
-     * intended to be called by an outside client using ExternalGroup.
+     * intended to be called by an outside client using ExternalGroupClient.
      * @return The version assigned to the update, the timestamp assigned to the update,
      * and the signature assigned to the update.
      */

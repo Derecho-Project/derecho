@@ -40,6 +40,12 @@
         }                                                                                                                                            \
     }
 
+#define REGISTER_RPC_FUNCTIONS_WITH_NOTIFICATION(name, arg1...)  \
+    void notify(const Bytes& msg) const { \
+        derecho::NotificationSupport::notify(msg); \
+    } \
+    REGISTER_RPC_FUNCTIONS(name, P2P_TARGETS(notify), arg1);
+
 /**
  * This macro is one of the possible arguments to REGISTER_RPC_FUNCTIONS; its
  * parameters should be a list of method names that should be tagged as

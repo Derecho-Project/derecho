@@ -11,7 +11,6 @@
 #include "test_objects.h"
 #include <derecho/conf/conf.hpp>
 
-using derecho::ExternalCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;
