@@ -227,7 +227,6 @@ int main(int argc, char* argv[]) {
     std::cout << "Finished constructing/joining Group" << std::endl;
     auto group_members = group.get_members();
     node_rank = group.get_my_rank();
-    uint32_t my_id = group_members[node_rank];
 
     if((sender_selector == PartialSendMode::HALF_SENDERS) && (node_rank <= (uint32_t)(num_of_nodes - 1) / 2)) {
         is_sending = false;
@@ -280,45 +279,6 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Done!" << std::endl;
 
-    double avg_latency, avg_std_dev;
-    // the if loop selects the senders
-    if(sender_selector == PartialSendMode::ALL_SENDERS|| (sender_selector == PartialSendMode::HALF_SENDERS && (int)(node_rank) > (num_of_nodes - 1) / 2) || (sender_selector == PartialSendMode::ONE_SENDER && (int)(node_rank) == num_of_nodes - 1)) {
-        double total_time = 0;
-        double sum_of_square = 0.0;
-        double average_time = 0.0;
-        for(uint i = 0; i < num_msgs; ++i) {
-            total_time += (int64_t)(message_pers_ts_us[num_sender * i + node_rank]) - (int64_t)(local_message_ts_us[i]);
-        }
-        // average latency in nano seconds
-        average_time = (total_time / num_msgs);
-        std::cout << "average time: " << average_time << std::endl;
-        // calculate the standard deviation
-        for(uint i = 0; i < num_msgs; ++i) {
-            sum_of_square += (double)((double)message_pers_ts_us[num_sender * i + node_rank] - (double)local_message_ts_us[i] - average_time) * ((double)message_pers_ts_us[num_sender * i + node_rank] - (double)local_message_ts_us[i] - average_time);
-        }
-        double std_dev = sqrt(sum_of_square / (num_msgs - 1));
-        // aggregate latency values from all senders
-        std::tie(avg_latency, avg_std_dev) = aggregate_latency(group_members, my_id, (average_time / 1000.0), (std_dev / 1000.0));
-    } else {
-        // if not a sender, then pass 0 as the latency (not counted)
-        std::tie(avg_latency, avg_std_dev) = aggregate_latency(group_members, my_id, 0.0, 0.0);
-    }
-
-    unsigned int num_senders_selector = 0;
-    if (sender_selector == PartialSendMode::HALF_SENDERS){
-        num_senders_selector = 1;
-    }
-    else if (sender_selector == PartialSendMode::ONE_SENDER){
-        num_senders_selector = 2;
-    }
-
-    // log the result at the leader node
-    if(node_rank == 0) {
-        log_results(exp_result{num_of_nodes, num_senders_selector, msg_size,
-                               derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), num_msgs,
-                               avg_latency, avg_std_dev},
-                    "data_latency");
-    }
     group.barrier_sync();
     group.leave();
 }
