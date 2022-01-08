@@ -1,14 +1,13 @@
-#include <map>
+#include "derecho/core/detail/p2p_connection.hpp"
 
-#include <cassert>
+#include "derecho/conf/conf.hpp"
+#include "derecho/core/detail/rpc_utils.hpp"
+#include "derecho/sst/detail/poll_utils.hpp"
+
 #include <cstring>
+#include <map>
 #include <sstream>
 #include <sys/time.h>
-
-#include <derecho/conf/conf.hpp>
-#include <derecho/core/detail/p2p_connection.hpp>
-#include <derecho/core/detail/rpc_utils.hpp>
-#include <derecho/sst/detail/poll_utils.hpp>
 
 namespace sst {
 

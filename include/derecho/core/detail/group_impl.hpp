@@ -3,16 +3,16 @@
  * @date Apr 22, 2016
  */
 
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include "../group.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/utils/container_template_functions.hpp"
+#include "derecho/utils/logger.hpp"
+#include "derecho_internal.hpp"
+#include "make_kind_map.hpp"
+
 #include <spdlog/async.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
-
-#include "../group.hpp"
-#include "derecho_internal.hpp"
-#include "make_kind_map.hpp"
-#include <derecho/utils/container_template_functions.hpp>
-#include <derecho/utils/logger.hpp>
 
 namespace derecho {
 
@@ -70,7 +70,7 @@ PeerCaller<ReplicatedType>&
 GroupProjection<ReplicatedType>::get_nonmember_subgroup(uint32_t subgroup_num) {
     void* ret{nullptr};
     set_peer_caller_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
-                                &ret);
+                            &ret);
     return *((PeerCaller<ReplicatedType>*)ret);
 }
 
@@ -118,8 +118,8 @@ ViewManager& Group<ReplicatedTypes...>::get_view_manager() {
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_peer_caller_pointer(std::type_index type,
-                                                            uint32_t subgroup_num,
-                                                            void** ret) {
+                                                        uint32_t subgroup_num,
+                                                        void** ret) {
     ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
                       ? &get_nonmember_subgroup<ReplicatedTypes>(subgroup_num)
                       : *ret)),
@@ -323,8 +323,8 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
         }
         // create the external client callback object if we don't have one
         external_client_callbacks.template get<FirstType>().emplace(
-                    subgroup_index, ExternalClientCallback<FirstType>(subgroup_type_id,
-                                                          my_id, subgroup_id, rpc_manager));
+                subgroup_index, ExternalClientCallback<FirstType>(subgroup_type_id,
+                                                                  my_id, subgroup_id, rpc_manager));
     }
     // add the client callback object
     // client_callback = std::make_unique<ExternalClientCallback<NotificationSupport>>(subgroup_type_id, my_id, rpc_manager);
@@ -384,7 +384,7 @@ PeerCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(uint
 
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-ExternalClientCallback<SubgroupType>& Group<ReplicatedTypes...>::get_client_callback(uint32_t subgroup_index){
+ExternalClientCallback<SubgroupType>& Group<ReplicatedTypes...>::get_client_callback(uint32_t subgroup_index) {
     try {
         return external_client_callbacks.template get<SubgroupType>().at(subgroup_index);
     } catch(std::out_of_range& ex) {

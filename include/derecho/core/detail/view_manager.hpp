@@ -5,6 +5,20 @@
  */
 #pragma once
 
+#include "../subgroup_info.hpp"
+#include "../view.hpp"
+#include "derecho/conf/conf.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho_internal.hpp"
+#include "locked_reference.hpp"
+#include "multicast_group.hpp"
+#include "persistence_manager.hpp"
+#include "replicated_interface.hpp"
+#include "restart_state.hpp"
+#include "rpc_manager.hpp"
+
+#include <spdlog/spdlog.h>
+
 #include <list>
 #include <map>
 #include <memory>
@@ -13,20 +27,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#include "../subgroup_info.hpp"
-#include "../view.hpp"
-#include "derecho_internal.hpp"
-#include "locked_reference.hpp"
-#include "multicast_group.hpp"
-#include "persistence_manager.hpp"
-#include "replicated_interface.hpp"
-#include "restart_state.hpp"
-#include "rpc_manager.hpp"
-#include <derecho/conf/conf.hpp>
-
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <spdlog/spdlog.h>
 
 namespace derecho {
 

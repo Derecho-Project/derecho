@@ -3,12 +3,12 @@
  */
 #pragma once
 
+#include "../derecho_exception.hpp"
+#include "derecho/openssl/signature.hpp"
+#include "derecho_internal.hpp"
+
 #include <map>
 #include <string>
-
-#include "../derecho_exception.hpp"
-#include "derecho_internal.hpp"
-#include <derecho/openssl/signature.hpp>
 
 namespace derecho {
 

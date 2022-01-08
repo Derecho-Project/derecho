@@ -4,11 +4,16 @@
  * @date Feb 7, 2017
  */
 
+#include "derecho/core/detail/rpc_manager.hpp"
+#include "derecho/core/detail/view_manager.hpp"
+
 #include <cassert>
 #include <iostream>
-
-#include <derecho/core/detail/rpc_manager.hpp>
-#include <derecho/core/detail/view_manager.hpp>
+#include <exception>
+#include <mutex>
+#include <memory>
+#include <functional>
+#include <thread>
 
 namespace derecho {
 

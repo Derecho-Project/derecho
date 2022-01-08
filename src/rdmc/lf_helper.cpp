@@ -1,3 +1,11 @@
+#include "derecho/rdmc/detail/lf_helper.hpp"
+
+#include "derecho/conf/conf.hpp"
+#include "derecho/core/detail/connection_manager.hpp"
+#include "derecho/rdmc/detail/util.hpp"
+#include "derecho/tcp/tcp.hpp"
+#include "derecho/utils/logger.hpp"
+
 #include <arpa/inet.h>
 #include <atomic>
 #include <byteswap.h>
@@ -15,13 +23,6 @@
 #include <rdma/fi_tagged.h>
 #include <thread>
 #include <vector>
-
-#include <derecho/conf/conf.hpp>
-#include <derecho/core/detail/connection_manager.hpp>
-#include <derecho/rdmc/detail/lf_helper.hpp>
-#include <derecho/rdmc/detail/util.hpp>
-#include <derecho/tcp/tcp.hpp>
-#include <derecho/utils/logger.hpp>
 
 /** From sst/verbs.cpp */
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -51,7 +52,7 @@ inline void crash_with_message(const char* format_str, ...) {
     exit(-1);
 }
 
-/** 
+/**
  * Passive endpoint info to be exchange
  */
 static constexpr size_t max_lf_addr_size = 128 - sizeof(uint32_t) - 2 * sizeof(uint64_t);
@@ -60,13 +61,13 @@ struct cm_con_data_t {
     char pep_addr[max_lf_addr_size]; /** local endpoint address */
 } __attribute__((packed));
 
-/** 
- * Object to hold the tcp connections for every node 
+/**
+ * Object to hold the tcp connections for every node
  */
 tcp::tcp_connections* rdmc_connections;
 
-/** 
- * Listener to detect new incoming connections 
+/**
+ * Listener to detect new incoming connections
  */
 //static unique_ptr<tcp::connection_listener> connection_listener;
 
@@ -82,8 +83,8 @@ struct completion_handler_set {
 static std::vector<completion_handler_set> completion_handlers;
 static std::mutex completion_handlers_mutex;
 
-/** 
- * Global states 
+/**
+ * Global states
  */
 struct lf_ctxt {
     struct fi_info* hints;           /** hints */
@@ -115,8 +116,8 @@ enum RDMAOps {
 
 namespace impl {
 
-/** 
- * Populate some of the global context with default valus 
+/**
+ * Populate some of the global context with default valus
  */
 static void default_context() {
     memset((void*)&g_ctxt, 0, sizeof(struct lf_ctxt));
@@ -192,7 +193,7 @@ memory_region::memory_region(char* buf, size_t s) : buffer(buf), size(s) {
 
 uint64_t memory_region::get_key() const { return mr->key; }
 
-/** 
+/**
  * Completion queue constructor
  */
 completion_queue::completion_queue() {
@@ -639,7 +640,7 @@ static void polling_loop() {
 }
 
 /**
- * Initialize the global context 
+ * Initialize the global context
  */
 bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
                    uint32_t node_rank) {

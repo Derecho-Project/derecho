@@ -1,9 +1,10 @@
 #pragma once
+
+#include "../openssl/signature.hpp"
+#include "HLC.hpp"
+
 #include <cstdint>
 #include <functional>
-
-#include "HLC.hpp"
-#include "../openssl/signature.hpp"
 
 namespace persistent {
 

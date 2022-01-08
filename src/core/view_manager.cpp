@@ -4,21 +4,21 @@
  * @date Feb 6, 2017
  */
 
-#include <arpa/inet.h>
-#include <tuple>
+#include "derecho/core/detail/view_manager.hpp"
 
-#include <derecho/core/derecho_exception.hpp>
-#include <derecho/core/detail/public_key_store.hpp>
-#include <derecho/core/detail/version_code.hpp>
-#include <derecho/core/detail/view_manager.hpp>
-#include <derecho/core/git_version.hpp>
-#include <derecho/core/replicated.hpp>
-#include <derecho/utils/container_template_functions.hpp>
-
-#include <derecho/persistent/Persistent.hpp>
-#include <derecho/utils/logger.hpp>
+#include "derecho/core/derecho_exception.hpp"
+#include "derecho/core/detail/public_key_store.hpp"
+#include "derecho/core/detail/version_code.hpp"
+#include "derecho/core/git_version.hpp"
+#include "derecho/core/replicated.hpp"
+#include "derecho/persistent/Persistent.hpp"
+#include "derecho/utils/container_template_functions.hpp"
+#include "derecho/utils/logger.hpp"
 
 #include <mutils/macro_utils.hpp>
+
+#include <arpa/inet.h>
+#include <tuple>
 
 namespace derecho {
 
@@ -952,7 +952,7 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
         gmsSST.put(gmsSST.changes);
         if(!proposed_join_sockets.empty()) {
             gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
-                                       gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+                       gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
         }
         gmsSST.put(gmsSST.num_changes);
     }
@@ -1079,7 +1079,7 @@ void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
         //Push the entire new changes vector and the associated joiner_ip vectors
         gmsSST.put(gmsSST.changes);
         gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
-                                   gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+                   gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
         gmsSST.put(gmsSST.num_changes);
     }
     //Allow this node to advance num_committed as the active leader

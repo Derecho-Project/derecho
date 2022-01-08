@@ -1,18 +1,18 @@
 #pragma once
 
+#include "../subgroup_info.hpp"
+#include "../view.hpp"
+#include "derecho_internal.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+
+#include <spdlog/spdlog.h>
+
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
-
-#include "../subgroup_info.hpp"
-#include "../view.hpp"
-#include "derecho_internal.hpp"
-
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <spdlog/spdlog.h>
 
 namespace derecho {
 /**
@@ -61,7 +61,7 @@ struct RestartState {
      * leader.
      */
     ragged_trim_map_t logged_ragged_trim;
-    /** 
+    /**
      * Map from (subgroup ID, shard num) to ID of the "restart leader" for that
      * shard, which is the node with the longest persistent log for that shard's
      * replicated state.

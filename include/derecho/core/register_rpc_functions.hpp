@@ -1,6 +1,6 @@
 #pragma once
+#include "derecho/utils/map_macro.hpp"
 #include "detail/rpc_utils.hpp"
-#include <derecho/utils/map_macro.hpp>
 
 #define make_p2p_tagger_expr(x) derecho::rpc::tag_p2p<derecho::rpc::hash_cstr(#x)>(&classname::x)
 #define make_ordered_tagger_expr(x) derecho::rpc::tag_ordered<derecho::rpc::hash_cstr(#x)>(&classname::x)
@@ -40,10 +40,10 @@
         }                                                                                                                                            \
     }
 
-#define REGISTER_RPC_FUNCTIONS_WITH_NOTIFICATION(name, arg1...)  \
-    void notify(const Bytes& msg) const { \
-        derecho::NotificationSupport::notify(msg); \
-    } \
+#define REGISTER_RPC_FUNCTIONS_WITH_NOTIFICATION(name, arg1...) \
+    void notify(const Bytes& msg) const {                       \
+        derecho::NotificationSupport::notify(msg);              \
+    }                                                           \
     REGISTER_RPC_FUNCTIONS(name, P2P_TARGETS(notify), arg1);
 
 /**

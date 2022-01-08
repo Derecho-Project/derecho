@@ -3,9 +3,14 @@
  *
  * @date Jun 20, 2017
  */
-#include <derecho/core/detail/persistence_manager.hpp>
-#include <derecho/core/detail/view_manager.hpp>
-#include <derecho/openssl/signature.hpp>
+#include "derecho/core/detail/persistence_manager.hpp"
+
+#include "derecho/core/detail/view_manager.hpp"
+#include "derecho/openssl/signature.hpp"
+
+#include <map>
+#include <string>
+#include <thread>
 
 namespace derecho {
 

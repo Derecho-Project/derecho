@@ -6,17 +6,18 @@
 
 #pragma once
 
-#include <functional>
-#include <numeric>
-#include <type_traits>
-
+#include "derecho/conf/conf.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/utils/logger.hpp"
 #include "rpc_utils.hpp"
-#include <derecho/conf/conf.hpp>
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <derecho/utils/logger.hpp>
+
 #include <mutils/FunctionalMap.hpp>
 #include <mutils/tuple_extras.hpp>
 #include <spdlog/spdlog.h>
+
+#include <functional>
+#include <numeric>
+#include <type_traits>
 
 namespace derecho {
 
@@ -165,8 +166,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(results_heap_ptr));
             dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, fmt::ptr(results_heap_ptr));
             rls_default_error("Received an exception from node {}. Exception message: {}", nid, exception_info->exception_what);
-            (*results_heap_ptr)->set_exception(nid, std::make_exception_ptr(
-                                                remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
+            (*results_heap_ptr)->set_exception(nid, std::make_exception_ptr(remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
         } else {
             dbg_default_trace("Received an RPC response for invocation ID {} from node {}", fmt::ptr(results_heap_ptr), nid);
             (*results_heap_ptr)->set_value(nid, *mutils::from_bytes<Ret>(dsm, response + 1 + sizeof(results_heap_ptr)));

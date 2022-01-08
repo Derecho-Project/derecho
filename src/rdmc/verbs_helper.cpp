@@ -1,3 +1,11 @@
+#include "derecho/rdmc/detail/verbs_helper.hpp"
+
+#include "derecho/conf/conf.hpp"
+#include "derecho/core/detail/connection_manager.hpp"
+#include "derecho/rdmc/detail/util.hpp"
+#include "derecho/tcp/tcp.hpp"
+#include "derecho/utils/logger.hpp"
+
 #include <atomic>
 #include <cstring>
 #include <fcntl.h>
@@ -7,13 +15,6 @@
 #include <poll.h>
 #include <thread>
 #include <vector>
-
-#include <derecho/conf/conf.hpp>
-#include <derecho/core/detail/connection_manager.hpp>
-#include <derecho/rdmc/detail/util.hpp>
-#include <derecho/rdmc/detail/verbs_helper.hpp>
-#include <derecho/tcp/tcp.hpp>
-#include <derecho/utils/logger.hpp>
 
 extern "C" {
 #include <infiniband/verbs.h>

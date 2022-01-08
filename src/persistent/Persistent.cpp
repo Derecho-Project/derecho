@@ -1,6 +1,11 @@
-#include <derecho/openssl/hash.hpp>
-#include <derecho/openssl/signature.hpp>
-#include <derecho/persistent/Persistent.hpp>
+#include "derecho/persistent/Persistent.hpp"
+
+#include "derecho/openssl/hash.hpp"
+#include "derecho/openssl/signature.hpp"
+
+#include <functional>
+#include <string>
+#include <typeindex>
 
 namespace persistent {
 

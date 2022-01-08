@@ -1,5 +1,14 @@
 #pragma once
 
+#include "derecho/conf/conf.hpp"
+#include "predicates.hpp"
+
+#ifdef USE_VERBS_API
+#include "detail/verbs.hpp"
+#else  //LIBFABRIC
+#include "detail/lf.hpp"
+#endif
+
 #include <atomic>
 #include <bitset>
 #include <cassert>
@@ -15,15 +24,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#include "predicates.hpp"
-#include <derecho/conf/conf.hpp>
-
-#ifdef USE_VERBS_API
-#include "detail/verbs.hpp"
-#else  //LIBFABRIC
-#include "detail/lf.hpp"
-#endif
 
 using sst::resources;
 
@@ -66,6 +66,7 @@ public:
 template <typename T>
 class SSTField : public _SSTField {
     static_assert(std::is_trivially_copyable<T>::value, "SSTField types must be trivially copyable!");
+
 public:
     using _SSTField::base;
     using _SSTField::field_len;
@@ -95,6 +96,7 @@ public:
 template <typename T>
 class SSTFieldVector : public _SSTField {
     static_assert(std::is_trivially_copyable<T>::value, "SSTFieldVector types must be trivially copyable!");
+
 private:
     const size_t length;
 
@@ -394,7 +396,7 @@ public:
     template <typename T>
     void put_with_completion(SSTFieldVector<T>& vec_field) {
         put_with_completion(all_indices, vec_field.get_base() - getBaseAddress(),
-            sizeof(vec_field[0][0]) * vec_field.size());
+                            sizeof(vec_field[0][0]) * vec_field.size());
     }
 
     /** Writes a contiguous subset of the local row to some of the remote nodes. */

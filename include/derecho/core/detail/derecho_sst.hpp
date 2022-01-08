@@ -1,15 +1,15 @@
 #pragma once
 
+#include "../derecho_type_definitions.hpp"
+#include "derecho_internal.hpp"
+#include "derecho/sst/sst.hpp"
+
 #include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <mutex>
 #include <sstream>
 #include <string>
-
-#include "../derecho_type_definitions.hpp"
-#include "derecho_internal.hpp"
-#include <derecho/sst/sst.hpp>
 
 namespace derecho {
 

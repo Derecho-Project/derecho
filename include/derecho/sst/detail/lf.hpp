@@ -7,15 +7,15 @@
  * including the Resources class and global setup functions.
  */
 
+#include "derecho/core/derecho_type_definitions.hpp"
+#include "derecho/core/detail/connection_manager.hpp"
+#include "derecho/utils/logger.hpp"
+
 #include <iostream>
 #include <map>
 #include <rdma/fabric.h>
 #include <rdma/fi_errno.h>
 #include <thread>
-
-#include <derecho/core/derecho_type_definitions.hpp>
-#include <derecho/core/detail/connection_manager.hpp>
-#include <derecho/utils/logger.hpp>
 
 #ifndef LF_VERSION
 #define LF_VERSION FI_VERSION(1, 5)
@@ -40,7 +40,7 @@ struct lf_sender_ctxt {
 class _resources {
 private:
     /** Connect the queue pair
-     * 
+     *
      * @param is_lf_server This parameter decide local role in connection.
      *     If is_lf_server is true, it waits on PEP for connection from remote
      *     side. Otherwise, it initiate a connection to remote side.
@@ -55,9 +55,9 @@ private:
 
 protected:
     std::atomic<bool> remote_failed;
-    /** 
+    /**
      * post read/write request
-     * 
+     *
      * @param ctxt - pointer to the sender context, caller should maintain the
      *     ownership of this context until completion.
      * @param offset - The offset within the remote buffer to read/write
@@ -108,7 +108,7 @@ public:
      * @param size_w The size of the write buffer (in bytes).
      * @param size_r The size of the read buffer (in bytes).
      * @param is_lf_server Is local node a libfabric server or client. A libfabric
-     *         client initiates connection to the passive endpoint of the remote 
+     *         client initiates connection to the passive endpoint of the remote
      *         node, while a libfabric server waiting for the conneciton using its
      *         local passive endpoint.
      */
@@ -204,10 +204,10 @@ bool sync(uint32_t r_id);
  * retained; all other connections will be deleted.
  */
 void filter_external_to(const std::vector<node_id_t>& live_nodes_list);
-/** 
+/**
  * Initializes the global libfabric resources. Must be called before creating
- * or using any SST instance. 
- * 
+ * or using any SST instance.
+ *
  * @param internal_ip_addrs_and_ports A map from id to (IP address, port) pairs for internal group members
  * @param external_ip_addrs_and_ports A map from id to (IP address, port) pairs for external connections
  * @param node_id id of this node.

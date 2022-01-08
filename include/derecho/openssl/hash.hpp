@@ -7,6 +7,7 @@
 
 #include "openssl_exception.hpp"
 #include "pointers.hpp"
+
 #include <openssl/evp.h>
 #include <vector>
 

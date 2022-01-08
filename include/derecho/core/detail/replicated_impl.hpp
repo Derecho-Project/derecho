@@ -1,13 +1,13 @@
 #pragma once
 
-#include <functional>
-#include <mutex>
-#include <utility>
-
 #include "../replicated.hpp"
 #include "view_manager.hpp"
 
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+
+#include <functional>
+#include <mutex>
+#include <utility>
 
 namespace derecho {
 
@@ -320,14 +320,14 @@ auto PeerCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
 
 template <typename T>
 ExternalClientCallback<T>::ExternalClientCallback(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id,
-                          rpc::RPCManager& group_rpc_manager)
+                                                  rpc::RPCManager& group_rpc_manager)
         : node_id(nid),
           subgroup_id(subgroup_id),
           group_rpc_manager(group_rpc_manager),
           wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
                                                    T::register_functions(), *group_rpc_manager.receivers)) {}
 
-//This is literally copied and pasted from PeerCaller<T>, except that this does not check if the receiver 
+//This is literally copied and pasted from PeerCaller<T>, except that this does not check if the receiver
 // is in the subgroup.
 
 template <typename T>

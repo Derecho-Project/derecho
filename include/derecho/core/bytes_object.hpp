@@ -1,6 +1,9 @@
 #pragma once
 
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+
 #include <cstring>
+#include <memory>
 
 namespace derecho {
 //A ByteRepresentable object representing a byte array that is used in several experiments.

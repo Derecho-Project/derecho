@@ -6,6 +6,14 @@
 
 #pragma once
 
+#include "../derecho_exception.hpp"
+#include "../derecho_type_definitions.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/utils/logger.hpp"
+#include "derecho_internal.hpp"
+
+#include <mutils/macro_utils.hpp>
+
 #include <cstddef>
 #include <exception>
 #include <functional>
@@ -20,13 +28,6 @@
 #include <typeindex>
 #include <utility>
 #include <vector>
-
-#include "../derecho_exception.hpp"
-#include "../derecho_type_definitions.hpp"
-#include "derecho_internal.hpp"
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <derecho/utils/logger.hpp>
-#include <mutils/macro_utils.hpp>
 
 namespace derecho {
 
@@ -885,8 +886,7 @@ public:
            && responded_nodes.find(removed_nid) == responded_nodes.end()) {
             //Mark the node as "responded" for the purposes of the other methods
             responded_nodes.insert(removed_nid);
-            reply_promises.at(removed_nid).set_exception(
-                std::make_exception_ptr(node_removed_from_group_exception{removed_nid}));
+            reply_promises.at(removed_nid).set_exception(std::make_exception_ptr(node_removed_from_group_exception{removed_nid}));
         }
     }
 

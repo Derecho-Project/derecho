@@ -9,4 +9,4 @@
 #include "subgroup_functions.hpp"
 #include "subgroup_info.hpp"
 #include "notification.hpp"
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include "derecho/mutils-serialization/SerializationSupport.hpp"

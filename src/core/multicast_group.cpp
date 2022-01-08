@@ -1,15 +1,16 @@
+#include "derecho/core/detail/multicast_group.hpp"
+
+#include "derecho/core/detail/derecho_internal.hpp"
+#include "derecho/persistent/Persistent.hpp"
+#include "derecho/rdmc/detail/util.hpp"
+#include "derecho/utils/logger.hpp"
+#include "derecho/utils/time.h"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <limits>
 #include <thread>
-
-#include <derecho/core/detail/derecho_internal.hpp>
-#include <derecho/core/detail/multicast_group.hpp>
-#include <derecho/persistent/Persistent.hpp>
-#include <derecho/rdmc/detail/util.hpp>
-#include <derecho/utils/logger.hpp>
-#include <derecho/utils/time.h>
 
 namespace derecho {
 

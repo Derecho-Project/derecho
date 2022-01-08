@@ -1,6 +1,7 @@
+#include "derecho/openssl/signature.hpp"
+
 #include <cstdio>
 #include <cstring>
-#include <derecho/openssl/signature.hpp>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>

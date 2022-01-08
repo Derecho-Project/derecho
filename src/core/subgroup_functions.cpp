@@ -2,15 +2,21 @@
  * @file subgroup_functions.cpp
  */
 
-#include <iterator>
-#include <vector>
+#include "derecho/core/subgroup_functions.hpp"
 
-#include <derecho/core/derecho_modes.hpp>
-#include <derecho/core/detail/derecho_internal.hpp>
-#include <derecho/core/subgroup_functions.hpp>
-#include <derecho/core/view.hpp>
-#include <derecho/utils/container_template_functions.hpp>
-#include <derecho/utils/logger.hpp>
+#include "derecho/core/derecho_modes.hpp"
+#include "derecho/core/detail/derecho_internal.hpp"
+#include "derecho/core/view.hpp"
+#include "derecho/utils/container_template_functions.hpp"
+#include "derecho/utils/logger.hpp"
+
+#include <algorithm>
+#include <iterator>
+#include <map>
+#include <memory>
+#include <set>
+#include <typeindex>
+#include <vector>
 
 namespace derecho {
 
@@ -438,10 +444,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
 
             // Figure out the sender list
             std::vector<int> is_sender;
-            if (sharding_policy.reserved_sender_ids_by_shard.size() > 0 &&
-                !sharding_policy.reserved_sender_ids_by_shard[shard_num].empty()) {
-                for(const auto& nid: desired_nodes) {
-                    if (sharding_policy.reserved_sender_ids_by_shard[shard_num].find(nid) != sharding_policy.reserved_sender_ids_by_shard[shard_num].end()) {
+            if(sharding_policy.reserved_sender_ids_by_shard.size() > 0 && !sharding_policy.reserved_sender_ids_by_shard[shard_num].empty()) {
+                for(const auto& nid : desired_nodes) {
+                    if(sharding_policy.reserved_sender_ids_by_shard[shard_num].find(nid) != sharding_policy.reserved_sender_ids_by_shard[shard_num].end()) {
                         // contained in sender list
                         is_sender.push_back(true);
                     } else {
@@ -530,12 +535,11 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
 
                     for(auto node_id : added_reserved_node_id_set) {
                         next_shard_members.push_back(node_id);
-                        if (sharding_policy.reserved_sender_ids_by_shard[shard_num].empty()) {
+                        if(sharding_policy.reserved_sender_ids_by_shard[shard_num].empty()) {
                             // we didn't specify a sender list for this shard. So all nodes can send.
                             next_is_sender.push_back(true);
                         } else {
-                            if (sharding_policy.reserved_sender_ids_by_shard[shard_num].find(node_id)!=
-                                sharding_policy.reserved_sender_ids_by_shard[shard_num].end()) {
+                            if(sharding_policy.reserved_sender_ids_by_shard[shard_num].find(node_id) != sharding_policy.reserved_sender_ids_by_shard[shard_num].end()) {
                                 next_is_sender.push_back(true);
                             } else {
                                 next_is_sender.push_back(false);
@@ -555,8 +559,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
                 next_shard_members.push_back(curr_view.members[curr_view.next_unassigned_rank]);
                 curr_view.next_unassigned_rank++;
                 //If senders are not specified, all nodes are senders; otherwise, additional members are not senders.
-                next_is_sender.push_back(sharding_policy.reserved_sender_ids_by_shard.empty()?
-                        true : sharding_policy.reserved_sender_ids_by_shard[shard_num].empty());
+                next_is_sender.push_back(sharding_policy.reserved_sender_ids_by_shard.empty() ? true : sharding_policy.reserved_sender_ids_by_shard[shard_num].empty());
             }
             dbg_default_trace("Assigned shard {} nodes in total, with curr_view.next_unassigned_rank {}: {}", next_shard_members.size(), curr_view.next_unassigned_rank, next_shard_members);
 
@@ -723,11 +726,11 @@ SubgroupAllocationPolicy parse_json_subgroup_policy(const json& jconf, std::set<
         }
         shard_allocation_policy.even_shards = false;
         shard_allocation_policy.num_shards = num_shards;
-        std::vector<int> min_num_nodes_by_shard,max_num_nodes_by_shard;
-        for(const auto& num:subgroup_it[min_nodes_by_shard_field].get<std::vector<std::string>>()) {
+        std::vector<int> min_num_nodes_by_shard, max_num_nodes_by_shard;
+        for(const auto& num : subgroup_it[min_nodes_by_shard_field].get<std::vector<std::string>>()) {
             min_num_nodes_by_shard.push_back(std::stoi(num));
         }
-        for(const auto& num:subgroup_it[max_nodes_by_shard_field].get<std::vector<std::string>>()) {
+        for(const auto& num : subgroup_it[max_nodes_by_shard_field].get<std::vector<std::string>>()) {
             max_num_nodes_by_shard.push_back(std::stoi(num));
         }
         shard_allocation_policy.min_num_nodes_by_shard = std::move(min_num_nodes_by_shard);
@@ -745,11 +748,11 @@ SubgroupAllocationPolicy parse_json_subgroup_policy(const json& jconf, std::set<
         // "reserved_node_ids_by_shard" is not a mandatory field
         if(!subgroup_it[reserved_node_ids_by_shard_field].is_null()) {
             auto reserved_nodes_and_senders = subgroup_it[reserved_node_ids_by_shard_field].get<std::vector<std::set<std::string>>>();
-            
-            for (const auto& per_shard_set : reserved_nodes_and_senders) {
-                std::set<node_id_t> nodes,senders;
-                for (const auto& node_string : per_shard_set) {
-                    if (node_string.at(0) == reserved_node_is_sender_tag) {
+
+            for(const auto& per_shard_set : reserved_nodes_and_senders) {
+                std::set<node_id_t> nodes, senders;
+                for(const auto& node_string : per_shard_set) {
+                    if(node_string.at(0) == reserved_node_is_sender_tag) {
                         node_id_t nid = static_cast<node_id_t>(std::stoi(node_string.substr(1)));
                         nodes.insert(nid);
                         senders.insert(nid);

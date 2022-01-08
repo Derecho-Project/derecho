@@ -1,5 +1,7 @@
-#include <derecho/core/detail/version_code.hpp>
-#include <derecho/core/git_version.hpp>
+#include "derecho/core/detail/version_code.hpp"
+
+#include "derecho/core/git_version.hpp"
+
 #include <functional>
 
 /** A simple hash-combine function to "mix" two hashcodes */
@@ -33,10 +35,10 @@ char int64_array[8]{1, 2, 3, 4, 5, 6, 7, 8};
 
 // Runtime detection of floating point storage order
 union float_union {
-     uint32_t as_uint32;
-     float as_float;
+    uint32_t as_uint32;
+    float as_float;
 } a_float = {.as_float = 123.4560001};
-union doulbe_union {
+union double_union {
     uint64_t as_uint64;
     double as_double;
 } a_double = {.as_double = 654.3210000987};

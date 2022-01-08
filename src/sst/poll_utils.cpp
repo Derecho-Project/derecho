@@ -1,8 +1,8 @@
+#include "derecho/sst/detail/poll_utils.hpp"
+
+#include <functional>
 #include <iostream>
 #include <numeric>
-#include <functional>
-
-#include <derecho/sst/detail/poll_utils.hpp>
 
 namespace sst {
 namespace util {

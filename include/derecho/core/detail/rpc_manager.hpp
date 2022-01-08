@@ -6,22 +6,22 @@
 
 #pragma once
 
+#include "../derecho_type_definitions.hpp"
+#include "../view.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/persistent/Persistent.hpp"
+#include "derecho/utils/logger.hpp"
+#include "derecho_internal.hpp"
+#include "p2p_connection_manager.hpp"
+#include "remote_invocable.hpp"
+#include "rpc_utils.hpp"
+
 #include <exception>
 #include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <vector>
-
-#include "../derecho_type_definitions.hpp"
-#include "../view.hpp"
-#include "derecho_internal.hpp"
-#include "p2p_connection_manager.hpp"
-#include "remote_invocable.hpp"
-#include "rpc_utils.hpp"
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <derecho/utils/logger.hpp>
-#include <derecho/persistent/Persistent.hpp>
 
 namespace derecho {
 
