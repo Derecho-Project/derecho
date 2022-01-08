@@ -1,10 +1,14 @@
-#include <atomic>
+#include "derecho/utils/logger.hpp"
+
+#include "derecho/conf/conf.hpp"
+
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
-#include <derecho/utils/logger.hpp>
-#include <derecho/conf/conf.hpp>
+
+#include <atomic>
+#include <memory>
 
 #define LOGGER_FACTORY_UNINITIALIZED	(0)
 #define LOGGER_FACTORY_INITIALIZING	(1)

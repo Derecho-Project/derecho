@@ -4,8 +4,18 @@
 #include "detail/p2p_connection_manager.hpp"
 #include "group.hpp"
 #include "view.hpp"
+#include "derecho/conf/conf.hpp"
 
-#include <derecho/conf/conf.hpp>
+#include <functional>
+#include <iostream>
+#include <unordered_map>
+#include <memory>
+#include <map>
+#include <thread>
+#include <mutex>
+#include <queue>
+#include <exception>
+
 namespace derecho {
 
 template <typename... ReplicatedTypes>

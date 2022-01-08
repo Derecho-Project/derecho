@@ -1,13 +1,15 @@
-#include <derecho/rdmc/rdmc.hpp>
-#include <derecho/rdmc/group_send.hpp>
-#include <derecho/rdmc/detail/message.hpp>
-#include <derecho/rdmc/detail/schedule.hpp>
-#include <derecho/rdmc/detail/util.hpp>
+#include "derecho/rdmc/rdmc.hpp"
+#include "derecho/rdmc/group_send.hpp"
+#include "derecho/rdmc/detail/message.hpp"
+#include "derecho/rdmc/detail/schedule.hpp"
+#include "derecho/rdmc/detail/util.hpp"
 #ifdef USE_VERBS_API
-    #include <derecho/rdmc/detail/verbs_helper.hpp>
+    #include "derecho/rdmc/detail/verbs_helper.hpp"
 #else
-    #include <derecho/rdmc/detail/lf_helper.hpp>
+    #include "derecho/rdmc/detail/lf_helper.hpp"
 #endif
+
+#include "derecho/core/derecho_type_definitions.hpp"
 
 #include <atomic>
 #include <cmath>
@@ -20,8 +22,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-#include <derecho/core/derecho_type_definitions.hpp>
 
 using namespace std;
 using namespace rdma;
@@ -95,8 +95,8 @@ void destroy_group(uint16_t group_number) {
     LOG_EVENT(group_number, -1, -1, "destroy_group");
     groups.erase(group_number);
 }
-void shutdown() { 
-    shutdown_flag = true; 
+void shutdown() {
+    shutdown_flag = true;
 #ifdef USE_VERBS_API
     ::rdma::impl::verbs_destroy();
 #else
@@ -174,7 +174,7 @@ barrier_group::barrier_group(vector<uint32_t> members) {
         bool is_lf_server = members[member_index] < members[target];
         eps.emplace(target, endpoint(members[target], is_lf_server));
     }
- 
+
     auto remote_mrs = ::rdma::impl::lf_exchange_memory_regions(
             members, node_rank, *steps_mr.get());
     for(unsigned int m = 0; m < total_steps; m++) {

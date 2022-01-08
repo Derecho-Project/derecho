@@ -1,13 +1,15 @@
-#include <cstdlib>
-#include <derecho/conf/conf.hpp>
-#include <stdexcept>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <stdexcept>
+#include "derecho/conf/conf.hpp"
+
 #include <nlohmann/json.hpp>
 #ifndef NDEBUG
 #include <spdlog/sinks/stdout_color_sinks.h>
 #endif  //NDEBUG
+
+#include <cstdlib>
+#include <stdexcept>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdexcept>
 
 namespace derecho {
 

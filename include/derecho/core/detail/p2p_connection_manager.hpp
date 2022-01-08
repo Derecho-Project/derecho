@@ -1,21 +1,21 @@
 #pragma once
 
+#include "p2p_connection.hpp"
+#ifdef USE_VERBS_API
+#include "derecho/sst/detail/verbs.hpp"
+#else
+#include "derecho/sst/detail/lf.hpp"
+#endif
+
 #include <atomic>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <thread>
 #include <vector>
-#include <mutex>
-#include <functional>
-
-#include "p2p_connection.hpp"
-#ifdef USE_VERBS_API
-#include <derecho/sst/detail/verbs.hpp>
-#else
-#include <derecho/sst/detail/lf.hpp>
-#endif
 
 namespace sst {
 

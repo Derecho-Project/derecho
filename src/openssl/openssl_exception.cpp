@@ -3,7 +3,7 @@
  *
  */
 
-#include <derecho/openssl/openssl_exception.hpp>
+#include "derecho/openssl/openssl_exception.hpp"
 
 namespace openssl {
 

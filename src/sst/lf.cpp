@@ -3,6 +3,16 @@
  * @file lf.cpp
  * Implementation of RDMA interface defined in lf.h.
  */
+
+#include "derecho/sst/detail/lf.hpp"
+
+#include "derecho/conf/conf.hpp"
+#include "derecho/core/detail/connection_manager.hpp"
+#include "derecho/sst/detail/poll_utils.hpp"
+#include "derecho/sst/detail/sst_impl.hpp"
+#include "derecho/tcp/tcp.hpp"
+#include "derecho/utils/logger.hpp"
+
 #include <arpa/inet.h>
 #include <byteswap.h>
 #include <errno.h>
@@ -16,14 +26,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include <derecho/conf/conf.hpp>
-#include <derecho/core/detail/connection_manager.hpp>
-#include <derecho/sst/detail/lf.hpp>
-#include <derecho/sst/detail/poll_utils.hpp>
-#include <derecho/sst/detail/sst_impl.hpp>
-#include <derecho/tcp/tcp.hpp>
-#include <derecho/utils/logger.hpp>
 
 using std::cout;
 using std::endl;
@@ -144,8 +146,7 @@ static void load_configuration() {
     // domain:
     g_ctxt.hints->domain_attr->name = crash_if_nullptr("strdup domain name.",
                                                        strdup, derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
-    if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) ||
-       (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)){
+    if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) || (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)) {
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
@@ -397,7 +398,7 @@ int _resources::post_remote_send(
         msg.msg_iov = &msg_iov;
         // in v1.12.1, the API spec changed.
         // msg.desc = (void**)&this->mr_lrkey;
-        void *desc = fi_mr_desc(this->read_mr);
+        void* desc = fi_mr_desc(this->read_mr);
         msg.desc = &desc;
         msg.iov_count = 1;
         msg.addr = 0;
@@ -422,7 +423,7 @@ int _resources::post_remote_send(
         msg.msg_iov = &msg_iov;
         // in v1.12.1, this API changed.
         // msg.desc = (void**)&this->mr_lrkey;
-        void *desc = fi_mr_desc(this->read_mr);
+        void* desc = fi_mr_desc(this->read_mr);
         msg.desc = &desc;
         msg.iov_count = 1;
         msg.addr = 0;  // not used for a connection endpoint
@@ -573,7 +574,7 @@ int resources_two_sided::post_receive(lf_sender_ctxt* ctxt, const long long int 
     msg.msg_iov = &msg_iov;
     // v1.12.1 changed API spec
     // msg.desc = (void**)&this->mr_lwkey;
-    void *desc = fi_mr_desc(this->write_mr);
+    void* desc = fi_mr_desc(this->write_mr);
     msg.desc = &desc;
     msg.iov_count = 1;
     msg.addr = 0;  // not used

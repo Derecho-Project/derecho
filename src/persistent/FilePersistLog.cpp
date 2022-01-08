@@ -1,6 +1,8 @@
-#include <derecho/conf/conf.hpp>
-#include <derecho/persistent/detail/FilePersistLog.hpp>
-#include <derecho/persistent/detail/util.hpp>
+#include "derecho/persistent/detail/FilePersistLog.hpp"
+
+#include "derecho/conf/conf.hpp"
+#include "derecho/persistent/detail/util.hpp"
+
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -448,7 +450,6 @@ bool FilePersistLog::getSignatureByIndex(int64_t index, unsigned char* signature
     return true;
 }
 
-
 int64_t FilePersistLog::getLength() {
     FPL_RDLOCK;
     int64_t len = NUM_USED_SLOTS;
@@ -514,7 +515,7 @@ int64_t FilePersistLog::getVersionIndex(version_t ver, bool exact) {
 
     FPL_UNLOCK;
 
-    if ((l_idx != INVALID_INDEX) && (LOG_ENTRY_AT(l_idx)->fields.ver != ver) && exact) {
+    if((l_idx != INVALID_INDEX) && (LOG_ENTRY_AT(l_idx)->fields.ver != ver) && exact) {
         l_idx = INVALID_INDEX;
     }
 
@@ -583,7 +584,7 @@ int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) {
     FPL_UNLOCK;
 
     if(key != this->hidx.begin() && this->hidx.size() > 0) {
-        key --;
+        key--;
         dbg_default_trace("getHLCIndex returns: hlc:({0},{1}),idx:{2}", key->hlc.m_rtc_us, key->hlc.m_logic, key->log_idx);
         return key->log_idx;
     }
@@ -600,7 +601,7 @@ const void* FilePersistLog::getEntry(const HLC& rhlc) {
 
     int64_t idx = getHLCIndex(rhlc);
 
-    if (idx != INVALID_INDEX) {
+    if(idx != INVALID_INDEX) {
         ple = LOG_ENTRY_AT(idx);
     }
 

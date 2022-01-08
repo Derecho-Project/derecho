@@ -6,9 +6,11 @@
 #include "PersistException.hpp"
 #include "PersistNoLog.hpp"
 #include "PersistentInterface.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/utils/logger.hpp"
 #include "detail/FilePersistLog.hpp"
 #include "detail/PersistLog.hpp"
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
+
 #include <functional>
 #include <inttypes.h>
 #include <iostream>
@@ -20,10 +22,8 @@
 #include <time.h>
 #include <typeindex>
 
-#include <derecho/utils/logger.hpp>
-
 #if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
-#include <derecho/utils/time.h>
+#include "derecho/utils/time.h"
 #endif  //_PERFORMANCE_DEBUG
 
 /**
@@ -45,39 +45,39 @@ public:
 };
 
 /**
-   * Helper function for creating Persistent version numbers out of MulticastGroup
-   * sequence numbers and View IDs. Packs two 32-bit integer types into an
-   * unsigned 64-bit int; the template allows them to be signed or unsigned.
-   * @param high_bits The integer that should become the high order bits of the
-   * version number.
-   * @param low_bits The integer that should become the low order bits of the
-   * version number
-   * @return The concatenation of the two integers as a 64-bit version number.
-   */
+ * Helper function for creating Persistent version numbers out of MulticastGroup
+ * sequence numbers and View IDs. Packs two 32-bit integer types into an
+ * unsigned 64-bit int; the template allows them to be signed or unsigned.
+ * @param high_bits The integer that should become the high order bits of the
+ * version number.
+ * @param low_bits The integer that should become the low order bits of the
+ * version number
+ * @return The concatenation of the two integers as a 64-bit version number.
+ */
 template <typename int_type>
 version_t combine_int32s(const int_type high_bits, const int_type low_bits);
 
 /**
-   * Helper function for unpacking a Persistent version number into two signed
-   * or unsigned int32 values. The template parameter determines whether each
-   * 32-bit half of the version number will be intepreted as a signed int or an
-   * unsigned int.
-   * @param packed_int The version number to unpack
-   * @return A std::pair in which the first element is the high-order bits of
-   * the version number, and the second element is the low-order bits of the
-   * version number.
-   */
+ * Helper function for unpacking a Persistent version number into two signed
+ * or unsigned int32 values. The template parameter determines whether each
+ * 32-bit half of the version number will be intepreted as a signed int or an
+ * unsigned int.
+ * @param packed_int The version number to unpack
+ * @return A std::pair in which the first element is the high-order bits of
+ * the version number, and the second element is the low-order bits of the
+ * version number.
+ */
 template <typename int_type>
 std::pair<int_type, int_type> unpack_version(const version_t packed_int);
 
 /**
-   * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
-   * variables. Replicated<T> class should maintain such a registry to perform
-   * the following operations:
-   * - makeVersion(const int64_t & ver): create a version
-   * - persist(): persist the existing versions
-   * - trim(const int64_t & ver): trim all versions earlier than ver
-   */
+ * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
+ * variables. Replicated<T> class should maintain such a registry to perform
+ * the following operations:
+ * - makeVersion(const int64_t & ver): create a version
+ * - persist(): persist the existing versions
+ * - trim(const int64_t & ver): trim all versions earlier than ver
+ */
 class PersistentRegistry : public mutils::RemoteDeserializationContext {
 public:
     /* Constructor */
@@ -728,9 +728,9 @@ public:
     template <typename DeltaType, typename DummyObjectType = ObjectType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<DummyObjectType>, DummyObjectType>::value, bool>
     getDeltaSignature(const version_t ver,
-             const std::function<bool(const DeltaType&)>& search_predicate,
-             unsigned char* signature, version_t& prev_ver,
-             mutils::DeserializationManager* dm = nullptr) const;
+                      const std::function<bool(const DeltaType&)>& search_predicate,
+                      unsigned char* signature, version_t& prev_ver,
+                      mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * Trim versions prior to the specified version.
@@ -1099,7 +1099,6 @@ public:
             mutils::DeserializationManager dm = {{}})
             : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, false, log_tail, persistent_registry, std::move(dm)) {}
 
-
     /**
      * Constructor 4 is a convenience constructor for use in Replicated Objects
      * where the underlying data type has a default constructor. It uses
@@ -1109,7 +1108,7 @@ public:
      * @param persistent_registry A pointer to the persistent registry for the Replicated Object
      */
     Volatile(PersistentRegistry* persistent_registry)
-            : Persistent<ObjectType, ST_MEM>(persistent_registry) {};
+            : Persistent<ObjectType, ST_MEM>(persistent_registry){};
 
     /** constructor 5, the default copy constructor, is disabled
      */

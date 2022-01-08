@@ -6,6 +6,11 @@
 
 #pragma once
 
+#include "../sst.hpp"
+
+#include "../predicates.hpp"
+#include "poll_utils.hpp"
+
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -15,10 +20,6 @@
 #include <thread>
 #include <time.h>
 #include <vector>
-
-#include "poll_utils.hpp"
-#include "../predicates.hpp"
-#include "../sst.hpp"
 
 namespace sst {
 
@@ -261,7 +262,7 @@ void SST<DerivedSST>::freeze(uint32_t row_index) {
     res_vec[row_index]->report_failure();
     //We can't delete from res_vec here because it creates a race with put(),
     //but maybe marking the resource object as "failed" is good enough.
-//    res_vec[row_index].reset();
+    //    res_vec[row_index].reset();
     if(failure_upcall) {
         failure_upcall(members[row_index]);
     }

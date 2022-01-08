@@ -6,11 +6,8 @@
 
 #pragma once
 
-#include <functional>
-#include <memory>
-#include <tuple>
-#include <type_traits>
-
+#include "derecho/persistent/Persistent.hpp"
+#include "derecho/tcp/tcp.hpp"
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/remote_invocable.hpp"
@@ -18,8 +15,11 @@
 #include "detail/rpc_manager.hpp"
 #include "detail/rpc_utils.hpp"
 
-#include <derecho/persistent/Persistent.hpp>
-#include <derecho/tcp/tcp.hpp>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <tuple>
+#include <type_traits>
 
 namespace derecho {
 

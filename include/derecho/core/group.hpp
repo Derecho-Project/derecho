@@ -1,5 +1,18 @@
 #pragma once
 
+#include "derecho/tcp/tcp.hpp"
+#include "derecho_exception.hpp"
+#include "detail/derecho_internal.hpp"
+#include "detail/persistence_manager.hpp"
+#include "detail/rpc_manager.hpp"
+#include "detail/view_manager.hpp"
+#include "replicated.hpp"
+#include "subgroup_info.hpp"
+#include "derecho/conf/conf.hpp"
+
+#include <mutils-containers/KindMap.hpp>
+#include <mutils-containers/TypeMap2.hpp>
+
 #include <chrono>
 #include <cstdint>
 #include <ctime>
@@ -14,20 +27,6 @@
 #include <typeindex>
 #include <utility>
 #include <vector>
-
-#include <derecho/tcp/tcp.hpp>
-
-#include "derecho_exception.hpp"
-#include "detail/derecho_internal.hpp"
-#include "detail/persistence_manager.hpp"
-#include "detail/rpc_manager.hpp"
-#include "detail/view_manager.hpp"
-#include "replicated.hpp"
-#include "subgroup_info.hpp"
-
-#include <derecho/conf/conf.hpp>
-#include <mutils-containers/KindMap.hpp>
-#include <mutils-containers/TypeMap2.hpp>
 
 namespace derecho {
 /**

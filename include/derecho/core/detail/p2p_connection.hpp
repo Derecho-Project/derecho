@@ -1,5 +1,11 @@
 #pragma once
 
+#ifdef USE_VERBS_API
+#include "derecho/sst/detail/verbs.hpp"
+#else
+#include "derecho/sst/detail/lf.hpp"
+#endif
+
 #include <atomic>
 #include <iostream>
 #include <map>
@@ -7,12 +13,6 @@
 #include <optional>
 #include <thread>
 #include <vector>
-
-#ifdef USE_VERBS_API
-#include <derecho/sst/detail/verbs.hpp>
-#else
-#include <derecho/sst/detail/lf.hpp>
-#endif
 
 namespace sst {
 class P2PConnectionManager;

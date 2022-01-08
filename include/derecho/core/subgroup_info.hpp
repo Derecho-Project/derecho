@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "derecho_exception.hpp"
+
 #include <cstdint>
 #include <functional>
 #include <list>
@@ -13,8 +15,6 @@
 #include <memory>
 #include <typeindex>
 #include <vector>
-
-#include "derecho_exception.hpp"
 
 namespace derecho {
 

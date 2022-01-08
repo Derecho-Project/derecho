@@ -7,10 +7,11 @@
  * including the Resources class and global setup functions.
  */
 
+#include "derecho/core/derecho_type_definitions.hpp"
+
 #include <map>
 #include <atomic>
 #include <infiniband/verbs.h>
-#include <derecho/core/derecho_type_definitions.hpp>
 
 namespace sst {
 

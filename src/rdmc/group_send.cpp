@@ -1,11 +1,11 @@
-#include <derecho/rdmc/group_send.hpp>
-#include <derecho/rdmc/detail/message.hpp>
-#include <derecho/rdmc/detail/util.hpp>
+#include "derecho/rdmc/group_send.hpp"
+#include "derecho/rdmc/detail/message.hpp"
+#include "derecho/rdmc/detail/util.hpp"
 
 #ifdef USE_VERBS_API
-    #include <derecho/rdmc/detail/verbs_helper.hpp>
-#else 
-    #include <derecho/rdmc/detail/lf_helper.hpp>
+    #include "derecho/rdmc/detail/verbs_helper.hpp"
+#else
+    #include "derecho/rdmc/detail/lf_helper.hpp"
 #endif
 
 #include <cassert>
@@ -410,7 +410,7 @@ void polling_group::post_recv(schedule::block_transfer transfer) {
 #ifdef USE_VERBS_API
     auto it = queue_pairs.find(transfer.target);
     assert(it != queue_pairs.end());
-#else 
+#else
     auto it = endpoints.find(transfer.target);
     assert(it != endpoints.end());
 #endif
@@ -438,7 +438,7 @@ void polling_group::post_recv(schedule::block_transfer transfer) {
 void polling_group::connect(uint32_t neighbor) {
 #ifdef USE_VERBS_API
     queue_pairs.emplace(neighbor, queue_pair(members[neighbor]));
-    
+
     auto post_recv = [this, neighbor](rdma::queue_pair* qp) {
         qp->post_empty_recv(form_tag(group_number, neighbor),
                             message_types.ready_for_block);
@@ -449,7 +449,7 @@ void polling_group::connect(uint32_t neighbor) {
     // Decide whether the endpoint will act as a server in the connection
     bool is_lf_server = members[member_index] < members[neighbor];
     endpoints.emplace(neighbor, endpoint(members[neighbor], is_lf_server));
-    
+
     auto post_recv = [this, neighbor](rdma::endpoint* ep) {
         ep->post_empty_recv(form_tag(group_number, neighbor),
                             message_types.ready_for_block);

@@ -1,5 +1,20 @@
 #pragma once
 
+#include "../derecho_modes.hpp"
+#include "../subgroup_info.hpp"
+#include "connection_manager.hpp"
+#include "derecho/conf/conf.hpp"
+#include "derecho/mutils-serialization/SerializationMacros.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/rdmc/rdmc.hpp"
+#include "derecho/sst/multicast.hpp"
+#include "derecho/sst/sst.hpp"
+#include "derecho_internal.hpp"
+#include "derecho_sst.hpp"
+#include "persistence_manager.hpp"
+
+#include <spdlog/spdlog.h>
+
 #include <assert.h>
 #include <condition_variable>
 #include <functional>
@@ -13,20 +28,6 @@
 #include <set>
 #include <tuple>
 #include <vector>
-
-#include "../derecho_modes.hpp"
-#include "../subgroup_info.hpp"
-#include "connection_manager.hpp"
-#include "derecho_internal.hpp"
-#include "derecho_sst.hpp"
-#include "persistence_manager.hpp"
-#include <derecho/conf/conf.hpp>
-#include <derecho/mutils-serialization/SerializationMacros.hpp>
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <derecho/rdmc/rdmc.hpp>
-#include <derecho/sst/multicast.hpp>
-#include <derecho/sst/sst.hpp>
-#include <spdlog/spdlog.h>
 
 namespace derecho {
 
@@ -391,7 +392,6 @@ private:
     std::list<pred_handle> sender_pred_handles;
 
     std::vector<bool> last_transfer_medium;
-
 
     /** A reference to the PersistenceManager that lives in Group, used to
      * alert it when a new version needs to be persisted. */

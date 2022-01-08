@@ -1,5 +1,5 @@
 #!/bin/bash
-# 
+#
 # Pre-commit hook that ensures the file git_version.cpp is updated to reflect
 # the current version of the project as of this commit. This script parses the
 # output of git describe to get each component of the version number (assuming
@@ -34,7 +34,7 @@ cat > $(pwd)/src/core/git_version.cpp <<EOM
  * local repository's .git/hooks/ directory.
  */
 
-#include <derecho/core/git_version.hpp>
+#include "derecho/core/git_version.hpp"
 
 namespace derecho {
 

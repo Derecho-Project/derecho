@@ -9,6 +9,7 @@
 #include "hash.hpp"
 #include "openssl_exception.hpp"
 #include "pointers.hpp"
+
 #include <openssl/evp.h>
 #include <vector>
 
@@ -80,7 +81,7 @@ public:
      * @param pem_file_name The name (or path) of the PEM file to create
      */
     void to_pem_public(const std::string& pem_file_name);
-     /**
+    /**
      * Serializes the public-key component of this EnvelopeKey into PEM format,
      * then returns the resulting PEM "file" in a string. This avoids the
      * overhead of disk I/O if you need to send the file over the network.

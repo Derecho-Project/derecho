@@ -28,6 +28,10 @@ if ( NOT DEFINED CMAKE_INSTALL_INCLUDEDIR )
     set( CMAKE_INSTALL_INCLUDEDIR include )
 endif ( )
 
+# Prevent "make install" from automatically calling "make all", since the "all" target includes
+# all the applications and they are not part of the library we want to install with "make install"
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
+
 include(GetGitRevisionDescription)
 
 # These packages export their location information in the "old" way,

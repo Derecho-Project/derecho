@@ -5,6 +5,10 @@
  */
 #pragma once
 
+#include "../derecho_type_definitions.hpp"
+#include "derecho/persistent/HLC.hpp"
+#include "derecho/persistent/PersistentInterface.hpp"
+
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -13,10 +17,6 @@
 #include <string>
 #include <sys/types.h>
 #include <utility>
-
-#include "../derecho_type_definitions.hpp"
-#include <derecho/persistent/HLC.hpp>
-#include <derecho/persistent/PersistentInterface.hpp>
 
 namespace persistent {
 class PersistentRegistry;

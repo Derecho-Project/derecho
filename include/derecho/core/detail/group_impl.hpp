@@ -3,16 +3,16 @@
  * @date Apr 22, 2016
  */
 
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include "../group.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/utils/container_template_functions.hpp"
+#include "derecho/utils/logger.hpp"
+#include "derecho_internal.hpp"
+#include "make_kind_map.hpp"
+
 #include <spdlog/async.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
-
-#include "../group.hpp"
-#include "derecho_internal.hpp"
-#include "make_kind_map.hpp"
-#include <derecho/utils/container_template_functions.hpp>
-#include <derecho/utils/logger.hpp>
 
 namespace derecho {
 

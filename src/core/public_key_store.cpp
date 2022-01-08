@@ -1,8 +1,9 @@
 /**
  * @file public_key_store.cpp
  */
-#include <derecho/core/detail/public_key_store.hpp>
-#include <derecho/persistent/detail/util.hpp>
+#include "derecho/core/detail/public_key_store.hpp"
+#include "derecho/persistent/detail/util.hpp"
+
 #include <dirent.h>
 #include <regex>
 
@@ -51,7 +52,7 @@ void PublicKeyStore::persist_key_for(const ip_addr_t& node_ip) {
 openssl::EnvelopeKey PublicKeyStore::get_key_for(const ip_addr_t& ip_address) {
     try {
         return keys.at(ip_address);
-    } catch (std::out_of_range& err) {
+    } catch(std::out_of_range& err) {
         //Rename this exception to something more meaningful
         throw public_key_not_found(ip_address);
     }

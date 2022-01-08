@@ -1,5 +1,8 @@
-#include <derecho/openssl/hash.hpp>
-#include <derecho/openssl/openssl_exception.hpp>
+#include "derecho/openssl/hash.hpp"
+
+#include "derecho/openssl/openssl_exception.hpp"
+
+#include <openssl/evp.h>
 
 namespace openssl {
 

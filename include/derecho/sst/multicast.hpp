@@ -1,3 +1,5 @@
+#include "sst.hpp"
+
 #include <cassert>
 #include <chrono>
 #include <cstdlib>
@@ -8,8 +10,6 @@
 #include <memory>
 #include <thread>
 #include <vector>
-
-#include "sst.hpp"
 
 namespace sst {
 template <typename sstType>

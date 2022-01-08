@@ -4,17 +4,18 @@
 
 #pragma once
 
-#include <exception>
-#include <memory>
-#include <nlohmann/json.hpp>
-#include <set>
-#include <variant>
-
+#include "derecho/utils/logger.hpp"
 #include "derecho_exception.hpp"
 #include "derecho_modes.hpp"
 #include "detail/derecho_internal.hpp"
 #include "subgroup_info.hpp"
-#include <derecho/utils/logger.hpp>
+
+#include <nlohmann/json.hpp>
+
+#include <exception>
+#include <memory>
+#include <set>
+#include <variant>
 
 using json = nlohmann::json;
 
@@ -125,7 +126,7 @@ struct ShardAllocationPolicy {
     /**
      * Only used with 'reserved_node_ids_by_shard'.
      * For each shard, this stores a list of node IDs that will perform send.
-     * This list must be a subset of the reserved nodes specified in 
+     * This list must be a subset of the reserved nodes specified in
      * 'reserved_node_ids_by_shard'. If 'reserved_sender_ids_by_shard' is empty,
      * Then, all nodes in the shard, no matter if they are specified in the
      * reserved pool or not, can send. Otherwise, only the nodes specified in
@@ -529,8 +530,6 @@ template <typename... ReplicatedTypes>
 DefaultSubgroupAllocator make_subgroup_allocator(const json& layout) {
     return DefaultSubgroupAllocator({std::type_index(typeid(ReplicatedTypes))...}, layout);
 }
-
-
 
 /**
  * Generate a single-type subgroup allocation policy from a JSON object

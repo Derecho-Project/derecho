@@ -5,6 +5,12 @@
  */
 #pragma once
 
+#include "derecho/openssl/signature.hpp"
+#include "derecho/persistent/PersistentInterface.hpp"
+#include "derecho/utils/logger.hpp"
+#include "derecho_internal.hpp"
+#include "replicated_interface.hpp"
+
 #include <atomic>
 #include <chrono>
 #include <errno.h>
@@ -12,12 +18,6 @@
 #include <queue>
 #include <semaphore.h>
 #include <thread>
-
-#include "derecho_internal.hpp"
-#include "replicated_interface.hpp"
-#include <derecho/openssl/signature.hpp>
-#include <derecho/persistent/PersistentInterface.hpp>
-#include <derecho/utils/logger.hpp>
 
 namespace derecho {
 
@@ -39,6 +39,7 @@ public:
         subgroup_id_t subgroup_id;
         persistent::version_t version;
     };
+
 private:
     /** Thread handle */
     std::thread persist_thread;
@@ -90,6 +91,7 @@ private:
     void handle_persist_request(subgroup_id_t subgroup_id, persistent::version_t version);
     /** Helper function that handles a single verification request */
     void handle_verify_request(subgroup_id_t subgroup_id, persistent::version_t version);
+
 public:
     /**
      * Constructor.

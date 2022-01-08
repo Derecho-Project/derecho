@@ -1,5 +1,6 @@
 #include "../external_group.hpp"
 #include "version_code.hpp"
+
 namespace derecho {
 
 template <typename T, typename ExternalGroupType>

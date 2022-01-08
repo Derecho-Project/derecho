@@ -6,7 +6,8 @@
 
 #pragma once
 
-#include <derecho/core/git_version.hpp>
+#include "derecho/core/git_version.hpp"
+
 #include <exception>
 #include <sstream>
 #include <string>
@@ -31,7 +32,7 @@ struct derecho_exception : public std::exception {
  * a message that is too large. This usually means the maximum message size for
  * a subgroup has been configured to too small a size.
  */
-struct buffer_overflow_exception: public derecho_exception {
+struct buffer_overflow_exception : public derecho_exception {
     buffer_overflow_exception(const std::string& message) : derecho_exception(message) {}
 };
 

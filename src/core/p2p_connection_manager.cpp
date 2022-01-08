@@ -1,13 +1,18 @@
+#include "derecho/core/detail/p2p_connection_manager.hpp"
+
+#include "derecho/conf/conf.hpp"
+#include "derecho/sst/detail/poll_utils.hpp"
+#include "derecho/utils/logger.hpp"
+
 #include <cassert>
 #include <cstring>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <sys/time.h>
+#include <thread>
 #include <unordered_set>
 
-#include <derecho/conf/conf.hpp>
-#include <derecho/core/detail/p2p_connection_manager.hpp>
-#include <derecho/sst/detail/poll_utils.hpp>
-#include <derecho/utils/logger.hpp>
 namespace sst {
 P2PConnectionManager::P2PConnectionManager(const P2PParams params)
         : my_node_id(params.my_node_id),
