@@ -184,7 +184,7 @@ private:
      */
     mutils::KindMap<peer_caller_index_map, ReplicatedTypes...> peer_callers;
     /**
-     * Same thing with PeerCaller
+     * Same thing as peer_callers, but with ExternalClientCallback<T>
      */
     mutils::KindMap<external_client_callback_map, ReplicatedTypes...> external_client_callbacks;
     /**

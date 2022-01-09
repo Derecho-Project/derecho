@@ -19,7 +19,7 @@ public:
 
     std::size_t to_bytes(char* v) const {
         return 0;
-        
+
     }
 
     std::size_t bytes_size() const {
@@ -106,8 +106,9 @@ int main(int argc, char** argv) {
                     bbuf[j] = 'a' + j % 26;
                 }
                 Bytes bytes(bbuf, msg_size);
-                // notification! 
+                // notification!
                 handle.p2p_send<RPC_NAME(notify)>(2, bytes);
+                free(bbuf);
             }
         }
         while(true) {
@@ -123,12 +124,12 @@ int main(int argc, char** argv) {
         ExternalClientCaller<TestObject, decltype(group)>& handle1 = group.get_subgroup_caller<TestObject>(0);
         ExternalClientCaller<TestObject, decltype(group)>& handle2 = group.get_subgroup_caller<TestObject>(1);
 
-        
+
         // register notification handler
         handle1.register_notification([](const derecho::Bytes& data){std::cout << "Notification Successful from 0! Data: " << data.bytes << " Size: " << data.size << std::endl;}, 0);
         handle2.register_notification([](const derecho::Bytes& data){std::cout << "Notification Successful from 1! Data: " << data.bytes << " Size: " << data.size << std::endl;}, 1);
         handle2.register_notification([](const derecho::Bytes& data){std::cout << "Another Victory from 1! Data: " << data.bytes << " Size: " << data.size << std::endl;}, 1);
-        
+
         cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
         while(true) {
         }

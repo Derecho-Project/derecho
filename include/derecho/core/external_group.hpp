@@ -28,6 +28,11 @@ using namespace rpc;
  * This class represents a "handle" for communicating with a specific type of
  * subgroup using its RPC functions. It can be used to send P2P RPC messages to
  * a node in that subgroup using the P2P connections in ExternalGroupClient.
+ *
+ * @tparam T The Derecho subgroup type that this ExternalClientCaller will
+ * communicate with
+ * @tparam ExternalGroupType The concrete type of ExternalGroupClient<ReplicatedTypes...>
+ * that this ExternalClientCaller is connected to
  */
 template <typename T, typename ExternalGroupType>
 class ExternalClientCaller {
