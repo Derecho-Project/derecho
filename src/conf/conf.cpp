@@ -141,11 +141,11 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
         if(getConfUInt32(CONF_DERECHO_LOCAL_ID) >= getConfUInt32(CONF_DERECHO_MAX_NODE_ID)) {
             throw std::logic_error("Configuration error: Local node ID must be less than max node ID");
         }
-        if(getConfUInt32(CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE) <= DERECHO_MIN_RPC_RESPONSE_SIZE) {
+        if(getConfUInt32(CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE) < DERECHO_MIN_RPC_RESPONSE_SIZE) {
             throw std::logic_error(std::string("Configuration error: Default subgroup reply size must be at least ")
                                    + std::to_string(DERECHO_MIN_RPC_RESPONSE_SIZE));
         }
-        if(getConfUInt32(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) <= DERECHO_MIN_RPC_RESPONSE_SIZE) {
+        if(getConfUInt32(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) < DERECHO_MIN_RPC_RESPONSE_SIZE) {
             throw std::logic_error(std::string("Configuration error: P2P reply payload size must be at least ")
                                    + std::to_string(DERECHO_MIN_RPC_RESPONSE_SIZE));
         }
