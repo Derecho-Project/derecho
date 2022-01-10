@@ -941,7 +941,8 @@ public:
     /**
      * Update the provided Signer with the state of T at the specified version.
      * This should not finalize the Signer, since other Persistent fields in
-     * the same Replicated object might need to update it too.
+     * the same Replicated object might need to update it too. Does nothing if
+     * signatures are disabled.
      * @param ver The version whose data to use in updating the Signer
      * @param signer A Signer object that has been initialized and is ready to
      * accept bytes for signing
@@ -955,6 +956,7 @@ public:
      * of the signature buffer must be equal to the configured signature length for
      * this log. Also specifies the previous version whose signature has been included
      * in this signature, to make it easier to verify the chain of signatures.
+     * Does nothing if signatures are disabled.
      * @param ver the version to add the signature to; should be the same version
      * that was used previously in update_signature to create this signature.
      * @param signature A byte buffer containing the signature to add to the log
@@ -972,7 +974,8 @@ public:
 
     /**
      * Retrieves the signature associated with the specified version and copies
-     * it into the provided buffer, which must be of the correct length.
+     * it into the provided buffer, which must be of the correct length. Does
+     * nothing and returns false if signatures are disabled.
      * Note: It would be better to throw an exception to indicate that the version
      * is invalid, but Persistent doesn't have an exception hierarchy that can be
      * caught; it only throws integers, which can't be matched to catch blocks.
@@ -983,7 +986,8 @@ public:
      * INVALID_VERSION if there was no version in the log with the requested
      * version number
      * @return true if a signature was successfully retrieved, false if there was
-     * no version in the log with the requested version number
+     * no version in the log with the requested version number, or if signatures
+     * are disabled.
      */
     virtual bool getSignature(version_t ver, unsigned char* signature, version_t& prev_ver) const;
 
@@ -996,14 +1000,15 @@ public:
      * @param signature A byte buffer into which the signature will be placed
      * @param prev_ver A variable which will be updated to equal the previous
      * version whose signature is included in this version's signature
-     * @return true if a signature was successfully retrieved, false if the index is invalid.
+     * @return true if a signature was successfully retrieved, false if the index is
+     * invalid or signatures are disabled.
      */
     virtual bool getSignatureByIndex(int64_t index, unsigned char* signature, version_t& prev_ver) const;
 
     /**
      * Update the provided Verifier with the state of T at the specified version.
      * This is analogous to update_signature, only for verifying the log against
-     * an existing signature.
+     * an existing signature. Does nothing if signatures are disabled.
      */
     virtual void updateVerifier(version_t ver, openssl::Verifier& verifier);
 

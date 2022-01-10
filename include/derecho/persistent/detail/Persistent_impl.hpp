@@ -545,6 +545,9 @@ void Persistent<ObjectType, storageType>::version(const version_t ver) {
 template <typename ObjectType,
           StorageType storageType>
 std::size_t Persistent<ObjectType, storageType>::updateSignature(version_t ver, openssl::Signer& signer) {
+    if(this->m_pLog->signature_size == 0) {
+        return 0;
+    }
     std::size_t bytes_added = 0;
     this->m_pLog->processEntryAtVersion(ver, [&signer, &bytes_added](const void* data, std::size_t size) {
         if(size > 0) {
@@ -582,6 +585,9 @@ std::size_t Persistent<ObjectType, storageType>::getSignatureSize() const {
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::updateVerifier(version_t ver, openssl::Verifier& verifier) {
+    if(this->m_pLog->signature_size == 0) {
+        return;
+    }
     this->m_pLog->processEntryAtVersion(ver, [&verifier](const void* data, std::size_t size) {
         if(size > 0) {
             verifier.add_bytes(data, size);
