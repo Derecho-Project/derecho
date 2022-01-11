@@ -2,6 +2,7 @@
 #define PERSISTENT_IMPL_HPP
 
 #include <derecho/openssl/hash.hpp>
+
 #include <utility>
 
 namespace persistent {
@@ -134,12 +135,16 @@ Persistent<ObjectType, storageType>::Persistent(
         // Set up PersistentRegistry's last signed version
         version_t latest_version = getLatestVersion();
         std::unique_ptr<unsigned char[]> latest_signature;
+        bool has_signature = enable_signatures;
         if(latest_version != INVALID_VERSION) {
             version_t prev_ver;  //Unused out-parameter
             latest_signature = std::make_unique<unsigned char[]>(this->m_pLog->signature_size);
-            getSignature(latest_version, latest_signature.get(), prev_ver);
+            has_signature = getSignature(latest_version, latest_signature.get(), prev_ver);
         }
-        persistent_registry->initializeLastSignature(latest_version, latest_signature.get(), this->m_pLog->signature_size);
+        // Don't do anything if signatures are disabled or getSignature() failed
+        if(has_signature) {
+            persistent_registry->initializeLastSignature(latest_version, latest_signature.get(), this->m_pLog->signature_size);
+        }
     }
 }
 
