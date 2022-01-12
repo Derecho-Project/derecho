@@ -161,7 +161,11 @@ ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(
         std::function<std::unique_ptr<ReplicatedTypes>()>... factories)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           receivers(new std::decay_t<decltype(*receivers)>()),
+#if __GNUC__ < 9
+          factories(make_kind_map(factories...)) {
+#else
           factories(make_kind_map<NoArgFactory>(factories...)) {
+#endif
     for(auto dc : deserialization_contexts) {
         rdv.push_back(dc);
     }

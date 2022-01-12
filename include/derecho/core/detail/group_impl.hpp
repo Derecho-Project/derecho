@@ -144,7 +144,11 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
                        persistence_manager,
                        _view_upcalls),
           rpc_manager(view_manager, deserialization_context),
+#if __GNUC__ < 9
+          factories(make_kind_map(factories...)) {
+#else
           factories(make_kind_map<Factory>(factories...)) {
+#endif
     bool in_total_restart = view_manager.first_init();
     //State transfer must complete before an initial view can commit, and must retry if the view is aborted
     bool initial_view_confirmed = false;

@@ -120,8 +120,7 @@ private:
     template <typename T>
     using external_caller_index_map = std::map<uint32_t, ExternalClientCaller<T, ExternalGroupClient<ReplicatedTypes...>>>;
     mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
-    template <typename T>
-    using NoArgFactory = std::function<std::unique_ptr<T>()>;
+
     /**
      * Maps a type to a factory for that type, which must take no arguments.
      * These will be used to construct "empty" instances of the Replicated Types

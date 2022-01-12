@@ -86,6 +86,10 @@ struct UserMessageCallbacks {
 template <typename T>
 using Factory = std::function<std::unique_ptr<T>(persistent::PersistentRegistry*, subgroup_id_t subgroup_id)>;
 
+/** Type of the no-argument factory function needed by ExternalGroupClient */
+template <typename T>
+using NoArgFactory = std::function<std::unique_ptr<T>()>;
+
 // to post the next version in a subgroup
 using subgroup_post_next_version_func_t = std::function<void(
         const subgroup_id_t&,
