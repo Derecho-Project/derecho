@@ -122,7 +122,8 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
         }
 
     } else {
-        derecho::ExternalGroupClient<TestObject> group;
+        auto dummy_object_factory = [](){ return std::make_unique<TestObject>(); };
+        derecho::ExternalGroupClient<TestObject> group(dummy_object_factory);
 
         cout << "Finished constructing ExternalGroupClient" << endl;
 
@@ -145,7 +146,7 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
 /*
  * This will not compile because TestPersistentObject does not have a no-argument constructor.
  * Subgroups with persistent members never have no-argument constructors, because they need the PersistentRegistry* argument
-
+ */
 void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_nodes, uint32_t num_messages) {
     node_id_t my_id = derecho::getConfUInt64(CONF_DERECHO_LOCAL_ID);
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
@@ -155,7 +156,9 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
         derecho::SubgroupInfo subgroup_info{derecho::DefaultSubgroupAllocator(
                 {{std::type_index(typeid(TestPersistentObject)),
                   derecho::identical_subgroups_policy(num_nodes, derecho::fixed_even_shards(1, 1))}})};
-        auto object_factory = [](persistent::PersistentRegistry* registry, derecho::subgroup_id_t) { return std::make_unique<TestPersistentObject>(registry); };
+        auto object_factory = [](persistent::PersistentRegistry* registry, derecho::subgroup_id_t) {
+            return std::make_unique<TestPersistentObject>(registry);
+        };
 
         derecho::Group<TestPersistentObject> group({}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, object_factory);
         std::cout << "Finished constructing/joining Group" << std::endl;
@@ -181,7 +184,10 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
         }
 
     } else {
-        derecho::ExternalGroupClient<TestPersistentObject> group;
+        //A Persistent<T> constructed with a null PersistentRegistry won't work, but we don't need it to work
+        auto dummy_object_factory = [](){ return std::make_unique<TestPersistentObject>(nullptr); };
+
+        derecho::ExternalGroupClient<TestPersistentObject> group(dummy_object_factory);
 
         cout << "Finished constructing ExternalGroupClient" << endl;
 
@@ -200,7 +206,7 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
         }
     }
 }
-*/
+
 int main(int argc, char** argv) {
     const int num_args = 5;
     if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]) != 0)) {
@@ -217,7 +223,7 @@ int main(int argc, char** argv) {
     const bool persistence_on = std::stoi(argv[argc - num_args + 4]) != 0;
 
     if(persistence_on) {
-        // run_persistent_test(external_node_id, is_sender, num_of_nodes, count);
+        run_persistent_test(external_node_id, is_sender, num_of_nodes, count);
     } else {
         run_nonpersistent_test(external_node_id, is_sender, num_of_nodes, count);
     }

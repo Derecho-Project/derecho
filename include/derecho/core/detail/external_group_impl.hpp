@@ -12,12 +12,14 @@ ExternalClientCaller<T, ExternalGroupType>::ExternalClientCaller(subgroup_type_i
                                                    T::register_functions(), *group_client.receivers)) {}
 
 template <typename T, typename ExternalGroupType>
-void ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<void(const derecho::Bytes&)> func, node_id_t nid) {
+template <typename CopyOfT>
+std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
+ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<void(const derecho::Bytes&)> func, node_id_t nid) {
     // Dirty fix for adding a p2p connection
-    add_p2p_connections(nid);
+    add_p2p_connection(nid);
     if(support_map.find(nid) == support_map.end()) {
         // Create the support pointer
-        support_map[nid] = std::make_unique<T>();
+        support_map[nid] = group_client.factories.template get<T>()();
 
         // We have to store this pointer in ExternalClientCaller, although it is of no use to us in the future. This is to
         // keep it as well as the lambda inside alive throughout the entire program
@@ -37,48 +39,49 @@ void ExternalClientCaller<T, ExternalGroupType>::register_notification(std::func
 
 // Factor out add_p2p_connections out of p2p_send()
 template <typename T, typename ExternalGroupType>
-void ExternalClientCaller<T, ExternalGroupType>::add_p2p_connections(node_id_t dest_node) {
-    if(!group_client.p2p_connections->contains_node(dest_node)) {
-        dbg_default_info("p2p connection to {} is not established yet, establishing right now.", dest_node);
-        int rank = group_client.curr_view->rank_of(dest_node);
-        if(rank == -1) {
-            throw invalid_node_exception("Cannot send a p2p request to node "
-                                         + std::to_string(dest_node) + ": it is not a member of the Group.");
-        }
-        tcp::socket sock(group_client.curr_view->member_ips_and_ports[rank].ip_address,
-                         group_client.curr_view->member_ips_and_ports[rank].gms_port);
-
-        JoinResponse leader_response;
-        uint64_t leader_version_hashcode;
-        try {
-            sock.exchange(my_version_hashcode, leader_version_hashcode);
-            if(leader_version_hashcode != my_version_hashcode) {
-                throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
-            }
-            sock.write(JoinRequest{node_id, true});
-            sock.read(leader_response);
-            if(leader_response.code == JoinResponseCode::ID_IN_USE) {
-                dbg_default_error("Error! Leader refused connection because ID {} is already in use!", group_client.my_id);
-                dbg_default_flush();
-                throw derecho_exception("Leader rejected join, ID already in use.");
-            }
-            sock.write(ExternalClientRequest::ESTABLISH_P2P);
-            sock.write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
-        } catch(tcp::socket_error&) {
-            throw derecho_exception("Failed to establish P2P connection.");
-        }
-
-        assert(dest_node != node_id);
-        sst::add_external_node(dest_node, {group_client.curr_view->member_ips_and_ports[rank].ip_address,
-                                           group_client.curr_view->member_ips_and_ports[rank].external_port});
-        group_client.p2p_connections->add_connections({dest_node});
+void ExternalClientCaller<T, ExternalGroupType>::add_p2p_connection(node_id_t dest_node) {
+    if(group_client.p2p_connections->contains_node(dest_node)) {
+        return;
     }
+    dbg_default_info("p2p connection to {} is not established yet, establishing right now.", dest_node);
+    int rank = group_client.curr_view->rank_of(dest_node);
+    if(rank == -1) {
+        throw invalid_node_exception("Cannot send a p2p request to node "
+                                     + std::to_string(dest_node) + ": it is not a member of the Group.");
+    }
+    tcp::socket sock(group_client.curr_view->member_ips_and_ports[rank].ip_address,
+                     group_client.curr_view->member_ips_and_ports[rank].gms_port);
+
+    JoinResponse leader_response;
+    uint64_t leader_version_hashcode;
+    try {
+        sock.exchange(my_version_hashcode, leader_version_hashcode);
+        if(leader_version_hashcode != my_version_hashcode) {
+            throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+        }
+        sock.write(JoinRequest{node_id, true});
+        sock.read(leader_response);
+        if(leader_response.code == JoinResponseCode::ID_IN_USE) {
+            dbg_default_error("Error! Leader refused connection because ID {} is already in use!", group_client.my_id);
+            dbg_default_flush();
+            throw derecho_exception("Leader rejected join, ID already in use.");
+        }
+        sock.write(ExternalClientRequest::ESTABLISH_P2P);
+        sock.write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
+    } catch(tcp::socket_error&) {
+        throw derecho_exception("Failed to establish P2P connection.");
+    }
+
+    assert(dest_node != node_id);
+    sst::add_external_node(dest_node, {group_client.curr_view->member_ips_and_ports[rank].ip_address,
+                                       group_client.curr_view->member_ips_and_ports[rank].external_port});
+    group_client.p2p_connections->add_connections({dest_node});
 }
 
 template <typename T, typename ExternalGroupType>
 template <rpc::FunctionTag tag, typename... Args>
 auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, Args&&... args) {
-    add_p2p_connections(dest_node);
+    add_p2p_connection(dest_node);
 
     auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
             [this, &dest_node](size_t size) -> char* {
@@ -96,24 +99,7 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
 }
 
 template <typename... ReplicatedTypes>
-ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(std::vector<DeserializationContext*> deserialization_contexts)
-        : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
-          receivers(new std::decay_t<decltype(*receivers)>()) {
-    for(auto dc : deserialization_contexts) {
-        rdv.push_back(dc);
-    }
-#ifdef USE_VERBS_API
-    sst::verbs_initialize({},
-                          std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
-                          my_id);
-#else
-    sst::lf_initialize({},
-                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
-                       my_id);
-#endif
-
-    if(!get_view(INVALID_NODE_ID)) throw derecho_exception("Failed to contact the leader to request very first view.");
-
+void ExternalGroupClient<ReplicatedTypes...>::initialize_p2p_connections() {
     uint64_t view_max_rpc_reply_payload_size = 0;
     uint32_t view_max_rpc_window_size = 0;
 
@@ -142,6 +128,56 @@ ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(std::vector<Deseria
             view_max_rpc_reply_payload_size + sizeof(header),
             true,
             NULL});
+}
+
+template <typename... ReplicatedTypes>
+ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient()
+        : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
+          receivers(new std::decay_t<decltype(*receivers)>()) {
+#ifdef USE_VERBS_API
+    sst::verbs_initialize({},
+                          std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                          my_id);
+#else
+    sst::lf_initialize({},
+                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                       my_id);
+#endif
+
+    if(!get_view(INVALID_NODE_ID)) throw derecho_exception("Failed to contact the leader to request very first view.");
+
+    initialize_p2p_connections();
+
+    rpc_listener_thread = std::thread(&ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop, this);
+}
+
+template <typename... ReplicatedTypes>
+ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(std::function<std::unique_ptr<ReplicatedTypes>()>... factories)
+        : ExternalGroupClient({}, factories...) {}
+
+template <typename... ReplicatedTypes>
+ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(
+        std::vector<DeserializationContext*> deserialization_contexts,
+        std::function<std::unique_ptr<ReplicatedTypes>()>... factories)
+        : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
+          receivers(new std::decay_t<decltype(*receivers)>()),
+          factories(make_kind_map<NoArgFactory>(factories...)) {
+    for(auto dc : deserialization_contexts) {
+        rdv.push_back(dc);
+    }
+#ifdef USE_VERBS_API
+    sst::verbs_initialize({},
+                          std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                          my_id);
+#else
+    sst::lf_initialize({},
+                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                       my_id);
+#endif
+
+    if(!get_view(INVALID_NODE_ID)) throw derecho_exception("Failed to contact the leader to request very first view.");
+
+    initialize_p2p_connections();
 
     rpc_listener_thread = std::thread(&ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop, this);
 }

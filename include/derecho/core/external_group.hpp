@@ -1,21 +1,21 @@
 #pragma once
 
+#include "derecho/conf/conf.hpp"
 #include "detail/connection_manager.hpp"
 #include "detail/p2p_connection_manager.hpp"
 #include "group.hpp"
-#include "view.hpp"
 #include "notification.hpp"
-#include "derecho/conf/conf.hpp"
+#include "view.hpp"
 
+#include <exception>
 #include <functional>
 #include <iostream>
-#include <unordered_map>
-#include <memory>
 #include <map>
-#include <thread>
+#include <memory>
 #include <mutex>
 #include <queue>
-#include <exception>
+#include <thread>
+#include <unordered_map>
 
 namespace derecho {
 
@@ -67,8 +67,18 @@ public:
     ExternalClientCaller(ExternalClientCaller&&) = default;
     ExternalClientCaller(const ExternalClientCaller&) = delete;
 
-    void register_notification(std::function<void(const derecho::Bytes&)>, node_id_t nid);
-    void add_p2p_connections(node_id_t dest_node);
+    /**
+     * Registers a new notification function that will be called when the specified
+     * node sends a notification to this external client. The node must be within
+     * this ExternalClientCaller's subgroup.
+     * @param func The notification function
+     * @param nid The Derecho node to receive notifications from.
+     */
+    template<typename CopyOfT = T>
+    std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
+    register_notification(std::function<void(const derecho::Bytes&)> func, node_id_t nid);
+    /** Sets up a P2P connection to the specified node, if one does not yet exist. */
+    void add_p2p_connection(node_id_t dest_node);
     /**
      * Sends a peer-to-peer message to a single member of the subgroup that
      * this ExternalClientCaller connects to, invoking the RPC function
@@ -110,6 +120,16 @@ private:
     template <typename T>
     using external_caller_index_map = std::map<uint32_t, ExternalClientCaller<T, ExternalGroupClient<ReplicatedTypes...>>>;
     mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
+    template <typename T>
+    using NoArgFactory = std::function<std::unique_ptr<T>()>;
+    /**
+     * Maps a type to a factory for that type, which must take no arguments.
+     * These will be used to construct "empty" instances of the Replicated Types
+     * in order to create receiver functions for notifications. This can be
+     * empty if no ReplicatedTypes in the list have notifications enabled, in
+     * which case the register_notification() function will be removed.
+     */
+    mutils::KindMap<NoArgFactory, ReplicatedTypes...> factories;
 
     /**
      * requests a new view from group member nid
@@ -121,7 +141,11 @@ private:
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
     void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
     uint32_t get_index_of_type(const std::type_info& ti) const;
-
+    /**
+     * Setup method called by the constructors. Computes max_payload_sizes based
+     * on the current view and uses them to construct p2p_connections.
+     */
+    void initialize_p2p_connections();
 
     /** ======================== copy/paste from rpc_manager ======================== **/
     std::atomic<bool> thread_shutdown{false};
@@ -135,8 +159,8 @@ private:
         p2p_req() : sender_id(0),
                     msg_buf(nullptr) {}
         p2p_req(node_id_t _sender_id,
-                 char* _msg_buf) : sender_id(_sender_id),
-                                   msg_buf(_msg_buf) {}
+                char* _msg_buf) : sender_id(_sender_id),
+                                  msg_buf(_msg_buf) {}
     };
     std::queue<p2p_req> p2p_request_queue;
     std::mutex request_queue_mutex;
@@ -151,7 +175,28 @@ private:
     /** ======================== copy/paste from rpc_manager ======================== **/
 
 public:
-    ExternalGroupClient(std::vector<DeserializationContext*> deserialization_contexts = {});
+    /**
+     * Constructs an external group client given a list of DeserializationContexts that
+     * may be needed to receive objects from the group and a set of factory functions
+     * for the ReplicatedTypes in the group. The factory functions, which take no arguments,
+     * are only used for receiving notifications. Thus, they can construct a mostly "empty"
+     * version of the ReplicatedType as long as the object they construct can be used to
+     * receive notifications.
+     */
+    ExternalGroupClient(std::vector<DeserializationContext*> deserialization_contexts,
+                        std::function<std::unique_ptr<ReplicatedTypes>()>... factories);
+
+    /**
+     * Constructor without deserialization contexts, which are optional.
+     */
+    ExternalGroupClient(std::function<std::unique_ptr<ReplicatedTypes>()>... factories);
+    /**
+     * No-argument constructor that leaves the factories map and deserialization contexts
+     * empty. Can only be used if none of the ReplicatedTypes have NotificationSupport as
+     * a base class; if notifications are enabled, you must provide factories.
+     */
+    ExternalGroupClient();
+
     virtual ~ExternalGroupClient();
 
     /**
