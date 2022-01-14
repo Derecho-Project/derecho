@@ -76,7 +76,7 @@ public:
      */
     template<typename CopyOfT = T>
     std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
-    register_notification(std::function<void(const derecho::Bytes&)> func, node_id_t nid);
+    register_notification(std::function<void(const derecho::NotificationMessage&)> func, node_id_t nid);
     /** Sets up a P2P connection to the specified node, if one does not yet exist. */
     void add_p2p_connection(node_id_t dest_node);
     /**

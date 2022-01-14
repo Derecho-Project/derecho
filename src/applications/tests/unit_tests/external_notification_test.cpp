@@ -6,7 +6,6 @@
 #include <iostream>
 #include <sstream>
 
-using derecho::Bytes;
 using derecho::ExternalClientCaller;
 using derecho::Replicated;
 using std::cout;
@@ -22,7 +21,7 @@ private:
 public:
     TestObject(const std::string& initial_data = "") : data(initial_data) {}
 
-    void notify(const Bytes& msg) const {
+    void notify(const derecho::NotificationMessage& msg) const {
         derecho::NotificationSupport::notify(msg);
     }
 
@@ -69,7 +68,7 @@ public:
         *persistent_data = new_value;
     }
 
-    void notify(const Bytes& msg) const {
+    void notify(const derecho::NotificationMessage& msg) const {
         derecho::NotificationSupport::notify(msg);
     }
 
@@ -107,22 +106,19 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
                 derecho::ExternalClientCallback<TestObject>& handle = group.get_client_callback<TestObject>(my_id);
                 std::cout << "acquired notification support callback!" << std::endl;
                 uint64_t msg_size = max_msg_size - 128;
-                char* bbuf = new char[msg_size];
-                bzero(bbuf, msg_size);
+                derecho::NotificationMessage message(1, msg_size);
                 for(uint64_t j = 0; j < msg_size - 1; ++j) {
-                    bbuf[j] = 'a' + j % 26;
+                    message.body[j] = 'a' + j % 26;
                 }
-                Bytes bytes(bbuf, msg_size);
                 // notification!
-                handle.p2p_send<RPC_NAME(notify)>(external_node_id, bytes);
-                delete bbuf;
+                handle.p2p_send<RPC_NAME(notify)>(external_node_id, message);
             }
         }
         while(true) {
         }
 
     } else {
-        auto dummy_object_factory = [](){ return std::make_unique<TestObject>(); };
+        auto dummy_object_factory = []() { return std::make_unique<TestObject>(); };
         derecho::ExternalGroupClient<TestObject> group(dummy_object_factory);
 
         cout << "Finished constructing ExternalGroupClient" << endl;
@@ -133,9 +129,18 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
         ExternalClientCaller<TestObject, decltype(group)>& handle2 = group.get_subgroup_caller<TestObject>(1);
 
         // register notification handler
-        handle1.register_notification([](const derecho::Bytes& data) { std::cout << "Notification Successful from 0! Data: " << data.bytes << " Size: " << data.size << std::endl; }, 0);
-        handle2.register_notification([](const derecho::Bytes& data) { std::cout << "Notification Successful from 1! Data: " << data.bytes << " Size: " << data.size << std::endl; }, 1);
-        handle2.register_notification([](const derecho::Bytes& data) { std::cout << "Another Victory from 1! Data: " << data.bytes << " Size: " << data.size << std::endl; }, 1);
+        handle1.register_notification([](const derecho::NotificationMessage& message) {
+            std::cout << "Notification Successful from 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        },
+                                      0);
+        handle2.register_notification([](const derecho::NotificationMessage& message) {
+            std::cout << "Notification Successful from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        },
+                                      1);
+        handle2.register_notification([](const derecho::NotificationMessage& message) {
+            std::cout << "Another Victory from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        },
+                                      1);
 
         cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
         while(true) {
@@ -169,15 +174,12 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
                 derecho::ExternalClientCallback<TestPersistentObject>& handle = group.get_client_callback<TestPersistentObject>(my_id);
                 std::cout << "acquired notification support callback!" << std::endl;
                 uint64_t msg_size = max_msg_size - 128;
-                char* bbuf = new char[msg_size];
-                bzero(bbuf, msg_size);
+                derecho::NotificationMessage message(1, msg_size);
                 for(uint64_t j = 0; j < msg_size - 1; ++j) {
-                    bbuf[j] = 'a' + j % 26;
+                    message.body[j] = 'a' + j % 26;
                 }
-                Bytes bytes(bbuf, msg_size);
                 // notification!
-                handle.p2p_send<RPC_NAME(notify)>(external_node_id, bytes);
-                delete bbuf;
+                handle.p2p_send<RPC_NAME(notify)>(external_node_id, message);
             }
         }
         while(true) {
@@ -185,7 +187,7 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
 
     } else {
         //A Persistent<T> constructed with a null PersistentRegistry won't work, but we don't need it to work
-        auto dummy_object_factory = [](){ return std::make_unique<TestPersistentObject>(nullptr); };
+        auto dummy_object_factory = []() { return std::make_unique<TestPersistentObject>(nullptr); };
 
         derecho::ExternalGroupClient<TestPersistentObject> group(dummy_object_factory);
 
@@ -197,10 +199,18 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
         ExternalClientCaller<TestPersistentObject, decltype(group)>& handle2 = group.get_subgroup_caller<TestPersistentObject>(1);
 
         // register notification handler
-        handle1.register_notification([](const derecho::Bytes& data) { std::cout << "Notification Successful from 0! Data: " << data.bytes << " Size: " << data.size << std::endl; }, 0);
-        handle2.register_notification([](const derecho::Bytes& data) { std::cout << "Notification Successful from 1! Data: " << data.bytes << " Size: " << data.size << std::endl; }, 1);
-        handle2.register_notification([](const derecho::Bytes& data) { std::cout << "Another Victory from 1! Data: " << data.bytes << " Size: " << data.size << std::endl; }, 1);
-
+        handle1.register_notification([](const derecho::NotificationMessage& message) {
+            std::cout << "Notification Successful from 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        },
+                                      0);
+        handle2.register_notification([](const derecho::NotificationMessage& message) {
+            std::cout << "Notification Successful from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        },
+                                      1);
+        handle2.register_notification([](const derecho::NotificationMessage& message) {
+            std::cout << "Another Victory from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        },
+                                      1);
         cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
         while(true) {
         }

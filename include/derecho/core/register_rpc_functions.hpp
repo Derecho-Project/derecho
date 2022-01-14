@@ -41,7 +41,7 @@
     }
 
 #define REGISTER_RPC_FUNCTIONS_WITH_NOTIFICATION(name, arg1...) \
-    void notify(const Bytes& msg) const {                       \
+    void notify(const derecho::NotificationMessage& msg) const {\
         derecho::NotificationSupport::notify(msg);              \
     }                                                           \
     REGISTER_RPC_FUNCTIONS(name, P2P_TARGETS(notify), arg1);

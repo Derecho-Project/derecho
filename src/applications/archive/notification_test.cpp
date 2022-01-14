@@ -10,7 +10,6 @@ using derecho::ExternalClientCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;
-using derecho::Bytes;
 
 
 class TestObject: public derecho::NotificationSupport, public mutils::ByteRepresentable {
@@ -100,15 +99,12 @@ int main(int argc, char** argv) {
                 derecho::ExternalClientCallback<TestObject>& handle = group.get_client_callback<TestObject>(my_id);
                 std::cout << "acquired notification support callback!" << std::endl;
                 uint64_t msg_size = max_msg_size - 128;
-                char* bbuf = (char*)malloc(msg_size);
-                bzero(bbuf, msg_size);
+                derecho::NotificationMessage message(1, msg_size);
                 for (uint64_t j = 0; j < msg_size - 1; ++j){
-                    bbuf[j] = 'a' + j % 26;
+                    message.body[j] = 'a' + j % 26;
                 }
-                Bytes bytes(bbuf, msg_size);
                 // notification!
-                handle.p2p_send<RPC_NAME(notify)>(2, bytes);
-                free(bbuf);
+                handle.p2p_send<RPC_NAME(notify)>(2, message);
             }
         }
         while(true) {
@@ -126,9 +122,9 @@ int main(int argc, char** argv) {
 
 
         // register notification handler
-        handle1.register_notification([](const derecho::Bytes& data){std::cout << "Notification Successful from 0! Data: " << data.bytes << " Size: " << data.size << std::endl;}, 0);
-        handle2.register_notification([](const derecho::Bytes& data){std::cout << "Notification Successful from 1! Data: " << data.bytes << " Size: " << data.size << std::endl;}, 1);
-        handle2.register_notification([](const derecho::Bytes& data){std::cout << "Another Victory from 1! Data: " << data.bytes << " Size: " << data.size << std::endl;}, 1);
+        handle1.register_notification([](const derecho::NotificationMessage& data){std::cout << "Notification Successful from 0! Data: " << data.body << " Size: " << data.size << std::endl;}, 0);
+        handle2.register_notification([](const derecho::NotificationMessage& data){std::cout << "Notification Successful from 1! Data: " << data.body << " Size: " << data.size << std::endl;}, 1);
+        handle2.register_notification([](const derecho::NotificationMessage& data){std::cout << "Another Victory from 1! Data: " << data.body << " Size: " << data.size << std::endl;}, 1);
 
         cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
         while(true) {

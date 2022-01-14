@@ -14,7 +14,7 @@ ExternalClientCaller<T, ExternalGroupType>::ExternalClientCaller(subgroup_type_i
 template <typename T, typename ExternalGroupType>
 template <typename CopyOfT>
 std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
-ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<void(const derecho::Bytes&)> func, node_id_t nid) {
+ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<void(const derecho::NotificationMessage&)> func, node_id_t nid) {
     // Dirty fix for adding a p2p connection
     add_p2p_connection(nid);
     if(support_map.find(nid) == support_map.end()) {
