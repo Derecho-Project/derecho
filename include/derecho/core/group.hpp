@@ -81,6 +81,9 @@ public:
     auto& get_nonmember_subgroup(uint32_t subgroup_num = 0);
 
     template <typename SubgroupType>
+    ExternalClientCallback<SubgroupType>& get_client_callback(uint32_t subgroup_index = 0);
+
+    template <typename SubgroupType>
     std::size_t get_number_of_shards(uint32_t subgroup_index = 0);
 
     template <typename SubgroupType>
@@ -97,11 +100,13 @@ class GroupProjection : public virtual _Group {
 protected:
     virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
     virtual void set_peer_caller_pointer(std::type_index, uint32_t, void**) = 0;
+    virtual void set_external_client_pointer(std::type_index, uint32_t, void**) = 0;
     virtual ViewManager& get_view_manager() = 0;
 
 public:
     Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_index = 0);
     PeerCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
+    ExternalClientCallback<ReplicatedType>& get_client_callback(uint32_t subgroup_index = 0);
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
     std::size_t get_number_of_shards(uint32_t subgroup_index = 0);
     uint32_t get_num_subgroups();
@@ -127,8 +132,10 @@ public:
 template <typename... ReplicatedTypes>
 class Group : public virtual _Group, public GroupProjection<ReplicatedTypes>... {
 public:
-    void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret) override;
-    void set_peer_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret) override;
+    //Functions implementing GroupProjection<ReplicatedTypes>...
+    void set_replicated_pointer(std::type_index type, uint32_t subgroup_index, void** returned_replicated_ptr) override;
+    void set_peer_caller_pointer(std::type_index type, uint32_t subgroup_index, void** returned_peercaller_ptr) override;
+    void set_external_client_pointer(std::type_index type, uint32_t subgroup_index, void** returned_external_client_ptr) override;
 
 protected:
     uint32_t get_index_of_type(const std::type_info&) const override;
@@ -334,13 +341,12 @@ public:
     PeerCaller<SubgroupType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
 
     /**
-     * Get a ShardIterator object that can be used to send P2P messages to every
-     * shard within a specific subgroup.
-     * @tparam SubgroupType The subgroup type to communicate with
+     * Get an ExternalClientCallback object that can be used to send P2P messages
+     * to external clients of a specific subgroup
+     * @tparam SubgroupType The subgroup type
      * @param subgroup_index The index of the subgroup within SubgroupType
-     * to communicate with
-     * @return A ShardIterator that will contact one member of each shard in
-     * the subgroup identified by (SubgroupType, subgroup_index)
+     * @return An ExternalClientCallback that can send notifications to external
+     * clients of the requested subgroup
      */
     template <typename SubgroupType>
     ExternalClientCallback<SubgroupType>& get_client_callback(uint32_t subgroup_index = 0);

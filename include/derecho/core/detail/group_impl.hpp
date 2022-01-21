@@ -33,6 +33,14 @@ auto& _Group::get_nonmember_subgroup(uint32_t subgroup_num) {
 }
 
 template <typename SubgroupType>
+ExternalClientCallback<SubgroupType>& _Group::get_client_callback(uint32_t subgroup_index) {
+    if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_client_callback(subgroup_index);
+    } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
+template <typename SubgroupType>
 std::vector<std::vector<node_id_t>> _Group::get_subgroup_members(uint32_t subgroup_index) {
     if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
         return gptr->get_subgroup_members(subgroup_index);
@@ -59,19 +67,28 @@ uint32_t _Group::get_num_subgroups() {
 template <typename ReplicatedType>
 Replicated<ReplicatedType>&
 GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
-    void* ret{nullptr};
+    void* pointer_to_replicated{nullptr};
     set_replicated_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
-                           &ret);
-    return *((Replicated<ReplicatedType>*)ret);
+                           &pointer_to_replicated);
+    return *static_cast<Replicated<ReplicatedType>*>(pointer_to_replicated);
 }
 
 template <typename ReplicatedType>
 PeerCaller<ReplicatedType>&
 GroupProjection<ReplicatedType>::get_nonmember_subgroup(uint32_t subgroup_num) {
-    void* ret{nullptr};
+    void* pointer_to_peercaller{nullptr};
     set_peer_caller_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
-                            &ret);
-    return *((PeerCaller<ReplicatedType>*)ret);
+                            &pointer_to_peercaller);
+    return *static_cast<PeerCaller<ReplicatedType>*>(pointer_to_peercaller);
+}
+
+template <typename ReplicatedType>
+ExternalClientCallback<ReplicatedType>&
+GroupProjection<ReplicatedType>::get_client_callback(uint32_t subgroup_index) {
+    void* pointer_to_client_callback{nullptr};
+    set_external_client_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_index,
+                                &pointer_to_client_callback);
+    return *static_cast<ExternalClientCallback<ReplicatedType>*>(pointer_to_client_callback);
 }
 
 template <typename ReplicatedType>
@@ -93,11 +110,11 @@ uint32_t GroupProjection<ReplicatedType>::get_num_subgroups() {
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
-                                                       uint32_t subgroup_num,
-                                                       void** ret) {
-    ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
-                      ? &get_subgroup<ReplicatedTypes>(subgroup_num)
-                      : *ret)),
+                                                       uint32_t subgroup_index,
+                                                       void** returned_replicated_ptr) {
+    ((*returned_replicated_ptr = (type == std::type_index{typeid(ReplicatedTypes)}
+                                          ? &get_subgroup<ReplicatedTypes>(subgroup_index)
+                                          : *returned_replicated_ptr)),
      ...);
 }
 
@@ -118,11 +135,21 @@ ViewManager& Group<ReplicatedTypes...>::get_view_manager() {
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_peer_caller_pointer(std::type_index type,
-                                                        uint32_t subgroup_num,
-                                                        void** ret) {
-    ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
-                      ? &get_nonmember_subgroup<ReplicatedTypes>(subgroup_num)
-                      : *ret)),
+                                                        uint32_t subgroup_index,
+                                                        void** returned_peercaller_ptr) {
+    ((*returned_peercaller_ptr = (type == std::type_index{typeid(ReplicatedTypes)}
+                                          ? &get_nonmember_subgroup<ReplicatedTypes>(subgroup_index)
+                                          : *returned_peercaller_ptr)),
+     ...);
+}
+
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::set_external_client_pointer(std::type_index type,
+                                                            uint32_t subgroup_index,
+                                                            void** returned_external_client_ptr) {
+    ((*returned_external_client_ptr = (type == std::type_index{typeid(ReplicatedTypes)}
+                                               ? &get_client_callback<ReplicatedTypes>(subgroup_index)
+                                               : *returned_external_client_ptr)),
      ...);
 }
 

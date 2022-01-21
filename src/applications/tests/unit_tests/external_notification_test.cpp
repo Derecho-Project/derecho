@@ -101,9 +101,10 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
         std::cout << "Finished constructing/joining Group" << std::endl;
 
         if(is_sender) {
+            uint32_t my_subgroup_index = *group.get_my_subgroup_indexes<TestObject>().begin();
             for(uint i = 0; i < num_messages; ++i) {
                 // group.notify(2, bytes);
-                derecho::ExternalClientCallback<TestObject>& handle = group.get_client_callback<TestObject>(my_id);
+                derecho::ExternalClientCallback<TestObject>& handle = group.get_client_callback<TestObject>(my_subgroup_index);
                 std::cout << "acquired notification support callback!" << std::endl;
                 uint64_t msg_size = max_msg_size - 128;
                 derecho::NotificationMessage message(1, msg_size);
@@ -169,9 +170,10 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
         std::cout << "Finished constructing/joining Group" << std::endl;
 
         if(is_sender) {
+            uint32_t my_subgroup_index = *group.get_my_subgroup_indexes<TestPersistentObject>().begin();
             for(uint i = 0; i < num_messages; ++i) {
                 // group.notify(2, bytes);
-                derecho::ExternalClientCallback<TestPersistentObject>& handle = group.get_client_callback<TestPersistentObject>(my_id);
+                derecho::ExternalClientCallback<TestPersistentObject>& handle = group.get_client_callback<TestPersistentObject>(my_subgroup_index);
                 std::cout << "acquired notification support callback!" << std::endl;
                 uint64_t msg_size = max_msg_size - 128;
                 derecho::NotificationMessage message(1, msg_size);

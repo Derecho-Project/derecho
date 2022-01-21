@@ -42,3 +42,6 @@ target_link_libraries(view_change_test derecho)
 
 add_executable(external_notification_test external_notification_test.cpp)
 target_link_libraries(external_notification_test derecho)
+
+add_executable(persistence_notification_test persistence_notification_test.cpp)
+target_link_libraries(persistence_notification_test derecho)
