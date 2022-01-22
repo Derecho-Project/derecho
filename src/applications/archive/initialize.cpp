@@ -7,7 +7,7 @@ using namespace tcp;
 void write_string(socket& s, const std::string str) {
     // We are going to write the null character
     s.write(str.size() + 1);
-    s.write(str.c_str(), str.size() + 1);
+    s.write(reinterpret_cast<const uint8_t*>(str.c_str()), str.size() + 1);
 }
 
 std::string read_string(socket& s) {
@@ -15,10 +15,10 @@ std::string read_string(socket& s) {
     size_t size;
     s.read(size);
     // Read into a character array
-    char* ch_arr = new char[size];
-    s.read(ch_arr, size);
+    std::unique_ptr<char[]> ch_arr = std::make_unique<char[]>(size);
+    s.read(reinterpret_cast<uint8_t*>(ch_arr.get()), size);
     // Return the string constructed from the character array read from the socket
-    return std::string(ch_arr);
+    return std::string(ch_arr.get());
 }
 
 std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> initialize(const uint32_t num_nodes) {

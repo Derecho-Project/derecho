@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
 
     // buffer for the message - received here by the receivers and generated
     // here by the sender
-    std::unique_ptr<char[]> buffer(new char[buffer_size]);
+    std::unique_ptr<uint8_t[]> buffer(new uint8_t[buffer_size]);
     auto mr = std::make_shared<rdma::memory_region>(buffer.get(), buffer_size);
 
     // create the group
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
                                  [&mr](size_t length) -> rdmc::receive_destination {
                                      return {mr, 0};
                                  },
-                                 [&count](char *data, size_t size) {
+                                 [&count](uint8_t *data, size_t size) {
                                      ++count;
                                  },
                                  [](std::optional<uint32_t>) {});

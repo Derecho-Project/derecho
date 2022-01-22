@@ -76,7 +76,7 @@ polling_group::polling_group(uint16_t _group_number, size_t _block_size,
                 callback, std::move(_schedule)),
           first_block_buffer(nullptr) {
     if(member_index != 0) {
-        first_block_buffer = unique_ptr<char[]>(new char[block_size]);
+        first_block_buffer = unique_ptr<uint8_t[]>(new uint8_t[block_size]);
         memset(first_block_buffer.get(), 0, block_size);
         first_block_mr = make_unique<memory_region>(first_block_buffer.get(), block_size);
     }
@@ -358,8 +358,8 @@ void polling_group::complete_message() {
         LOG_EVENT(group_number, message_number, *first_block_number,
                   "starting_remap_first_block");
         // if(block_size > (128 << 10) && (block_size % 4096 == 0)) {
-        //     char *tmp_buffer =
-        //         (char *)mmap(NULL, block_size, PROT_READ | PROT_WRITE,
+        //     uint8_t *tmp_buffer =
+        //         (uint8_t *)mmap(NULL, block_size, PROT_READ | PROT_WRITE,
         //                      MAP_ANON | MAP_PRIVATE, -1, 0);
 
         //     mremap(buffer + block_size * (*first_block_number), block_size,
@@ -384,7 +384,7 @@ void polling_group::complete_message() {
     receive_step = 0;
     mr.reset();
     // if(first_block_buffer == nullptr && member_index > 0){
-    //     first_block_buffer = (char*)mmap(NULL, block_size,
+    //     first_block_buffer = (uint8_t*)mmap(NULL, block_size,
     // PROT_READ|PROT_WRITE,
     //                                      MAP_ANON|MAP_PRIVATE, -1, 0);
     //     memset(first_block_buffer, 1, block_size);

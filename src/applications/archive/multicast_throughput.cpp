@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
         while(true) {
             std::this_thread::sleep_for(chrono::microseconds(1000));
             if(sst) {
-                sst->put_with_completion((char*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
+                sst->put_with_completion((uint8_t*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
             }
         }
     };
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
     uint num_finished = 0;
     auto sst_receive_handler = [&num_finished, num_senders_selector, &num_nodes, &num_messages, &completed](
                                        uint32_t sender_rank, uint64_t index,
-                                       volatile char* msg, uint32_t size) {
+                                       volatile uint8_t* msg, uint32_t size) {
         if(index == num_messages - 1) {
             completed[sender_rank] = true;
             num_finished++;
@@ -172,7 +172,7 @@ int main(int argc, char* argv[]) {
     clock_gettime(CLOCK_REALTIME, &start_time);
     if(node_rank == num_nodes - 1 || num_senders_selector == 0 || (node_rank > (num_nodes - 1) / 2 && num_senders_selector == 1)) {
         for(uint i = 0; i < num_messages; ++i) {
-            volatile char* buf;
+            volatile uint8_t* buf;
             while((buf = g.get_buffer(max_msg_size)) == NULL) {
                 // ++count;
             }

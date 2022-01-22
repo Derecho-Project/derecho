@@ -70,10 +70,10 @@ int main() {
             // create an array of resources
             resources *res[num_nodes];
             // create buffer for write and read
-            char *write_buf[num_nodes], *read_buf[num_nodes];
+            uint8_t *write_buf[num_nodes], *read_buf[num_nodes];
             for(int r_index = 1; r_index < num_nodes; ++r_index) {
-                write_buf[r_index] = (char *)malloc(size);
-                read_buf[r_index] = (char *)malloc(size);
+                write_buf[r_index] = (uint8_t *)malloc(size);
+                read_buf[r_index] = (uint8_t *)malloc(size);
 
                 res[r_index] = new resources(r_index, read_buf[r_index],
                                              write_buf[r_index], size, size);
@@ -126,9 +126,9 @@ int main() {
         else {
             // create a resource with node 0
             // create buffer for write and read
-            char *write_buf, *read_buf;
-            write_buf = (char *)malloc(size);
-            read_buf = (char *)malloc(size);
+            uint8_t *write_buf, *read_buf;
+            write_buf = (uint8_t *)malloc(size);
+            read_buf = (uint8_t *)malloc(size);
 
             // write to the write buffer
             for(int i = 0; i < size - 1; ++i) {

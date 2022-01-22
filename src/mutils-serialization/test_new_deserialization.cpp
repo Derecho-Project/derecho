@@ -5,7 +5,7 @@ using namespace mutils;
 int main() {
 	std::vector<int> v{1,2,3,4};
 	auto size = bytes_size(v);
-	char c[size];
+	uint8_t c[size];
 	bzero(c,size);
 	to_bytes(v,c);
 	deserialize_and_run<std::vector<int> >(nullptr,c,[&](std::vector<int>& v2){

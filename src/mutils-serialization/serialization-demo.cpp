@@ -10,7 +10,7 @@ struct TestSerialization : public ByteRepresentable{
 	const long b;
 
 	TestSerialization(int a, long b):a(a),b(b){}
-	
+
 	DEFAULT_SERIALIZATION_SUPPORT(TestSerialization,a,b);
 };
 
@@ -20,7 +20,7 @@ int main(){
 		int i = 3;
 		auto size = bytes_size(i);
 		TestSerialization ts{1,1};
-		char *c = (char*) malloc(ts.bytes_size());
+		uint8_t *c = (uint8_t*) malloc(ts.bytes_size());
 		to_bytes(ts,c);
 		auto ts2 = from_bytes<TestSerialization>(&dsm,c);
 		free(c);
@@ -30,11 +30,11 @@ int main(){
 
 	{
 		int foo;
-		char* c = (char*) malloc(bytes_size(foo));
+		uint8_t* c = (uint8_t*) malloc(bytes_size(foo));
 		to_bytes(foo,c);
 		auto foo2 = from_bytes<int>(&dsm,c);
 		free(c);
 		assert(foo == *foo2);
 	}
-	
+
 }

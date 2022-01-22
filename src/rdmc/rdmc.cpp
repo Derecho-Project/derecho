@@ -133,9 +133,9 @@ barrier_group::barrier_group(vector<uint32_t> members) {
     total_steps = ceil(log2(group_size));
     for(unsigned int m = 0; m < total_steps; m++) steps[m] = -1;
 
-    steps_mr = make_unique<memory_region>((char*)&steps[0],
+    steps_mr = make_unique<memory_region>((uint8_t*)&steps[0],
                                           total_steps * sizeof(int64_t));
-    number_mr = make_unique<memory_region>((char*)&number, sizeof(number));
+    number_mr = make_unique<memory_region>((uint8_t*)&number, sizeof(number));
 
     set<uint32_t> targets;
     for(unsigned int m = 0; m < total_steps; m++) {

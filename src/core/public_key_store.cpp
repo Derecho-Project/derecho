@@ -37,7 +37,7 @@ void PublicKeyStore::add_public_key(const ip_addr_t& node_ip, const std::string&
     keys.emplace(node_ip, openssl::EnvelopeKey::from_pem_public(key_directory + "/" + key_file_name));
 }
 
-void PublicKeyStore::add_public_key(const ip_addr_t& node_ip, const char* key_bytes, std::size_t key_size) {
+void PublicKeyStore::add_public_key(const ip_addr_t& node_ip, const uint8_t* key_bytes, std::size_t key_size) {
     keys.emplace(node_ip, openssl::EnvelopeKey::from_pem_public(key_bytes, key_size));
 }
 

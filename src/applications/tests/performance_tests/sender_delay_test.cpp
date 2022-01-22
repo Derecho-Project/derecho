@@ -99,7 +99,7 @@ int main(int argc, char* argv[]) {
                                &start_time,
                                &nanoseconds_elapsed,
                                num_slow_senders,
-                               num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
+                               num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<uint8_t*, long long int>> data, persistent::version_t ver) mutable {
         // increment the total number of messages delivered
         ++num_delivered;
         if(num_delivered == num_messages * (num_nodes - num_slow_senders)) {
@@ -154,7 +154,7 @@ int main(int argc, char* argv[]) {
         for(uint i = 0; i < num_messages && !done; ++i) {
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
-            raw_subgroup.send(max_msg_size, [](char* buf) {});
+            raw_subgroup.send(max_msg_size, [](uint8_t* buf) {});
         }
     };
 
@@ -164,7 +164,7 @@ int main(int argc, char* argv[]) {
             busy_wait(wait_time, done);
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
-            raw_subgroup.send(max_msg_size, [](char* buf) {});
+            raw_subgroup.send(max_msg_size, [](uint8_t* buf) {});
         }
     };
 

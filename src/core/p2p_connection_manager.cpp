@@ -102,7 +102,7 @@ void P2PConnectionManager::update_incoming_seq_num(node_id_t node_id) {
 }
 
 // check if there's a new request from any node
-std::optional<std::pair<node_id_t, char*>> P2PConnectionManager::probe_all() {
+std::optional<std::pair<node_id_t, uint8_t*>> P2PConnectionManager::probe_all() {
     for(node_id_t node_id = 0; node_id < p2p_connections.size(); ++node_id) {
         //Check the hint before locking the mutex. If it's false, don't bother.
         if(!active_p2p_connections[node_id]) continue;
@@ -117,18 +117,18 @@ std::optional<std::pair<node_id_t, char*>> P2PConnectionManager::probe_all() {
         // If we only test buf[0], it will fall in the wrong path if the least significant byte of the payload size is
         // zero.
         if(buf && reinterpret_cast<size_t*>(buf)[0]) {
-            return std::pair<node_id_t, char*>(node_id, buf);
+            return std::pair<node_id_t, uint8_t*>(node_id, buf);
         } else if(buf) {
             // this means that we have a null reply
             // we don't need to process it, but we still want to increment the seq num
             p2p_connections[node_id].second->update_incoming_seq_num();
-            return std::pair<node_id_t, char*>(INVALID_NODE_ID, nullptr);
+            return std::pair<node_id_t, uint8_t*>(INVALID_NODE_ID, nullptr);
         }
     }
     return {};
 }
 
-char* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYPE type) {
+uint8_t* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYPE type) {
     std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
     if(p2p_connections[node_id].second) {
         return p2p_connections[node_id].second->get_sendbuffer_ptr(type);

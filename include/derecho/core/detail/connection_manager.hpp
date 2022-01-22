@@ -1,9 +1,8 @@
 #pragma once
 
-
 #include "../derecho_type_definitions.hpp"
-#include "locked_reference.hpp"
 #include "derecho/tcp/tcp.hpp"
+#include "locked_reference.hpp"
 
 #include <cassert>
 #include <map>
@@ -44,7 +43,7 @@ public:
      * it is closed, while socket_io_error or one of its subclasses means an
      * error occurred during the write() call.
      */
-    void write(node_id_t node_id, char const* buffer, size_t size);
+    void write(node_id_t node_id, uint8_t const* buffer, size_t size);
     /**
      * Writes size bytes from a buffer to all the other nodes currently
      * connected, in ascending order of node ID.
@@ -53,7 +52,7 @@ public:
      * @throw a subclass of socket_error if there was an error before all size
      * bytes could be written on all sockets.
      */
-    void write_all(char const* buffer, size_t size);
+    void write_all(uint8_t const* buffer, size_t size);
     /**
      * Receives size bytes from the node with ID node_id, over the TCP socket
      * connected to that node. Blocks until all the bytes have been received or
@@ -68,7 +67,7 @@ public:
      * read returned EOF) before all size bytes could be read, and
      * socket_io_error means some other error occurred during the read() call.
      */
-    void read(node_id_t node_id, char* buffer, size_t size);
+    void read(node_id_t node_id, uint8_t* buffer, size_t size);
     /**
      * Adds a TCP connection to a new node. If the new node's ID is lower than
      * this node's ID, this function initiates a new TCP connection to it;

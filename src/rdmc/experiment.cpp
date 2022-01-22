@@ -70,7 +70,7 @@ send_stats measure_partially_concurrent_multicast(
     size_t num_blocks = (size - 1) / block_size + 1;
     size_t buffer_size = num_blocks * block_size;
     auto mr = make_shared<memory_region>(buffer_size * num_senders);
-    char *buffer = mr->buffer;
+    uint8_t *buffer = mr->buffer;
 
     uint16_t base_group_number = next_group_number;
     atomic<uint32_t> sends_remaining;
@@ -85,7 +85,7 @@ send_stats measure_partially_concurrent_multicast(
                 [&mr, i, buffer_size](size_t length) -> rdmc::receive_destination {
                     return {mr, buffer_size * i};
                 },
-                [&](char *data, size_t) {
+                [&](uint8_t *data, size_t) {
                     if(--sends_remaining == 0) {
                         universal_barrier_group->barrier_wait();
                         end_ptime = get_process_time();
@@ -556,7 +556,7 @@ void test_create_group_failure() {
                 puts("FAILURE: incoming message called");
                 return {nullptr, 0};
             },
-            [&](char *data, size_t) { puts("FAILURE: received message called"); },
+            [&](uint8_t *data, size_t) { puts("FAILURE: received message called"); },
             [group_number = next_group_number](std::optional<uint32_t>) {});
 
     t = get_time() - t;

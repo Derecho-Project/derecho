@@ -201,18 +201,18 @@ public:
     virtual version_t persist(version_t ver,
                               bool preLocked = false) override;
     virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func) override;
-    virtual void addSignature(version_t ver, const unsigned char* signature, version_t previous_signed_version) override;
-    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& previous_signed_version) override;
-    virtual bool getSignatureByIndex(int64_t index, unsigned char* signature, version_t& prev_ver) override;
+    virtual void addSignature(version_t ver, const uint8_t* signature, version_t previous_signed_version) override;
+    virtual bool getSignature(version_t ver, uint8_t* signature, version_t& previous_signed_version) override;
+    virtual bool getSignatureByIndex(int64_t index, uint8_t* signature, version_t& prev_ver) override;
     virtual void trimByIndex(int64_t eno) override;
     virtual void trim(version_t ver) override;
     virtual void trim(const HLC& hlc) override;
     virtual void truncate(version_t ver) override;
     virtual size_t bytes_size(version_t ver) override;
-    virtual size_t to_bytes(char* buf, version_t ver) override;
-    virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
+    virtual size_t to_bytes(uint8_t* buf, version_t ver) override;
+    virtual void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f,
                              version_t ver) override;
-    virtual void applyLogTail(char const* v) override;
+    virtual void applyLogTail(uint8_t const* v) override;
 
     template <typename TKey, typename KeyGetter>
     void trim(const TKey& key, const KeyGetter& keyGetter) {
@@ -296,7 +296,7 @@ private:
      * @PARAM ple - the pointer to the log entry
      * @RETURN the number of bytes written to the byte array
      */
-    size_t writeLogEntryToByteArray(const LogEntry* ple, char* ba);
+    size_t writeLogEntryToByteArray(const LogEntry* ple, uint8_t* ba);
     /**
      * post the log entry to a serialization function accepting a byte array
      * Note: no lock protected, use FPL_RDLOCK
@@ -304,14 +304,14 @@ private:
      * @PARAM ple - pointer to the log entry
      * @RETURN the number of bytes posted.
      */
-    size_t postLogEntry(const std::function<void(char const* const, std::size_t)>& f, const LogEntry* ple);
+    size_t postLogEntry(const std::function<void(uint8_t const* const, std::size_t)>& f, const LogEntry* ple);
     /**
      * merge the log entry to current state.
      * Note: no lock protected, use FPL_WRLOCK
      * @PARAM ba - serialize form of the entry
      * @RETURN - number of size read from the entry.
      */
-    size_t mergeLogEntryFromByteArray(const char* ba);
+    size_t mergeLogEntryFromByteArray(const uint8_t* ba);
 
     /**
      * binary search through the log, return the maximum index of the entries

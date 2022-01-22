@@ -33,7 +33,7 @@ int main() {
     int num_messages = 1000;
 
     auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index,
-                                 std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) {
+                                 std::optional<std::pair<uint8_t*, long long int>> data, persistent::version_t ver) {
         cout << "Sender: " << sender_id << ", index: " << index << endl;
     };
 
@@ -55,7 +55,7 @@ int main() {
         derecho::RawSubgroup &sg = g->get_subgroup<RawObject>();
         // random message size between 1 and 100
         unsigned int msg_size = (rand() % 7 + 2) * 10;
-        char *buf = sg.get_sendbuffer_ptr(msg_size);
+        uint8_t *buf = sg.get_sendbuffer_ptr(msg_size);
         while(!buf) {
             buf = sg.get_sendbuffer_ptr(msg_size);
         }

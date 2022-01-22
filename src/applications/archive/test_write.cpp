@@ -50,7 +50,7 @@ int main() {
     // create read and write buffers
 //  char *write_buf = (char *)malloc(ROWSIZE);
 //  char *read_buf = (char *)malloc(ROWSIZE);
-    char *write_buf = nullptr,*read_buf = nullptr;
+    uint8_t *write_buf = nullptr,*read_buf = nullptr;
     if(posix_memalign((void**)&write_buf,4096l,ROWSIZE) || posix_memalign((void**)&read_buf,4096l,ROWSIZE)){
       cerr << "failed to memalign SST ROWs." << endl;
       return -1;

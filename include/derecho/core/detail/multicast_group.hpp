@@ -172,13 +172,13 @@ struct DerechoParams : public mutils::ByteRepresentable {
  * This is a move-only type, since memory regions can't be copied.
  */
 struct MessageBuffer {
-    std::unique_ptr<char[]> buffer;
+    std::unique_ptr<uint8_t[]> buffer;
     std::shared_ptr<rdma::memory_region> mr;
 
     MessageBuffer() {}
     MessageBuffer(size_t size) {
         if(size != 0) {
-            buffer = std::unique_ptr<char[]>(new char[size]);
+            buffer = std::unique_ptr<uint8_t[]>(new uint8_t[size]);
             mr = std::make_shared<rdma::memory_region>(buffer.get(), size);
         }
     }
@@ -214,7 +214,7 @@ struct SSTMessage {
     /** The message's size in bytes. */
     long long unsigned int size;
     /** Pointer to the message */
-    volatile char* buf;
+    volatile uint8_t* buf;
 };
 
 /**
@@ -334,7 +334,7 @@ private:
     /** Messages that are currently being received. */
     std::map<std::pair<subgroup_id_t, node_id_t>, RDMCMessage> current_receives;
     /** Receiver lambdas for shards that have only one member. */
-    std::map<subgroup_id_t, std::function<void(char*, size_t)>> singleton_shard_receive_handlers;
+    std::map<subgroup_id_t, std::function<void(uint8_t*, size_t)>> singleton_shard_receive_handlers;
 
     /** Messages that have finished sending/receiving but aren't yet globally stable.
      * Organized by [subgroup number] -> [sequence number] -> [message] */
@@ -481,7 +481,7 @@ private:
     void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                              const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                              uint32_t num_shard_senders, uint32_t sender_rank,
-                             volatile char* data, uint64_t size);
+                             volatile uint8_t* data, uint64_t size);
 
     bool receiver_predicate(const SubgroupSettings& subgroup_settings,
                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
@@ -490,7 +490,7 @@ private:
     void receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                            uint32_t num_shard_senders, DerechoSST& sst,
-                           const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
+                           const std::function<void(uint32_t, volatile uint8_t*, uint32_t)>& sst_receive_handler_lambda);
 
     void update_min_persisted_num(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                                   uint32_t num_shard_members, DerechoSST& sst);
@@ -502,7 +502,7 @@ private:
     void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);
     /* Get a pointer into the current buffer, to write data into it before sending
      * Now this is a private function, called by send internally */
-    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send);
+    uint8_t* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send);
 
 public:
     /**
@@ -551,7 +551,7 @@ public:
     /** Send now internally calls get_sendbuffer_ptr.
 	The user function that generates the message is supplied to send */
     bool send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-              const std::function<void(char* buf)>& msg_generator, bool cooked_send);
+              const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send);
 
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
 

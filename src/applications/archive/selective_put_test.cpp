@@ -49,7 +49,7 @@ int main() {
         sst[0].a = 7;
         sst[0].b = 9;
         sst.put({0, 1, 2},
-                (char*)std::addressof(sst[0].a) - (char*)std::addressof(sst[0]),
+                (uint8_t*)std::addressof(sst[0].a) - (uint8_t*)std::addressof(sst[0]),
                 sizeof(sst[0].a));
     } else if(node_rank <= 2) {
         while(sst[0].a != 7) {

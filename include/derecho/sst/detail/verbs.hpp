@@ -9,9 +9,9 @@
 
 #include "derecho/core/derecho_type_definitions.hpp"
 
-#include <map>
 #include <atomic>
 #include <infiniband/verbs.h>
+#include <map>
 
 namespace sst {
 
@@ -35,22 +35,23 @@ struct verbs_sender_ctxt {
     enum verbs_sender_ctxt_type {
         INTERNAL_FLOW_CONTROL,
         EXPLICIT_SEND_WITH_COMPLETION
-    } type = EXPLICIT_SEND_WITH_COMPLETION; // the type of the sender context, default to EXPLICIT_SEND_WITH_COMPLETION.
+    } type
+            = EXPLICIT_SEND_WITH_COMPLETION;  // the type of the sender context, default to EXPLICIT_SEND_WITH_COMPLETION.
     union {
         // for INTERNAL_FLOW_CONTROL type:
-        _resources *res;
+        _resources* res;
         // for EXPLICIT_SEND_WOTHCOMPLETION type:
         struct {
-            uint32_t    remote_id;  // id of the remote node
-            uint32_t    ce_idx;     // index into the completion entry list
+            uint32_t remote_id;  // id of the remote node
+            uint32_t ce_idx;     // index into the completion entry list
         } sender_info;
     } ctxt;
     // getters
-    uint32_t remote_id() {return ctxt.sender_info.remote_id;}
-    uint32_t ce_idx() {return ctxt.sender_info.ce_idx;}
+    uint32_t remote_id() { return ctxt.sender_info.remote_id; }
+    uint32_t ce_idx() { return ctxt.sender_info.ce_idx; }
     // setters
-    void set_remote_id(const uint32_t& rid) {ctxt.sender_info.remote_id = rid;}
-    void set_ce_idx(const uint32_t& cidx) {ctxt.sender_info.ce_idx = cidx;}
+    void set_remote_id(const uint32_t& rid) { ctxt.sender_info.remote_id = rid; }
+    void set_ce_idx(const uint32_t& cidx) { ctxt.sender_info.ce_idx = cidx; }
 };
 
 /**
@@ -77,18 +78,18 @@ public:
     /** Index of the remote node. */
     int remote_index;
     /** Handle for the IB Verbs Queue Pair object. */
-    struct ibv_qp *qp;
+    struct ibv_qp* qp;
     /** Memory Region handle for the write buffer. */
-    struct ibv_mr *write_mr;
+    struct ibv_mr* write_mr;
     /** Memory Region handle for the read buffer. */
-    struct ibv_mr *read_mr;
+    struct ibv_mr* read_mr;
     /** Connection data values needed to connect to remote side. */
     struct cm_con_data_t remote_props;
     /** Pointer to the memory buffer used for local writes.*/
-    char *write_buf;
+    uint8_t* write_buf;
     /** Pointer to the memory buffer used for the results of RDMA remote reads.
      */
-    char *read_buf;
+    uint8_t* read_buf;
     /** the number of ops without completion in the queue pair. */
     std::atomic<uint32_t> without_completion_send_cnt;
     /** the maximum number of ops without completion allowed in the queue pair. */
@@ -100,7 +101,7 @@ public:
 
     /** Constructor; initializes Queue Pair, Memory Regions, and `remote_props`.
      */
-    _resources(int r_index, char *write_addr, char *read_addr, int size_w,
+    _resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                int size_r);
     /** Destroys the resources. */
     virtual ~_resources();
@@ -108,7 +109,7 @@ public:
 
 class resources : public _resources {
 public:
-    resources(int r_index, char *write_addr, char *read_addr, int size_w,
+    resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
               int size_r);
     /**
      * Report that the remote node this object is connected to has failed.
@@ -137,7 +138,7 @@ class resources_two_sided : public _resources {
     int post_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
 
 public:
-    resources_two_sided(int r_index, char *write_addr, char *read_addr, int size_w,
+    resources_two_sided(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                         int size_r);
     /**
      * Report that the remote node this object is connected to has failed.

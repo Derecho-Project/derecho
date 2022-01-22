@@ -80,9 +80,9 @@ public:
     /** memory region for remote writer */
     struct fid_mr* read_mr;
     /** Pointer to the memory buffer used for local writes.*/
-    char* write_buf;
+    uint8_t* write_buf;
     /** Pointer to the memory buffer used for the results of RDMA remote reads. */
-    char* read_buf;
+    uint8_t* read_buf;
     /** key for local read buffer */
     uint64_t mr_lrkey;
     /** key for local write buffer */
@@ -112,7 +112,7 @@ public:
      *         node, while a libfabric server waiting for the conneciton using its
      *         local passive endpoint.
      */
-    _resources(int r_id, char* write_addr, char* read_addr, int size_w,
+    _resources(int r_id, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                int size_r, int is_lf_server);
     /** Destroys the resources. */
     virtual ~_resources();
@@ -125,7 +125,7 @@ public:
 class resources : public _resources {
 public:
     /** Constructor: simply forwards to _resources::_resources */
-    resources(int r_id, char* write_addr, char* read_addr, int size_w,
+    resources(int r_id, uint8_t* write_addr, uint8_t* read_addr, int size_w,
               int size_r, int is_lf_server) : _resources(r_id, write_addr, read_addr, size_w, size_r, is_lf_server) {
     }
     /**
@@ -160,7 +160,7 @@ class resources_two_sided : public _resources {
 
 public:
     /** constructor: simply forwards to _resources::_resources */
-    resources_two_sided(int r_id, char* write_addr, char* read_addr, int size_w,
+    resources_two_sided(int r_id, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                         int size_r, int is_lf_server) : _resources(r_id, write_addr, read_addr, size_w, size_r, is_lf_server) {
     }
     /**

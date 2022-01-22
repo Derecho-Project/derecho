@@ -36,9 +36,9 @@ int main() {
     verbs_initialize();
 
     // create buffer for write and read
-    char *write_buf, *read_buf;
-    write_buf = (char *)malloc(size);
-    read_buf = (char *)malloc(size);
+    uint8_t *write_buf, *read_buf;
+    write_buf = (uint8_t *)malloc(size);
+    read_buf = (uint8_t *)malloc(size);
 
     int r_index = num_nodes - 1 - node_rank;
     resources *res = new resources(r_index, write_buf, read_buf, size, size);

@@ -23,7 +23,7 @@ class TestObject : public mutils::ByteRepresentable {
     Bytes dummy_data;
 
 public:
-    TestObject(std::size_t data_size) : dummy_data(new char[data_size], data_size) {}
+    TestObject(std::size_t data_size) : dummy_data(new uint8_t[data_size], data_size) {}
     //Deserialization constructor
     TestObject(const Bytes& init_bytes) : dummy_data(init_bytes) {}
 

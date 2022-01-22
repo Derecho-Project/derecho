@@ -51,9 +51,9 @@ int main() {
         short int a = 0;
         short int b = SHRT_MAX;
         // create buffer for write and read
-        char *write_buf, *read_buf;
-        write_buf = (char *)&a;
-        read_buf = (char *)malloc(4);
+        uint8_t *write_buf, *read_buf;
+        write_buf = (uint8_t *)&a;
+        read_buf = (uint8_t *)malloc(4);
 
         int r_index = num_nodes - 1 - node_rank;
         resources *res = new resources(r_index, write_buf, read_buf, size, 4);
@@ -70,9 +70,9 @@ int main() {
     else {
         int b;
         // create buffer for write and read
-        char *write_buf, *read_buf;
-        write_buf = (char *)malloc(4);
-        read_buf = (char *)&b;
+        uint8_t *write_buf, *read_buf;
+        write_buf = (uint8_t *)malloc(4);
+        read_buf = (uint8_t *)&b;
         ;
 
         int r_index = num_nodes - 1 - node_rank;

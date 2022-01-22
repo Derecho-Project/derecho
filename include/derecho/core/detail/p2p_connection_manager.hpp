@@ -92,7 +92,7 @@ public:
      * sender's ID and a pointer into the message buffer.
      * @return (remote node ID, message byte buffer)
      */
-    std::optional<std::pair<node_id_t, char*>> probe_all();
+    std::optional<std::pair<node_id_t, uint8_t*>> probe_all();
     /**
      * Returns a pointer to the beginning of the next available message buffer
      * for the specified request type in the specified node's P2P connection
@@ -101,7 +101,7 @@ public:
      * @param type The type of P2P message to send
      * @return A pointer to the beginning of a message buffer, or null
      */
-    char* get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYPE type);
+    uint8_t* get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYPE type);
     /**
      * Sends the next outgoing message to the specified node, i.e. the one
      * populated by the most recent call to get_sendbuffer_ptr.

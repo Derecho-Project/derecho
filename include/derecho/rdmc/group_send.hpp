@@ -68,7 +68,7 @@ private:
 
     unique_ptr<rdma::memory_region> first_block_mr;
     optional<size_t> first_block_number;
-    unique_ptr<char[]> first_block_buffer;
+    unique_ptr<uint8_t[]> first_block_buffer;
 
     size_t incoming_block;
     size_t message_number = 0;

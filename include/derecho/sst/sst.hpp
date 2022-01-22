@@ -40,19 +40,19 @@ constexpr size_t padded_len(const size_t& len) {
 /** Internal helper class, never exposed to the client. */
 class _SSTField {
 public:
-    volatile char* base;
+    volatile uint8_t* base;
     size_t rowLen;
     size_t field_len;
 
     _SSTField(const size_t field_len) : base(nullptr), rowLen(0), field_len(field_len) {}
 
-    size_t set_base(volatile char* const base) {
+    size_t set_base(volatile uint8_t* const base) {
         this->base = base;
         return padded_len(field_len);
     }
 
-    char* get_base() {
-        return const_cast<char*>(base);
+    uint8_t* get_base() {
+        return const_cast<uint8_t*>(base);
     }
 
     void set_rowLen(const size_t& _rowLen) { rowLen = _rowLen; }
@@ -169,9 +169,9 @@ private:
     void init_SSTFields(Fields&... fields) {
         rowLen = 0;
         compute_rowLen(rowLen, fields...);
-        rows = new char[rowLen * num_members];
-        // snapshot = new char[rowLen * num_members];
-        volatile char* base = rows;
+        rows = new uint8_t[rowLen * num_members];
+        // snapshot = new uint8_t[rowLen * num_members];
+        volatile uint8_t* base = rows;
         set_bases_and_rowLens(base, rowLen, fields...);
     }
 
@@ -190,8 +190,8 @@ private:
     /** timeout settings for poll completion queue */
     const uint32_t poll_cq_timeout_ms;
     /** Pointer to memory where the SST rows are stored. */
-    volatile char* rows;
-    // char* snapshot;
+    volatile uint8_t* rows;
+    // uint8_t* snapshot;
     /** Length of each row in this SST, in bytes. */
     size_t rowLen;
     /** List of nodes in the SST; indexes are row numbers, values are node IDs. */
@@ -279,9 +279,9 @@ public:
         unsigned int node_rank, sst_index;
         for(auto const& rank_index : members_by_id) {
             std::tie(node_rank, sst_index) = rank_index;
-            char *write_addr, *read_addr;
-            write_addr = const_cast<char*>(rows) + rowLen * sst_index;
-            read_addr = const_cast<char*>(rows) + rowLen * my_index;
+            uint8_t *write_addr, *read_addr;
+            write_addr = const_cast<uint8_t*>(rows) + rowLen * sst_index;
+            read_addr = const_cast<uint8_t*>(rows) + rowLen * my_index;
             if(sst_index != my_index) {
                 if(row_is_frozen[sst_index]) {
                     continue;
@@ -323,8 +323,8 @@ public:
     /** Gets the index of the local row in the table. */
     unsigned int get_local_index() const { return my_index; }
 
-    const char* getBaseAddress() {
-        return const_cast<char*>(rows);
+    const uint8_t* getBaseAddress() {
+        return const_cast<uint8_t*>(rows);
     }
 
     /** Writes the entire local row to all remote nodes. */
@@ -367,7 +367,7 @@ public:
     template <typename T>
     void put(SSTFieldVector<T>& vec_field, std::size_t index) {
         put(all_indices,
-            const_cast<char*>(reinterpret_cast<volatile char*>(std::addressof(vec_field[0][index])))
+            const_cast<uint8_t*>(reinterpret_cast<volatile uint8_t*>(std::addressof(vec_field[0][index])))
                     - getBaseAddress(),
             sizeof(vec_field[0][index]));
     }
@@ -377,7 +377,7 @@ public:
     void put(const std::vector<uint32_t> receiver_ranks,
              SSTFieldVector<T>& vec_field, std::size_t index) {
         put(receiver_ranks,
-            const_cast<char*>(reinterpret_cast<volatile char*>(std::addressof(vec_field[0][index])))
+            const_cast<uint8_t*>(reinterpret_cast<volatile uint8_t*>(std::addressof(vec_field[0][index])))
                     - getBaseAddress(),
             sizeof(vec_field[0][index]));
     }
@@ -405,7 +405,7 @@ public:
     void put_with_completion(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size);
 
 private:
-    using char_p = volatile char*;
+    using byte_p = volatile uint8_t*;
 
     void compute_rowLen(size_t&) {}
 
@@ -415,22 +415,22 @@ private:
         compute_rowLen(rowLen, rest...);
     }
 
-    void set_bases_and_rowLens(char_p&, const size_t) {}
+    void set_bases_and_rowLens(byte_p&, const size_t) {}
 
     template <typename Field, typename... Fields>
-    void set_bases_and_rowLens(char_p& base, const size_t rlen, Field& f, Fields&... rest) {
+    void set_bases_and_rowLens(byte_p& base, const size_t rlen, Field& f, Fields&... rest) {
         base += f.set_base(base);
         f.set_rowLen(rlen);
         set_bases_and_rowLens(base, rlen, rest...);
     }
 
     // void take_snapshot() {
-    //   memcpy(snapshot, const_cast<char*>(rows), rowLen * num_members);
+    //   memcpy(snapshot, const_cast<uint8_t*>(rows), rowLen * num_members);
     // }
 
     // // returns snapshot == current
     // bool compare_snapshot_and_current() {
-    //     int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
+    //     int res = memcmp(const_cast<uint8_t*>(rows), snapshot, rowLen * num_members);
     //     if(res == 0) {
     //         return true;
     //     }
