@@ -15,8 +15,10 @@ namespace derecho {
  * methods (which all used signed char*, not unsigned char*).
  */
 class Bytes : public mutils::ByteRepresentable {
+    //A pointer to a byte array
     char* bytes;
-    std::size_t size;
+    //The length of the array. Can't be named size because that would conflict with the method.
+    std::size_t length;
     //Indicates that this instance was created inside from_bytes_noalloc and doesn't own the bytes
     bool is_temporary;
     //Private constructor only used by from_bytes_noalloc.
@@ -31,6 +33,10 @@ public:
      */
     char* get() const;
     /**
+     * @returns the size of the wrapped byte array
+     */
+    std::size_t size() const;
+    /**
      * Constructs a byte array by copying the contents of a char array into the
      * internal buffer.
      * @param buffer A pointer to the char array
@@ -38,7 +44,13 @@ public:
      */
     Bytes(const char* buffer, std::size_t size);
     /**
-     * Constructs an empty byte array
+     * Constructs an empty byte array of the specified size. This will create a
+     * new array for the internal buffer, but not copy anything into it.
+     * @param size The size of the array
+     */
+    explicit Bytes(std::size_t size);
+    /**
+     * Constructs an empty byte array of size 0.
      */
     Bytes();
     /**

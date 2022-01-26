@@ -259,9 +259,9 @@ int main(int argc, char** argv) {
         //Register the client callback handler
         storage_caller.register_notification(client_callback_function, notification_node);
         //Send some updates to the storage nodes and request callbacks when they have globally persisted
-        derecho::Bytes test_update(nullptr, update_size);
+        derecho::Bytes test_update(update_size);
         for(unsigned counter = 0; counter < num_updates; ++counter) {
-            std::generate(&test_update.get()[0], &test_update.get()[test_update.bytes_size()], [&]() {
+            std::generate(&test_update.get()[0], &test_update.get()[test_update.size()], [&]() {
                 return characters[char_distribution(random_generator)];
             });
             std::cout << "Submitting update " << counter << " to node " << update_node << std::endl;

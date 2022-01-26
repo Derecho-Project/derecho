@@ -5,31 +5,39 @@
 namespace derecho {
 
 Bytes::Bytes(const char* buffer, std::size_t size)
-        : size(size), is_temporary(false) {
+        : length(size), is_temporary(false) {
     bytes = nullptr;
     if(size > 0) {
-        bytes = new char[size];
-        memcpy(bytes, buffer, size);
+        bytes = new char[length];
+        memcpy(bytes, buffer, length);
+    }
+}
+
+Bytes::Bytes(std::size_t size)
+        : length(size), is_temporary(false) {
+    bytes = nullptr;
+    if(length > 0) {
+        bytes = new char[length];
     }
 }
 
 //from_bytes_noalloc constructor: wraps a byte array without copying it
 Bytes::Bytes(char* buffer, std::size_t size, bool is_temporary)
         : bytes(buffer),
-          size(size),
+          length(size),
           is_temporary(true) {}
 
 Bytes::Bytes()
         : bytes(nullptr),
-          size(0),
+          length(0),
           is_temporary(false) {
 }
 
 Bytes::Bytes(const Bytes& other)
-    : size(other.size), is_temporary(false) {
-    if(size > 0) {
-        bytes = new char[size];
-        memcpy(bytes, other.bytes, size);
+        : length(other.length), is_temporary(false) {
+    if(length > 0) {
+        bytes = new char[length];
+        memcpy(bytes, other.bytes, length);
     } else {
         bytes = nullptr;
     }
@@ -43,11 +51,11 @@ Bytes::~Bytes() {
 
 Bytes& Bytes::operator=(Bytes&& other) {
     char* swp_bytes = other.bytes;
-    std::size_t swp_size = other.size;
+    std::size_t swp_size = other.length;
     other.bytes = bytes;
-    other.size = size;
+    other.length = length;
     bytes = swp_bytes;
-    size = swp_size;
+    length = swp_size;
     return *this;
 }
 
@@ -55,31 +63,35 @@ Bytes& Bytes::operator=(const Bytes& other) {
     if(bytes != nullptr && !is_temporary) {
         delete[] bytes;
     }
-    size = other.size;
-    if(size > 0) {
-        bytes = new char[size];
-        memcpy(bytes, other.bytes, size);
+    length = other.length;
+    if(length > 0) {
+        bytes = new char[length];
+        memcpy(bytes, other.bytes, length);
     } else {
         bytes = nullptr;
     }
     return *this;
 }
 
+std::size_t Bytes::size() const {
+    return length;
+}
+
 std::size_t Bytes::to_bytes(char* buffer) const {
-    ((std::size_t*)(buffer))[0] = size;
-    if(size > 0) {
-        memcpy(buffer + sizeof(size), bytes, size);
+    ((std::size_t*)(buffer))[0] = length;
+    if(length > 0) {
+        memcpy(buffer + sizeof(length), bytes, length);
     }
-    return size + sizeof(size);
+    return length + sizeof(length);
 }
 
 std::size_t Bytes::bytes_size() const {
-    return size + sizeof(size);
+    return length + sizeof(length);
 }
 
 void Bytes::post_object(const std::function<void(char const* const, std::size_t)>& post_func) const {
-    post_func((char*)&size, sizeof(size));
-    post_func(bytes, size);
+    post_func((char*)&length, sizeof(length));
+    post_func(bytes, length);
 }
 
 void Bytes::ensure_registered(mutils::DeserializationManager&) {}
@@ -106,4 +118,4 @@ mutils::context_ptr<const Bytes> Bytes::from_bytes_noalloc_const(mutils::Deseria
 char* Bytes::get() const {
     return bytes;
 }
-}  // namespace test
+}  // namespace derecho
