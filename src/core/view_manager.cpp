@@ -1686,7 +1686,7 @@ std::vector<int> ViewManager::process_suspicions(DerechoSST& gmsSST) {
                     dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. num_failed - num_departed = {} but num_members - num_departed + 1 = {}",
                                      curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 } else {
-                    throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+                    throw derecho_partitioning_exception(curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 }
             }
 
@@ -1705,7 +1705,7 @@ std::vector<int> ViewManager::process_suspicions(DerechoSST& gmsSST) {
                     dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. num_failed - num_left = {} but num_members - num_departed + 1 = {}",
                                      curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 } else {
-                    throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+                    throw derecho_partitioning_exception(curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 }
             }
 
@@ -2381,7 +2381,7 @@ void ViewManager::report_failure(const node_id_t who) {
             dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. failed_cnt = {} but num_members - rip_cnt + 1 = {}",
                              failed_cnt, curr_view->num_members - rip_cnt + 1);
         } else {
-            throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+            throw derecho_partitioning_exception(failed_cnt, curr_view->num_members - rip_cnt + 1);
         }
     }
     curr_view->gmsSST->put(curr_view->gmsSST->suspected, failed_rank);
