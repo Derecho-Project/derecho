@@ -93,7 +93,7 @@ static bool shutdown = false;
  * @param size_w The size of the write buffer (in bytes).
  * @param size_r The size of the read buffer (in bytes).
  */
-_resources::_resources(int r_index, char* write_addr, char* read_addr, int size_w,
+_resources::_resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                        int size_r)
         : remote_failed(false),
           remote_index(r_index),
@@ -281,7 +281,7 @@ void _resources::connect_qp() {
     }
 
     // exchange using TCP sockets info required to connect QPs
-    local_con_data.addr = htonll((uintptr_t)(char*)write_buf);
+    local_con_data.addr = htonll((uintptr_t)(uint8_t*)write_buf);
     local_con_data.rkey = htonl(write_mr->rkey);
     local_con_data.qp_num = htonl(qp->qp_num);
     local_con_data.lid = htons(g_res->port_attr.lid);
@@ -397,7 +397,7 @@ int _resources::post_remote_send(verbs_sender_ctxt* sctxt, const long long int o
     return ret;
 }
 
-resources::resources(int r_index, char* write_addr, char* read_addr, int size_w,
+resources::resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                      int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
 }
 
@@ -463,7 +463,7 @@ void resources::post_remote_write_with_completion(verbs_sender_ctxt* sctxt, cons
     }
 }
 
-resources_two_sided::resources_two_sided(int r_index, char* write_addr, char* read_addr, int size_w,
+resources_two_sided::resources_two_sided(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                                          int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
 }
 

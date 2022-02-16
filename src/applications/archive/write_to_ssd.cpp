@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
     fssd.open("messages");
     bool done = false;
     auto stability_callback = [&fssd, &num_messages, &done, &num_nodes](
-                                      uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) {
+                                      uint32_t subgroup, int sender_id, long long int index, uint8_t* buf, long long int msg_size) {
         fssd.write(buf, msg_size);
         fssd.flush();
         if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
     // start timer
     clock_gettime(CLOCK_REALTIME, &start_time);
     for(int i = 0; i < num_messages; ++i) {
-        char *buf = sg.get_sendbuffer_ptr(msg_size);
+        uint8_t* buf = sg.get_sendbuffer_ptr(msg_size);
         while(!buf) {
             buf = sg.get_sendbuffer_ptr(msg_size);
         }

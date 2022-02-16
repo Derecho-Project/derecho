@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
 
         bool done = false;
         auto stability_callback = [&num_messages, &done, &num_nodes](
-                                          uint32_t subgroup, uint32_t sender_id, long long int index, char *buf,
+                                          uint32_t subgroup, uint32_t sender_id, long long int index, uint8_t* buf,
                                           long long int msg_size) {
             cout << "In stability callback; sender ID = " << sender_id
                  << ", index = " << index << endl;
@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
             derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
             // random message size between 1 and 100
             unsigned int msg_size = (rand() % 7 + 2) * 10;
-            char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_size);
+            uint8_t* buf = group_as_subgroup.get_sendbuffer_ptr(msg_size);
             //        cout << "After getting sendbuffer for message " << i <<
             //        endl;
             //        managed_group.debug_print_status();

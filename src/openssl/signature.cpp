@@ -145,7 +145,7 @@ void Signer::add_bytes(const void* buffer, std::size_t buffer_size) {
     }
 }
 
-void Signer::finalize(unsigned char* signature_buffer) {
+void Signer::finalize(uint8_t* signature_buffer) {
     //We assume the caller has allocated a signature buffer of the correct length,
     //but we have to pass a valid siglen to EVP_DigestSignFinal anyway
     size_t siglen;
@@ -157,12 +157,12 @@ void Signer::finalize(unsigned char* signature_buffer) {
     }
 }
 
-std::vector<unsigned char> Signer::finalize() {
+std::vector<uint8_t> Signer::finalize() {
     size_t signature_len = 0;
     if(EVP_DigestSignFinal(digest_context.get(), NULL, &signature_len) != 1) {
         throw openssl_error(ERR_get_error(), "EVP_DigestSignFinal");
     }
-    std::vector<unsigned char> signature(signature_len);
+    std::vector<uint8_t> signature(signature_len);
     //Technically, this function call may change signature_len again, but with RSA it never does
     if(EVP_DigestSignFinal(digest_context.get(), signature.data(), &signature_len) != 1) {
         throw openssl_error(ERR_get_error(), "EVP_DigestSignFinal");
@@ -170,7 +170,7 @@ std::vector<unsigned char> Signer::finalize() {
     return signature;
 }
 
-void Signer::sign_bytes(const void* buffer, std::size_t buffer_size, unsigned char* signature_buffer) {
+void Signer::sign_bytes(const void* buffer, std::size_t buffer_size, uint8_t* signature_buffer) {
     if(EVP_MD_CTX_reset(digest_context.get()) != 1) {
         throw openssl_error(ERR_get_error(), "EVP_MD_CTX_reset");
     }
@@ -213,7 +213,7 @@ void Verifier::add_bytes(const void* buffer, std::size_t buffer_size) {
         throw openssl_error(ERR_get_error(), "EVP_DigestVerifyUpdate");
     }
 }
-bool Verifier::finalize(const unsigned char* signature_buffer, std::size_t signature_length) {
+bool Verifier::finalize(const uint8_t* signature_buffer, std::size_t signature_length) {
     //EVP_DigestVerifyFinal returns 1 on success, 0 on signature mismatch, and "another value" on a more serious error
     int status = EVP_DigestVerifyFinal(digest_context.get(), signature_buffer, signature_length);
     if(status == 1) {
@@ -224,10 +224,10 @@ bool Verifier::finalize(const unsigned char* signature_buffer, std::size_t signa
         throw openssl_error(ERR_get_error(), "EVP_DigestVerifyFinal");
     }
 }
-bool Verifier::finalize(const std::vector<unsigned char>& signature) {
+bool Verifier::finalize(const std::vector<uint8_t>& signature) {
     return finalize(signature.data(), signature.size());
 }
-bool Verifier::verify_bytes(const void* buffer, std::size_t buffer_size, const unsigned char* signature, std::size_t signature_size) {
+bool Verifier::verify_bytes(const void* buffer, std::size_t buffer_size, const uint8_t* signature, std::size_t signature_size) {
     if(EVP_MD_CTX_reset(digest_context.get()) != 1) {
         throw openssl_error(ERR_get_error(), "EVP_MD_CTX_reset");
     }

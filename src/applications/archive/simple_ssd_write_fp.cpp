@@ -11,8 +11,8 @@ using std::endl;
 int main() {
     srand(time(NULL));
     long long unsigned buffer_size = 10000000;
-    std::unique_ptr<char[]> buffer(new char[buffer_size]);
-    char* buf = buffer.get();
+    std::unique_ptr<uint8_t[]> buffer(new uint8_t[buffer_size]);
+    uint8_t* buf = buffer.get();
     for(int j = 0; j < buffer_size; ++j) {
         buf[j] = rand() % 26 + 'a';
     }

@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
         while(true) {
             std::this_thread::sleep_for(chrono::microseconds(100));
             if(sst) {
-                sst->put_with_completion((char*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
+                sst->put_with_completion((uint8_t*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
             }
         }
     };
@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
 
     vector<bool> completed(num_senders, false);
     uint64_t num_finished = 0;
-    auto sst_receive_handler = [&](uint32_t sender_rank, uint64_t index, volatile char* msg, uint32_t size) {
+    auto sst_receive_handler = [&](uint32_t sender_rank, uint64_t index, volatile uint8_t* msg, uint32_t size) {
         clock_gettime(CLOCK_REALTIME, &recv_times[sender_rank][index]);
         if(index == num_messages - 1) {
             completed[sender_rank] = true;
@@ -154,7 +154,7 @@ int main(int argc, char* argv[]) {
 
     if(num_senders_selector == 0 || (node_rank > (num_nodes - 1) / 2 && num_senders_selector == 1) || (node_rank == 0 && num_senders_selector == 2)) {
         for(uint i = 0; i < num_messages; ++i) {
-            volatile char* buf;
+            volatile uint8_t* buf;
             while((buf = g.get_buffer(max_msg_size)) == NULL) {
             }
             clock_gettime(CLOCK_REALTIME, &send_times[i]);

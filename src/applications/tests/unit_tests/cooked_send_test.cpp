@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
     SubgroupInfo subgroup_info(subgroup_membership_function);
     volatile bool done = false;
     uint32_t num_msgs = 500;
-    auto stability_callback = [num_msgs, num_nodes, &done, counter = (uint)0](subgroup_id_t, node_id_t sender_id, message_id_t index, std::optional<std::pair<char*, long long int>>, persistent::version_t) mutable {
+    auto stability_callback = [num_msgs, num_nodes, &done, counter = (uint)0](subgroup_id_t, node_id_t sender_id, message_id_t index, std::optional<std::pair<uint8_t*, long long int>>, persistent::version_t) mutable {
         counter++;
         if(counter == num_msgs * num_nodes) {
             done = true;

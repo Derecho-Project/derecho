@@ -97,7 +97,7 @@ void tcp_connections::destroy() {
     conn_listener.reset();
 }
 
-void tcp_connections::write(node_id_t node_id, char const* buffer,
+void tcp_connections::write(node_id_t node_id, uint8_t const* buffer,
                             size_t size) {
     std::lock_guard<std::mutex> lock(sockets_mutex);
     const auto it = sockets.find(node_id);
@@ -105,7 +105,7 @@ void tcp_connections::write(node_id_t node_id, char const* buffer,
     it->second.write(buffer, size);
 }
 
-void tcp_connections::write_all(char const* buffer, size_t size) {
+void tcp_connections::write_all(uint8_t const* buffer, size_t size) {
     std::lock_guard<std::mutex> lock(sockets_mutex);
     for(auto& p : sockets) {
         if(p.first == my_id) {
@@ -115,7 +115,7 @@ void tcp_connections::write_all(char const* buffer, size_t size) {
     }
 }
 
-void tcp_connections::read(node_id_t node_id, char* buffer,
+void tcp_connections::read(node_id_t node_id, uint8_t* buffer,
                            size_t size) {
     std::lock_guard<std::mutex> lock(sockets_mutex);
     const auto it = sockets.find(node_id);

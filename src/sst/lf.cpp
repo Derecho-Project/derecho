@@ -304,8 +304,8 @@ void _resources::connect_endpoint(bool is_lf_server) {
  */
 _resources::_resources(
         int r_id,
-        char* write_addr,
-        char* read_addr,
+        uint8_t* write_addr,
+        uint8_t* read_addr,
         int size_w,
         int size_r,
         int is_lf_server)

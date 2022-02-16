@@ -144,7 +144,7 @@ int socket::try_connect(std::string servername, uint16_t port, int timeout_ms) {
     return return_code;
 }
 
-void socket::read(char* buffer, size_t size) {
+void socket::read(uint8_t* buffer, size_t size) {
     if(sock < 0) {
         throw socket_closed_error("Attempted to read from closed socket");
     }
@@ -162,7 +162,7 @@ void socket::read(char* buffer, size_t size) {
     }
 }
 
-ssize_t socket::read_partial(char* buffer, size_t max_size) {
+ssize_t socket::read_partial(uint8_t* buffer, size_t max_size) {
     if(sock < 0) {
         throw socket_closed_error("Attempted to read from closed socket");
     }
@@ -176,7 +176,7 @@ bool socket::probe() {
     return count > 0;
 }
 
-void socket::write(const char* buffer, size_t size) {
+void socket::write(const uint8_t* buffer, size_t size) {
     if(sock < 0) {
         throw socket_closed_error("Attempted to write to closed socket");
     }

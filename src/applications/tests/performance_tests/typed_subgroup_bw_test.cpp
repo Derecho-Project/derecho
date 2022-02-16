@@ -1,20 +1,20 @@
+#include "aggregate_bandwidth.cpp"
+#include "aggregate_bandwidth.hpp"
+#include "bytes_object.hpp"
+#include "log_results.hpp"
+#include "partial_senders_allocator.hpp"
+
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/persistent/Persistent.hpp>
+
+#include <chrono>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
-#include <chrono>
-
-#include "aggregate_bandwidth.cpp"
-#include "aggregate_bandwidth.hpp"
-#include "bytes_object.hpp"
-#include "log_results.hpp"
-#include <derecho/conf/conf.hpp>
-#include <derecho/core/derecho.hpp>
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <derecho/persistent/Persistent.hpp>
-#include "partial_senders_allocator.hpp"
-
 
 using std::endl;
 using test::Bytes;
@@ -96,7 +96,6 @@ int main(int argc, char* argv[]) {
                                                             ? PartialSendMode::HALF_SENDERS
                                                             : PartialSendMode::ONE_SENDER);
 
-
     // Compute the total number of messages that should be delivered
     uint64_t total_num_messages = 0;
     switch(senders_mode) {
@@ -117,16 +116,16 @@ int main(int argc, char* argv[]) {
     auto stability_callback = [&done,
                                total_num_messages,
                                num_delivered = 0u,
-    			       &send_complete_time](uint32_t subgroup,
-                                                   uint32_t sender_id,
-                                                   long long int index,
-                                                   std::optional<std::pair<char*, long long int>> data,
-                                                   persistent::version_t ver) mutable {
+                               &send_complete_time](uint32_t subgroup,
+                                                    uint32_t sender_id,
+                                                    long long int index,
+                                                    std::optional<std::pair<uint8_t*, long long int>> data,
+                                                    persistent::version_t ver) mutable {
         // Count the total number of messages delivered
         ++num_delivered;
         // Check for completion
         if(num_delivered == total_num_messages) {
-	    send_complete_time = std::chrono::steady_clock::now();
+            send_complete_time = std::chrono::steady_clock::now();
             done = true;
         }
     };
@@ -169,23 +168,22 @@ int main(int argc, char* argv[]) {
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     //std::string str_1k(max_msg_size, 'x');
-    char* bbuf = (char*)malloc(max_msg_size);
+    uint8_t* bbuf = (uint8_t*)malloc(max_msg_size);
     bzero(bbuf, max_msg_size);
     Bytes bytes(bbuf, max_msg_size);
 
     // this function sends all the messages
     auto send_all = [&]() {
         for(uint i = 0; i < count; i++) {
-	derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
-        handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
-    }
+            derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
+            handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
+        }
     };
 
     int node_rank = group.get_my_rank();
-    
+
     // Begin Clock Timer
     begin_time = std::chrono::steady_clock::now();
-
 
     if(senders_mode == PartialSendMode::ALL_SENDERS) {
         send_all();
@@ -209,7 +207,7 @@ int main(int argc, char* argv[]) {
     }
     */
 
-    while(!done){
+    while(!done) {
     }
 
     free(bbuf);
@@ -225,7 +223,7 @@ int main(int argc, char* argv[]) {
     std::cout << std::flush;
 
     // aggregate bandwidth from all nodes
-    std::pair<double, double> bw_laten(thp_gbps,msec);
+    std::pair<double, double> bw_laten(thp_gbps, msec);
 
     auto members_order = group.get_members();
     bw_laten = aggregate_bandwidth(members_order, members_order[node_rank], bw_laten);

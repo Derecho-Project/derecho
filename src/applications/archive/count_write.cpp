@@ -62,13 +62,13 @@ int main() {
     // create a new shared state table with all the members
     mySST sst(members, node_rank);
     sst.a[node_rank] = 0;
-    sst.put((char*)std::addressof(sst.a[0]) - sst.getBaseAddress(), sizeof(int));
+    sst.put((uint8_t*)std::addressof(sst.a[0]) - sst.getBaseAddress(), sizeof(int));
 
     auto check_failures_loop = [&sst]() {
         pthread_setname_np(pthread_self(), "check_failures");
         while(true) {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
-            sst.put_with_completion((char*)std::addressof(sst.heartbeat[0]) - sst.getBaseAddress(), sizeof(bool));
+            sst.put_with_completion((uint8_t*)std::addressof(sst.heartbeat[0]) - sst.getBaseAddress(), sizeof(bool));
         }
     };
 
@@ -107,7 +107,7 @@ int main() {
     // trigger. Increments self value
     auto g = [&start_time](mySST& sst) {
         ++(sst.a[LOCAL]);
-        sst.put((char*)std::addressof(sst.a[0]) - sst.getBaseAddress(), sizeof(int));
+        sst.put((uint8_t*)std::addressof(sst.a[0]) - sst.getBaseAddress(), sizeof(int));
         if(sst.a[LOCAL] == 1000000) {
             // end timer
             struct timespec end_time;
@@ -132,9 +132,9 @@ int main() {
                         times[i] = my_time;
                     } else {
 #ifdef USE_VERBS_API
-                        res = new resources(i, (char*)&my_time, (char*)&times[i], sizeof(double), sizeof(double));
+                        res = new resources(i, (uint8_t*)&my_time, (uint8_t*)&times[i], sizeof(double), sizeof(double));
 #else
-                        res = new resources(i, (char*)&my_time, (char*)&times[i], sizeof(double), sizeof(double), node_rank < i);
+                        res = new resources(i, (uint8_t*)&my_time, (uint8_t*)&times[i], sizeof(double), sizeof(double), node_rank < i);
 #endif
                         res->post_remote_read(id, sizeof(double));
                         free(res);
@@ -166,9 +166,9 @@ int main() {
                 resources* res;
                 double no_need;
 #ifdef USE_VERBS_API
-                res = new resources(0, (char*)&my_time, (char*)&no_need, sizeof(double), sizeof(double));
+                res = new resources(0, (uint8_t*)&my_time, (uint8_t*)&no_need, sizeof(double), sizeof(double));
 #else
-                res = new resources(0, (char*)&my_time, (char*)&no_need, sizeof(double), sizeof(double), 0);
+                res = new resources(0, (uint8_t*)&my_time, (uint8_t*)&no_need, sizeof(double), sizeof(double), 0);
 #endif
                 sync(0);
                 free(res);

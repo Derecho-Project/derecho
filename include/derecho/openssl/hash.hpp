@@ -74,13 +74,13 @@ public:
      * @param hash_buffer A pointer to a byte array in which the hash will be
      * written by this function
      */
-    void finalize(unsigned char* hash_buffer);
+    void finalize(uint8_t* hash_buffer);
     /**
      * Retrieves the hash of all the bytes that have been added with add_bytes
      * (since the last call to init) and returns it in a new vector.
      * @return An array of bytes containing the hash.
      */
-    std::vector<unsigned char> finalize();
+    std::vector<uint8_t> finalize();
     /**
      * A convenience method that hashes a single byte buffer and places the hash
      * in the output buffer, which is assumed to be the correct size. (i.e. the
@@ -90,7 +90,7 @@ public:
      * @param hash_buffer The byte buffer in which the hash will be placed; must
      * be the correct size for this hash function.
      */
-    void hash_bytes(const void* buffer, std::size_t buffer_size, unsigned char* hash_buffer);
+    void hash_bytes(const void* buffer, std::size_t buffer_size, uint8_t* hash_buffer);
 };
 
 }  // namespace openssl

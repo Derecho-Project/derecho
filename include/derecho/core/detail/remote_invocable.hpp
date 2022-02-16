@@ -70,8 +70,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         return *this;
     }
 
-    using barray = char*;
-    using cbarray = const char*;
+    using barray = uint8_t*;
+    using cbarray = const uint8_t*;
 
     inline auto serialize_one(barray) { return 0; }
 
@@ -93,7 +93,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     struct send_return {
         std::size_t size;                            //The size of the message in bytes
-        char* buf;                                   //A pointer to the beginning of the message in its buffer
+        uint8_t* buf;                                //A pointer to the beginning of the message in its buffer
         std::unique_ptr<QueryResults<Ret>> results;  //The QueryResults (futures) object for this RPC call
         std::weak_ptr<PendingResults<Ret>> pending;  //A non-owning pointer to the PendingResults (promises) object for this RPC call
     };
@@ -105,7 +105,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      * used to store the constructed message
      * @param a The arguments to be used when calling the remote-invocable function
      */
-    send_return send(const std::function<char*(int)>& out_alloc,
+    send_return send(const std::function<uint8_t*(std::size_t)>& out_alloc,
                      const std::decay_t<Args>&... remote_args) {
         //Create a new PendingResults/QueryResults pair for this RPC
         std::shared_ptr<PendingResults<Ret>> pending_results = std::make_shared<PendingResults<Ret>>();
@@ -129,7 +129,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
          * | RemoteInvokerForClass) | shared_ptr<PendingResults> | arguments            |
          * ------------------------------------------------------------------------------
          */
-        char* serialized_args = out_alloc(size);
+        uint8_t* serialized_args = out_alloc(size);
         {
             auto buf_ptr = serialized_args + mutils::to_bytes(results_heap_ptr, serialized_args);
             auto check_size = mutils::bytes_size(results_heap_ptr) + serialize_all(buf_ptr, remote_args...);
@@ -149,12 +149,12 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      * exception.
      * @return An empty recv_ret, since there is no response to a response
      */
-    template <typename definitely_char>
+    template <typename definitely_uint8>
     inline recv_ret receive_response(
             std::false_type*,
             mutils::DeserializationManager* dsm,
-            const node_id_t& nid, const char* response,
-            const std::function<definitely_char*(int)>&) {
+            const node_id_t& nid, const uint8_t* response,
+            const std::function<definitely_uint8*(int)>&) {
         bool is_exception = response[0];
         std::shared_ptr<PendingResults<Ret>>* results_heap_ptr;
         std::memcpy(&results_heap_ptr, (response + 1), sizeof(results_heap_ptr));
@@ -190,8 +190,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     inline recv_ret receive_response(std::true_type*,
                                      mutils::DeserializationManager*,
-                                     const node_id_t& nid, const char* response,
-                                     const std::function<char*(int)>&) {
+                                     const node_id_t& nid, const uint8_t* response,
+                                     const std::function<uint8_t*(int)>&) {
         // if(response[0]) throw remote_exception_occurred{nid};
         assert_always(false && "was not expecting a response!");
     }
@@ -207,8 +207,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     inline recv_ret receive_response(  //mutils::DeserializationManager* dsm,
             mutils::RemoteDeserialization_v* rdv,
-            const node_id_t& nid, const char* response,
-            const std::function<char*(int)>& f) {
+            const node_id_t& nid, const uint8_t* response,
+            const std::function<uint8_t*(int)>& f) {
         constexpr std::is_same<void, Ret>* choice{nullptr};
         mutils::DeserializationManager dsm{*rdv};
         return receive_response(choice, &dsm, nid, response, f);
@@ -270,8 +270,8 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      */
     inline recv_ret receive_call(std::false_type const* const,
                                  mutils::DeserializationManager* dsm,
-                                 const node_id_t& caller, const char* _recv_buf,
-                                 const std::function<char*(int)>& out_alloc) {
+                                 const node_id_t& caller, const uint8_t* _recv_buf,
+                                 const std::function<uint8_t*(std::size_t)>& out_alloc) {
         //The first sizeof(void*) bytes of the request message is the "invocation ID,"
         //which is actually a pointer to memory on the sender's machine. This should
         //just be copied unchanged to the reply message.
@@ -307,7 +307,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
                                                      - exception_info.exception_name.size() - sizeof(invocation_id) - 1);
                 result_size = mutils::bytes_size(exception_info) + sizeof(invocation_id) + 1;
             }
-            char* out = out_alloc(result_size);
+            uint8_t* out = out_alloc(result_size);
             out[0] = true;
             std::memcpy(out + 1, &invocation_id, sizeof(invocation_id));
             mutils::to_bytes(exception_info, out + sizeof(invocation_id) + 1);
@@ -318,7 +318,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             //If a function throws an exception that doesn't derive from std::exception, there's nothing we can do
             const remote_exception_info exception_info("Unknown type", "");
             const std::size_t result_size = mutils::bytes_size(exception_info) + sizeof(invocation_id) + 1;
-            char* out = out_alloc(result_size);
+            uint8_t* out = out_alloc(result_size);
             out[0] = true;
             std::memcpy(out + 1, &invocation_id, sizeof(invocation_id));
             mutils::to_bytes(exception_info, out + sizeof(invocation_id) + 1);
@@ -333,8 +333,8 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      */
     inline recv_ret receive_call(std::true_type const* const,
                                  mutils::DeserializationManager* dsm,
-                                 const node_id_t&, const char* _recv_buf,
-                                 const std::function<char*(int)>&) {
+                                 const node_id_t&, const uint8_t* _recv_buf,
+                                 const std::function<uint8_t*(int)>&) {
         //TODO: Need to catch exceptions here, and possibly send them back, since void functions can still throw exceptions!
         auto recv_buf = _recv_buf + sizeof(void*);
         mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
@@ -353,8 +353,8 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      */
     inline recv_ret receive_call(  //mutils::DeserializationManager* dsm,
             mutils::RemoteDeserialization_v* rdv,
-            const node_id_t& who, const char* recv_buf,
-            const std::function<char*(int)>& out_alloc) {
+            const node_id_t& who, const uint8_t* recv_buf,
+            const std::function<uint8_t*(std::size_t)>& out_alloc) {
         constexpr std::is_same<Ret, void>* choice{nullptr};
         mutils::DeserializationManager dsm{*rdv};
         return this->receive_call(choice, &dsm, who, recv_buf, out_alloc);
@@ -695,7 +695,7 @@ public:
      * results ("pending").
      */
     template <FunctionTag Tag, typename... Args>
-    auto send(const std::function<char*(int)>& out_alloc, Args&&... args) {
+    auto send(const std::function<uint8_t*(std::size_t)>& out_alloc, Args&&... args) {
         using namespace remote_invocation_utilities;
 
         constexpr std::integral_constant<FunctionTag, Tag>* choice{nullptr};
@@ -708,7 +708,7 @@ public:
                 std::forward<Args>(args)...);
 
         std::size_t payload_size = sent_return.size;
-        char* buf = sent_return.buf - header_size;
+        uint8_t* buf = sent_return.buf - header_size;
         uint32_t flags = 0;
         /*
          set the cascading flag if necessary.
@@ -824,7 +824,7 @@ public:
               nid(nid) {}
 
     template <FunctionTag Tag, typename... Args>
-    auto send(const std::function<char*(int)>& out_alloc, Args&&... args) {
+    auto send(const std::function<uint8_t*(std::size_t)>& out_alloc, Args&&... args) {
         using namespace remote_invocation_utilities;
 
         constexpr std::integral_constant<FunctionTag, Tag>* choice{nullptr};
@@ -837,7 +837,7 @@ public:
                 std::forward<Args>(args)...);
 
         std::size_t payload_size = sent_return.size;
-        char* buf = sent_return.buf - header_size;
+        uint8_t* buf = sent_return.buf - header_size;
         uint32_t flags = 0;
         if(in_rpc_handler()) {
             RPC_HEADER_FLAG_SET(flags, CASCADE);

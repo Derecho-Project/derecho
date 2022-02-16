@@ -32,7 +32,7 @@ unsigned int message_number = 0;
 vector<uint64_t> message_times;
 shared_ptr<derecho::Group<>> managed_group;
 
-void stability_callback(uint32_t subgroup, int sender_id, long long int index, char *data, long long int size) {
+void stability_callback(uint32_t subgroup, int sender_id, long long int index, uint8_t* data, long long int size) {
     using namespace derecho;
     message_times.push_back(get_time());
 
@@ -57,7 +57,7 @@ void send_messages(uint64_t duration) {
     uint64_t end_time = get_time() + duration;
     while(get_time() < end_time) {
         derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
-        char *buffer = group_as_subgroup.get_sendbuffer_ptr(message_size);
+        uint8_t* buffer = group_as_subgroup.get_sendbuffer_ptr(message_size);
         if(buffer) {
             memset(buffer, rand() % 256, message_size);
             //          cout << "Send function call succeeded at the client

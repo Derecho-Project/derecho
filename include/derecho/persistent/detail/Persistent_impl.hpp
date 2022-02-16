@@ -46,7 +46,7 @@ std::unique_ptr<std::string> _NameMaker<ObjectType, storageType>::make(const cha
     std::unique_ptr<std::string> ret = std::make_unique<std::string>();
     //char * buf = (char *)malloc((strlen(this->m_sObjectTypeName)+13)/8*8);
     // SHA256 object type name to avoid file name length overflow.
-    unsigned char digest[32];
+    uint8_t digest[32];
     openssl::Hasher sha256(openssl::DigestAlgorithm::SHA256);
     try {
         sha256.hash_bytes(this->m_sObjectTypeName, strlen(this->m_sObjectTypeName), digest);
@@ -134,11 +134,11 @@ Persistent<ObjectType, storageType>::Persistent(
         persistent_registry->registerPersistent(this->m_pLog->m_sName, this);
         // Set up PersistentRegistry's last signed version
         version_t latest_version = getLatestVersion();
-        std::unique_ptr<unsigned char[]> latest_signature;
+        std::unique_ptr<uint8_t[]> latest_signature;
         bool has_signature = enable_signatures;
         if(latest_version != INVALID_VERSION) {
             version_t prev_ver;  //Unused out-parameter
-            latest_signature = std::make_unique<unsigned char[]>(this->m_pLog->signature_size);
+            latest_signature = std::make_unique<uint8_t[]>(this->m_pLog->signature_size);
             has_signature = getSignature(latest_version, latest_signature.get(), prev_ver);
         }
         // Don't do anything if signatures are disabled or getSignature() failed
@@ -166,7 +166,7 @@ Persistent<ObjectType, storageType>::Persistent(
         const char* object_name,
         std::unique_ptr<ObjectType>& wrapped_obj_ptr,
         bool enable_signatures,
-        const char* log_tail,
+        const uint8_t* log_tail,
         PersistentRegistry* persistent_registry,
         mutils::DeserializationManager)
         : m_pRegistry(persistent_registry) {
@@ -252,8 +252,8 @@ auto Persistent<ObjectType, storageType>::getByIndex(
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         return fun(*this->getByIndex(idx, dm));
     } else {
-        // return mutils::deserialize_and_run<ObjectType>(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
-        return mutils::deserialize_and_run(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
+        // return mutils::deserialize_and_run<ObjectType>(dm, (uint8_t*)this->m_pLog->getEntryByIndex(idx), fun);
+        return mutils::deserialize_and_run(dm, (uint8_t*)this->m_pLog->getEntryByIndex(idx), fun);
     }
 }
 
@@ -262,7 +262,7 @@ template <typename ObjectType,
 template <typename DeltaType, typename Func>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
 Persistent<ObjectType, storageType>::getDeltaByIndex(int64_t idx, const Func& fun, mutils::DeserializationManager* dm) const {
-    return mutils::deserialize_and_run(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
+    return mutils::deserialize_and_run(dm, (uint8_t*)this->m_pLog->getEntryByIndex(idx), fun);
 }
 
 template <typename ObjectType,
@@ -275,13 +275,13 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::getByIndex(
         std::unique_ptr<ObjectType> p = ObjectType::create(dm);
         // TODO: accelerate this by checkpointing
         for(int64_t i = this->m_pLog->getEarliestIndex(); i <= idx; i++) {
-            const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
+            const uint8_t* entry_data = (const uint8_t*)this->m_pLog->getEntryByIndex(i);
             p->applyDelta(entry_data);
         }
 
         return p;
     } else {
-        return mutils::from_bytes<ObjectType>(dm, (const char*)this->m_pLog->getEntryByIndex(idx));
+        return mutils::from_bytes<ObjectType>(dm, (const uint8_t*)this->m_pLog->getEntryByIndex(idx));
     }
 }
 
@@ -291,7 +291,7 @@ template <typename DeltaType>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> Persistent<ObjectType, storageType>::getDeltaByIndex(
         int64_t idx,
         mutils::DeserializationManager* dm) const {
-    return mutils::from_bytes<DeltaType>(dm, (char const*)this->m_pLog->getEntryByIndex(idx));
+    return mutils::from_bytes<DeltaType>(dm, (uint8_t const*)this->m_pLog->getEntryByIndex(idx));
 }
 
 template <typename ObjectType,
@@ -301,7 +301,7 @@ auto Persistent<ObjectType, storageType>::get(
         version_t ver,
         const Func& fun,
         mutils::DeserializationManager* dm) const {
-    char* pdat = (char*)this->m_pLog->getEntry(ver);
+    uint8_t* pdat = (uint8_t*)this->m_pLog->getEntry(ver);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
     }
@@ -319,7 +319,7 @@ template <typename DeltaType, typename Func>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
 Persistent<ObjectType, storageType>::getDelta(const version_t ver,
                                               const Func& fun, mutils::DeserializationManager* dm) const {
-    char* pdat = (char*)this->m_pLog->getEntry(ver, true);
+    uint8_t* pdat = (uint8_t*)this->m_pLog->getEntry(ver, true);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
     }
@@ -339,7 +339,7 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         return getByIndex(idx, dm);
     } else {
-        return mutils::from_bytes<ObjectType>(dm, (const char*)this->m_pLog->getEntryByIndex(idx));
+        return mutils::from_bytes<ObjectType>(dm, (const uint8_t*)this->m_pLog->getEntryByIndex(idx));
     }
 }
 
@@ -355,7 +355,7 @@ Persistent<ObjectType, storageType>::getDelta(
         throw PERSIST_EXP_INV_VERSION;
     }
 
-    return mutils::from_bytes<DeltaType>(dm, (const char*)this->m_pLog->getEntryByIndex(idx));
+    return mutils::from_bytes<DeltaType>(dm, (const uint8_t*)this->m_pLog->getEntryByIndex(idx));
 }
 
 template <typename ObjectType,
@@ -364,14 +364,14 @@ template <typename DeltaType, typename DummyObjectType>
 std::enable_if_t<std::is_base_of<IDeltaSupport<DummyObjectType>, DummyObjectType>::value, bool>
 Persistent<ObjectType, storageType>::getDeltaSignature(const version_t ver,
                                                        const std::function<bool(const DeltaType&)>& search_predicate,
-                                                       unsigned char* signature, version_t& prev_ver,
+                                                       uint8_t* signature, version_t& prev_ver,
                                                        mutils::DeserializationManager* dm) const {
     int64_t version_index = m_pLog->getVersionIndex(ver, true);
     dbg_default_trace("getDeltaSignature: Converted version {} to index {}", ver, version_index);
     if(version_index == INVALID_INDEX) {
         return false;
     }
-    const char* delta_data = reinterpret_cast<const char*>(m_pLog->getEntryByIndex(version_index));
+    const uint8_t* delta_data = reinterpret_cast<const uint8_t*>(m_pLog->getEntryByIndex(version_index));
     if(mutils::deserialize_and_run(dm, delta_data, search_predicate)) {
         dbg_default_trace("getDeltaSignature: Search predicate was true, getting signature from index {}", version_index);
         return m_pLog->getSignatureByIndex(version_index, signature, prev_ver);
@@ -423,7 +423,7 @@ auto Persistent<ObjectType, storageType>::get(
         }
         return getByIndex(idx, fun, dm);
     } else {
-        char* pdat = (char*)this->m_pLog->getEntry(hlc);
+        uint8_t* pdat = (uint8_t*)this->m_pLog->getEntry(hlc);
         if(pdat == nullptr) {
             throw PERSIST_EXP_INV_HLC;
         }
@@ -447,7 +447,7 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
         }
         return getByIndex(idx, dm);
     } else {
-        char const* pdat = (char const*)this->m_pLog->getEntry(hlc);
+        uint8_t const* pdat = (uint8_t const*)this->m_pLog->getEntry(hlc);
         if(pdat == nullptr) {
             throw PERSIST_EXP_INV_HLC;
         }
@@ -502,13 +502,13 @@ template <typename ObjectType,
 void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, const HLC& mhlc) {
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-        v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
+        v.finalizeCurrentDelta([&](uint8_t const* const buf, size_t len) {
             this->m_pLog->append((const void* const)buf, len, ver, mhlc);
         });
     } else {
         // ObjectType does not support Delta, logging the whole current state.
         auto size = mutils::bytes_size(v);
-        char* buf = new char[size];
+        uint8_t* buf = new uint8_t[size];
         bzero(buf, size);
         mutils::to_bytes(v, buf);
         this->m_pLog->append((void*)buf, size, ver, mhlc);
@@ -565,19 +565,19 @@ std::size_t Persistent<ObjectType, storageType>::updateSignature(version_t ver, 
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::addSignature(version_t ver, const unsigned char* signature, version_t prev_signed_ver) {
+void Persistent<ObjectType, storageType>::addSignature(version_t ver, const uint8_t* signature, version_t prev_signed_ver) {
     this->m_pLog->addSignature(ver, signature, prev_signed_ver);
 }
 
 template <typename ObjectType,
           StorageType storageType>
-bool Persistent<ObjectType, storageType>::getSignature(version_t ver, unsigned char* signature, version_t& prev_signed_ver) const {
+bool Persistent<ObjectType, storageType>::getSignature(version_t ver, uint8_t* signature, version_t& prev_signed_ver) const {
     return this->m_pLog->getSignature(ver, signature, prev_signed_ver);
 }
 
 template <typename ObjectType,
           StorageType storageType>
-bool Persistent<ObjectType, storageType>::getSignatureByIndex(int64_t index, unsigned char* signature, version_t& prev_signed_ver) const {
+bool Persistent<ObjectType, storageType>::getSignatureByIndex(int64_t index, uint8_t* signature, version_t& prev_signed_ver) const {
     return this->m_pLog->getSignatureByIndex(index, signature, prev_signed_ver);
 }
 
@@ -617,7 +617,7 @@ void Persistent<ObjectType, storageType>::persist(version_t ver) {
 
 template <typename ObjectType,
           StorageType storageType>
-std::size_t Persistent<ObjectType, storageType>::to_bytes(char* ret) const {
+std::size_t Persistent<ObjectType, storageType>::to_bytes(uint8_t* ret) const {
     std::size_t sz = 0;
     // object name
     dbg_default_trace("{0}[{1}] object_name starts at {2}", this->m_pLog->m_sName, __func__, sz);
@@ -647,7 +647,7 @@ std::size_t Persistent<ObjectType, storageType>::bytes_size() const {
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::post_object(const std::function<void(char const* const, std::size_t)>& f)
+void Persistent<ObjectType, storageType>::post_object(const std::function<void(uint8_t const* const, std::size_t)>& f)
         const {
     // object name
     mutils::post_object(f, this->m_pLog->m_sName);
@@ -661,7 +661,7 @@ void Persistent<ObjectType, storageType>::post_object(const std::function<void(c
 
 template <typename ObjectType,
           StorageType storageType>
-std::unique_ptr<Persistent<ObjectType, storageType>> Persistent<ObjectType, storageType>::from_bytes(mutils::DeserializationManager* dsm, char const* v) {
+std::unique_ptr<Persistent<ObjectType, storageType>> Persistent<ObjectType, storageType>::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* v) {
     size_t ofst = 0;
     dbg_default_trace("{0} object_name is loaded at {1}", __func__, ofst);
     auto obj_name = mutils::from_bytes<std::string>(dsm, v);
@@ -685,7 +685,7 @@ std::unique_ptr<Persistent<ObjectType, storageType>> Persistent<ObjectType, stor
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::applyLogTail(mutils::DeserializationManager* dsm, char const* v) {
+void Persistent<ObjectType, storageType>::applyLogTail(mutils::DeserializationManager* dsm, uint8_t const* v) {
     this->m_pLog->applyLogTail(v);
 }
 

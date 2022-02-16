@@ -41,7 +41,7 @@ class unsupported_feature : public exception {};
  */
 class memory_region {
     std::unique_ptr<ibv_mr, std::function<void(ibv_mr*)>> mr;
-    std::unique_ptr<char[]> allocated_buffer;
+    std::unique_ptr<uint8_t[]> allocated_buffer;
 
     memory_region(size_t size, bool contiguous);
     friend class queue_pair;
@@ -49,10 +49,10 @@ class memory_region {
 
 public:
     memory_region(size_t size);
-    memory_region(char* buffer, size_t size);
+    memory_region(uint8_t* buffer, size_t size);
     uint32_t get_rkey() const;
 
-    char* const buffer;
+    uint8_t* const buffer;
     const size_t size;
 };
 

@@ -80,7 +80,7 @@ public:
      * @param key_bytes A byte array containing the PEM file in memory
      * @param key_size The size of the byte array
      */
-    void add_public_key(const ip_addr_t& node_ip, const char* key_bytes, std::size_t key_size);
+    void add_public_key(const ip_addr_t& node_ip, const uint8_t* key_bytes, std::size_t key_size);
     /**
      * Saves the public key for the specified IP address to the filesystem as a
      * PEM file in the directory that this PublicKeyStore was constructed with.

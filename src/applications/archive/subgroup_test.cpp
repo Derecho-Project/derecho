@@ -41,8 +41,8 @@ int main(int argc, char* argv[]) {
 
     auto stability_callback = [&num_messages](
                                       uint32_t subgroup_num, uint32_t sender_id, long long int index,
-                                      std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) {
-        char* buf = data.value().first;
+                                      std::optional<std::pair<uint8_t*, long long int>> data, persistent::version_t ver) {
+        uint8_t* buf = data.value().first;
         if(index == num_messages - 1) {
             cout << "Received the last message in subgroup " << subgroup_num << " from sender " << sender_id << endl;
             cout << "The last message is: " << endl;
@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
         unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
         derecho::Replicated<RawObject>& subgroup_handle = managed_group.get_subgroup<RawObject>(my_subgroup_num);
         for(int i = 0; i < num_messages; ++i) {
-            subgroup_handle.send(msg_size, [&](char* buf) {
+            subgroup_handle.send(msg_size, [&](uint8_t* buf) {
                 for(unsigned int k = 0; k < msg_size; ++k) {
                     buf[k] = 'a' + (rand() % 26);
                 }

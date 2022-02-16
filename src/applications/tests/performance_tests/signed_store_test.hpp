@@ -21,11 +21,11 @@ private:
     bool is_temporary;
 
 public:
-    char* bytes;
+    uint8_t* bytes;
     std::size_t size;
 
     // constructor - copy to own the data
-    Blob(const char* const b, const decltype(size) s);
+    Blob(const uint8_t* const b, const decltype(size) s);
 
     // copy constructor - copy to own the data
     Blob(const Blob& other);
@@ -46,25 +46,25 @@ public:
     Blob& operator=(const Blob& other);
 
     // serialization/deserialization supports
-    std::size_t to_bytes(char* v) const;
+    std::size_t to_bytes(uint8_t* v) const;
 
     std::size_t bytes_size() const;
 
-    void post_object(const std::function<void(char const* const, std::size_t)>& f) const;
+    void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f) const;
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
-    static std::unique_ptr<Blob> from_bytes(mutils::DeserializationManager*, const char* const buffer);
+    static std::unique_ptr<Blob> from_bytes(mutils::DeserializationManager*, const uint8_t* const buffer);
 
     static mutils::context_ptr<Blob> from_bytes_noalloc(mutils::DeserializationManager* ctx,
-                                                        const char* const buffer);
+                                                        const uint8_t* const buffer);
 
     static mutils::context_ptr<const Blob> from_bytes_noalloc_const(mutils::DeserializationManager* m,
-                                                                    const char* const buffer);
+                                                                    const uint8_t* const buffer);
 
 private:
     //Non-owning constructor, used only by from_bytes_noalloc
-    Blob(char* buffer, std::size_t size, bool temporary);
+    Blob(uint8_t* buffer, std::size_t size, bool temporary);
 };
 
 class ObjectStore : public mutils::ByteRepresentable,
@@ -197,16 +197,16 @@ public:
 
     //This class has no serialized state, so DEFAULT_SERIALIZATION_SUPPORT won't work.
     //We must still provide trivial implementations of these functions.
-    std::size_t to_bytes(char* v) const { return 0; };
+    std::size_t to_bytes(uint8_t* v) const { return 0; };
 
     std::size_t bytes_size() const { return 0; };
 
-    void post_object(const std::function<void(char const* const, std::size_t)>& f) const {};
+    void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f) const {};
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
     //This should never be called, but needs to exist
-    static std::unique_ptr<ClientTier> from_bytes(mutils::DeserializationManager*, const char* const v) {
+    static std::unique_ptr<ClientTier> from_bytes(mutils::DeserializationManager*, const uint8_t* const v) {
         return std::make_unique<ClientTier>(0);
     };
 };
