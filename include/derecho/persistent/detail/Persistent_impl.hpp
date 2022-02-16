@@ -318,8 +318,9 @@ template <typename ObjectType,
 template <typename DeltaType, typename Func>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
 Persistent<ObjectType, storageType>::getDelta(const version_t ver,
+                                              bool exact,
                                               const Func& fun, mutils::DeserializationManager* dm) const {
-    char* pdat = (char*)this->m_pLog->getEntry(ver, true);
+    char* pdat = (char*)this->m_pLog->getEntry(ver, exact);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
     }
@@ -349,8 +350,9 @@ template <typename DeltaType>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
 Persistent<ObjectType, storageType>::getDelta(
         const version_t ver,
+        bool exact,
         mutils::DeserializationManager* dm) const {
-    int64_t idx = this->m_pLog->getVersionIndex(ver, true);
+    int64_t idx = this->m_pLog->getVersionIndex(ver, exact);
     if(idx == INVALID_INDEX) {
         throw PERSIST_EXP_INV_VERSION;
     }
@@ -503,7 +505,10 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, cons
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
-            this->m_pLog->append((const void* const)buf, len, ver, mhlc);
+            // will not create a log for versions without data change.
+            if (len > 0) {
+                this->m_pLog->append((const void* const)buf, len, ver, mhlc);
+            }
         });
     } else {
         // ObjectType does not support Delta, logging the whole current state.

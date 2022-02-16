@@ -668,6 +668,7 @@ public:
      * @tparam Func         User-specified function type, which is usually deduced.
      *
      * @param ver   version
+     * @param exact true for the version only, otherwise, a recent version before asked version also works.
      * @param fun   the user function to process a const DeltaType& object
      * @param dm    the deserialization manager
      *
@@ -678,6 +679,7 @@ public:
     template <typename DeltaType, typename Func>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
     getDelta(const version_t ver,
+             bool exact,
              const Func& fun,
              mutils::DeserializationManager* dm = nullptr) const;
 
@@ -691,6 +693,7 @@ public:
      * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
      *
      * @param ver   version
+     * @param exact true for the version only, otherwise, a recent version before asked version also works.
      * @param dm    the deserialization manager
      *
      * @return Returns a unique pointer to the copied DeltaType object.
@@ -700,6 +703,7 @@ public:
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
     getDelta(const version_t ver,
+             bool exact,
              mutils::DeserializationManager* dm = nullptr) const;
 
     /**

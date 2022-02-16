@@ -542,8 +542,8 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "delta-getbyver") == 0) {
             int64_t version = std::stoi(argv[2]);
             cout << "dx[ver:" << version << "] = " << dx[version]->value << endl;
-            cout << "dx.delta[ver:" << version << "] = " << *dx.template getDelta<int>(version) << "\t- by copy" << endl;
-            dx.template getDelta<int>(version, [version](const int& x){ cout << "dx.delta[ver:" << version << "] = " << x << "\t- by lambda" << std::endl;});
+            cout << "dx.delta[ver:" << version << "] = " << *dx.template getDelta<int>(version,true) << "\t- by copy" << endl;
+            dx.template getDelta<int>(version, true, [version](const int& x){ cout << "dx.delta[ver:" << version << "] = " << x << "\t- by lambda" << std::endl;});
         } else if(strcmp(argv[1], "delta-verify") == 0) {
             if (!use_signature) {
                 std::cout << "unable to verify without signature...exit." << std::endl;
