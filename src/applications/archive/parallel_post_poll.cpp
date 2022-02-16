@@ -66,9 +66,9 @@ int main() {
     // create all tcp connections and initialize global rdma resources
     initialize(node_rank, ip_addrs);
 
-    char *write_buf, *read_buf;
-    write_buf = (char *)malloc(size);
-    read_buf = (char *)malloc(50);
+    uint8_t *write_buf, *read_buf;
+    write_buf = (uint8_t *)malloc(size);
+    read_buf = (uint8_t *)malloc(50);
     for(int i = 35; i < 35 + 50; ++i) {
         char ch = (rand() % 26) + 'a';
         write_buf[i] = ch;

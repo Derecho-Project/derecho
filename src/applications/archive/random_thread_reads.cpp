@@ -119,9 +119,9 @@ int main() {
     initialize(node_rank, ip_addrs);
 
     // create memory for RDMA operations (with all nodes, we share the same buffer, which should not cause contention. CHECK THIS!)
-    char *write_buf, *read_buf;
-    write_buf = (char *)malloc(buf_size);
-    read_buf = (char *)malloc(read_size);
+    uint8_t *write_buf, *read_buf;
+    write_buf = (uint8_t *)malloc(buf_size);
+    read_buf = (uint8_t *)malloc(read_size);
     // create the resources
     res_vec.resize(num_nodes);
     for(int i = 0; i < num_nodes; ++i) {

@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
                                num_delivered = 0u](uint32_t subgroup,
                                                    uint32_t sender_id,
                                                    long long int index,
-                                                   std::optional<std::pair<char*, long long int>> data,
+                                                   std::optional<std::pair<uint8_t*, long long int>> data,
                                                    persistent::version_t ver) mutable {
         //Count the total number of messages delivered
         ++num_delivered;
@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
     std::cout << "my rank is: " << node_rank << ", and I'm sending: " << std::boolalpha << is_sending << std::endl;
 
     //Allocate this memory before starting the timer, even if we end up not needing it
-    char* bbuf = new char[msg_size];
+    uint8_t* bbuf = new uint8_t[msg_size];
     memset(bbuf, 0, msg_size);
     test::Bytes bs(bbuf, msg_size);
 

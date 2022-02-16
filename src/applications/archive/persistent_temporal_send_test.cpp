@@ -27,14 +27,14 @@ typedef struct _payload {
 
 //This class is modified from Matt's implementation
 struct Bytes : public mutils::ByteRepresentable {
-    char* bytes;
+    uint8_t* bytes;
     std::size_t size;
 
-    Bytes(const char* b, decltype(size) s)
+    Bytes(const uint8_t* b, decltype(size) s)
             : size(s) {
         bytes = nullptr;
         if(s > 0) {
-            bytes = new char[s];
+            bytes = new uint8_t[s];
             memcpy(bytes, b, s);
         }
     }
@@ -52,7 +52,7 @@ struct Bytes : public mutils::ByteRepresentable {
     }
 
     Bytes& operator=(Bytes&& other) {
-        char* swp_bytes = other.bytes;
+        uint8_t* swp_bytes = other.bytes;
         std::size_t swp_size = other.size;
         other.bytes = bytes;
         other.size = size;
@@ -67,7 +67,7 @@ struct Bytes : public mutils::ByteRepresentable {
         }
         size = other.size;
         if(size > 0) {
-            bytes = new char[size];
+            bytes = new uint8_t[size];
             memcpy(bytes, other.bytes, size);
         } else {
             bytes = nullptr;
@@ -75,7 +75,7 @@ struct Bytes : public mutils::ByteRepresentable {
         return *this;
     }
 
-    std::size_t to_bytes(char* v) const {
+    std::size_t to_bytes(uint8_t* v) const {
         ((std::size_t*)(v))[0] = size;
         if(size > 0) {
             memcpy(v + sizeof(size), bytes, size);
@@ -87,22 +87,22 @@ struct Bytes : public mutils::ByteRepresentable {
         return size + sizeof(size);
     }
 
-    void post_object(const std::function<void(char const* const, std::size_t)>& f) const {
-        f((char*)&size, sizeof(size));
+    void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f) const {
+        f((uint8_t*)&size, sizeof(size));
         f(bytes, size);
     }
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
-    static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager*, const char* const v) {
+    static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager*, const uint8_t* const v) {
         return std::make_unique<Bytes>(v + sizeof(std::size_t), ((std::size_t*)(v))[0]);
     }
 
-    static context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager*, const char* const v) {
+    static context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager*, const uint8_t* const v) {
         return context_ptr<Bytes>{new Bytes(v + sizeof(std::size_t), ((std::size_t*)(v))[0])};
     }
 
-    static context_ptr<const Bytes> from_bytes_noalloc_const(mutils::DeserializationManager*, const char* const v) {
+    static context_ptr<const Bytes> from_bytes_noalloc_const(mutils::DeserializationManager*, const uint8_t* const v) {
         return context_ptr<const Bytes>{new Bytes(v + sizeof(std::size_t), ((std::size_t*)(v))[0])};
     }
 };
@@ -128,7 +128,7 @@ public:
     }
 
     Bytes query_const_bytes(uint64_t query_us) const {
-        char bytes[1000000];
+        uint8_t bytes[1000000];
         Bytes b(bytes, 1000000);
         return b;
     }
@@ -211,7 +211,7 @@ int main(int argc, char* argv[]) {
     // ordered send.
     if(node_rank < (num_of_nodes - 1)) {
         dbg_default_debug("begin to send message for {} seconds. Message size={}", min_dur_sec, msg_size);
-        char* bbuf = new char[msg_size];
+        uint8_t* bbuf = new uint8_t[msg_size];
         bzero(bbuf, msg_size);
         Bytes bs(bbuf, msg_size);
 

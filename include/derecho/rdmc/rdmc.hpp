@@ -39,7 +39,7 @@ struct receive_destination {
 
 typedef std::function<receive_destination(size_t size)>
         incoming_message_callback_t;
-typedef std::function<void(char* buffer, size_t size)> completion_callback_t;
+typedef std::function<void(uint8_t* buffer, size_t size)> completion_callback_t;
 typedef std::function<void(std::optional<uint32_t> suspected_victim)>
         failure_callback_t;
 

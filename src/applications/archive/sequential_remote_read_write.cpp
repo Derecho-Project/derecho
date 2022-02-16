@@ -41,14 +41,14 @@ int main() {
     // create an array of resources
     resources *res[num_nodes];
     // create buffer for write and read
-    char *write_buf[num_nodes], *read_buf[num_nodes];
+    uint8_t *write_buf[num_nodes], *read_buf[num_nodes];
     for(int r_index = 0; r_index < num_nodes; ++r_index) {
         if(r_index == node_rank) {
             continue;
         }
 
-        write_buf[r_index] = (char *)malloc(size);
-        read_buf[r_index] = (char *)malloc(size);
+        write_buf[r_index] = (uint8_t *)malloc(size);
+        read_buf[r_index] = (uint8_t *)malloc(size);
         res[r_index] = new resources(r_index, write_buf[r_index], read_buf[r_index], size, size);
     }
 
@@ -130,8 +130,8 @@ int main() {
                 times1[i] = my_time1;
                 times2[i] = my_time2;
             } else {
-                res1 = new resources(i, (char *)&my_time1, (char *)&times1[i], sizeof(double), sizeof(double));
-                res2 = new resources(i, (char *)&my_time2, (char *)&times2[i], sizeof(double), sizeof(double));
+                res1 = new resources(i, (uint8_t *)&my_time1, (uint8_t *)&times1[i], sizeof(double), sizeof(double));
+                res2 = new resources(i, (uint8_t *)&my_time2, (uint8_t *)&times2[i], sizeof(double), sizeof(double));
                 res1->post_remote_read(sizeof(double));
                 res2->post_remote_read(sizeof(double));
                 verbs_poll_completion();
@@ -172,8 +172,8 @@ int main() {
     else {
         resources *res1, *res2;
         double no_need;
-        res1 = new resources(0, (char *)&my_time1, (char *)&no_need, sizeof(double), sizeof(double));
-        res2 = new resources(0, (char *)&my_time2, (char *)&no_need, sizeof(double), sizeof(double));
+        res1 = new resources(0, (uint8_t *)&my_time1, (uint8_t *)&no_need, sizeof(double), sizeof(double));
+        res2 = new resources(0, (uint8_t *)&my_time2, (uint8_t *)&no_need, sizeof(double), sizeof(double));
         sync(0);
         delete(res1);
         delete(res2);

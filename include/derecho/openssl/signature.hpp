@@ -161,13 +161,13 @@ public:
      * @param signature_buffer A pointer to a byte array in which the signature
      * will be written by this function.
      */
-    void finalize(unsigned char* signature_buffer);
+    void finalize(uint8_t* signature_buffer);
     /**
      * Signs all of the bytes that have been added with add_bytes (since the
      * last call to init) and returns a byte array containing the signature.
      * @return An array of bytes containing the signature.
      */
-    std::vector<unsigned char> finalize();
+    std::vector<uint8_t> finalize();
     /**
      * A convenience method that signs a single byte buffer in one shot and
      * places the signature in a byte buffer assumed to be the correct size.
@@ -177,7 +177,7 @@ public:
      * @param signature_buffer The byte buffer in which the signature will be
      * placed; must be the correct size for this signature.
      */
-    void sign_bytes(const void* buffer, std::size_t buffer_size, unsigned char* signature_buffer);
+    void sign_bytes(const void* buffer, std::size_t buffer_size, uint8_t* signature_buffer);
 };
 
 class Verifier {
@@ -214,7 +214,7 @@ public:
      * @param signature_length The length of the signature buffer
      * @return True if verification succeeds, false if it fails.
      */
-    bool finalize(const unsigned char* signature_buffer, std::size_t signature_length);
+    bool finalize(const uint8_t* signature_buffer, std::size_t signature_length);
     /**
      * Signs all of the bytes that have been added with add_bytes (since the
      * last call to init) and compares them to the provided signature. Returns
@@ -223,7 +223,7 @@ public:
      * @param signature A byte array containing the signature to compare
      * against.
      */
-    bool finalize(const std::vector<unsigned char>& signature);
+    bool finalize(const std::vector<uint8_t>& signature);
     /**
      * A convenience method that verifies a single byte buffer in one shot,
      * given a signature buffer to compare against.
@@ -233,7 +233,7 @@ public:
      * @param signature_size The length of the signature in bytes
      * @return True if verification succeeds, false if it fails.
      */
-    bool verify_bytes(const void* buffer, std::size_t buffer_size, const unsigned char* signature, std::size_t signature_size);
+    bool verify_bytes(const void* buffer, std::size_t buffer_size, const uint8_t* signature, std::size_t signature_size);
 };
 
 }  // namespace openssl

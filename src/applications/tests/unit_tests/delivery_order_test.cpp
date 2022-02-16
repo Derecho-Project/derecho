@@ -6,6 +6,7 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -35,7 +36,7 @@ int main(int argc, char* argv[]) {
     uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
     SubgroupInfo subgroup_info([num_nodes](const std::vector<std::type_index>& subgroup_type_order,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+                                           const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.members.size() < num_nodes) {
             throw subgroup_provisioning_exception();
         }
@@ -62,14 +63,14 @@ int main(int argc, char* argv[]) {
                               finished_nodes = std::set<node_id_t>()](subgroup_id_t subgroup_id,
                                                                       node_id_t sender_id,
                                                                       message_id_t index,
-                                                                      std::optional<std::pair<char*, long long int>> data,
+                                                                      std::optional<std::pair<uint8_t*, long long int>> data,
                                                                       persistent::version_t ver) mutable {
-        char* buf;
+        uint8_t* buf;
         long long int size;
         std::tie(buf, size) = data.value();
 
         if(num_received_msgs_map[sender_id] == 0) {
-            ifstream* input_file = new ifstream(buf);
+            ifstream* input_file = new ifstream(std::string(reinterpret_cast<char*>(buf), size));
             if(input_file->is_open()) {
                 input_file_map[sender_id] = input_file;
             } else {
@@ -79,7 +80,7 @@ int main(int argc, char* argv[]) {
         } else if(num_received_msgs_map[sender_id] <= num_msgs) {
             received_msgs.push_back(sender_id);
             string line = get_next_line(sender_id);
-            string msg_received(buf, size);
+            string msg_received(reinterpret_cast<char*>(buf), size);
             if(line != msg_received) {
                 cout << "Error: Message contents mismatch or violation of local order!!!" << endl;
                 exit(1);
@@ -92,7 +93,7 @@ int main(int argc, char* argv[]) {
                         for(uint64_t num_entries_sent = 0; num_entries_sent < received_msgs.size();) {
                             uint64_t num_entries = std::min(received_msgs.size() - num_entries_sent, max_msg_size / sizeof(node_id_t) - 50);
                             group_as_subgroup.send(num_entries * sizeof(node_id_t),
-                                                   [&received_msgs, &num_entries_sent, &num_entries](char* buf) {
+                                                   [&received_msgs, &num_entries_sent, &num_entries](uint8_t* buf) {
                                                        for(uint i = 0; i < num_entries; i++) {
                                                            (node_id_t&)buf[sizeof(node_id_t) * i] = received_msgs[num_entries_sent + i];
                                                        }
@@ -129,7 +130,7 @@ int main(int argc, char* argv[]) {
     };
 
     group = std::make_unique<Group<RawObject>>(UserMessageCallbacks{delivery_callback}, subgroup_info,
-                std::vector<DeserializationContext*>{}, std::vector<view_upcall_t>{}, &raw_object_factory);
+                                               std::vector<DeserializationContext*>{}, std::vector<view_upcall_t>{}, &raw_object_factory);
     cout << "Finished constructing/joining Group" << endl;
     Replicated<RawObject>& group_as_subgroup = group->get_subgroup<RawObject>();
     // my_rank = group_as_subgroup.get_my_rank();
@@ -145,16 +146,16 @@ int main(int argc, char* argv[]) {
     cout << endl;
 
     ifstream input_file(my_input_file);
-    group_as_subgroup.send(my_input_file.size(), [my_input_file](char* buf) {
-        my_input_file.copy(buf, my_input_file.size());
+    group_as_subgroup.send(my_input_file.size(), [my_input_file](uint8_t* buf) {
+        my_input_file.copy(reinterpret_cast<char*>(buf), my_input_file.size());
     });
 
     string line;
     uint32_t msg_counter = 0;
     while(msg_counter < num_msgs) {
         getline(input_file, line);
-        group_as_subgroup.send(msg_size, [line](char* buf) {
-            line.copy(buf, line.size());
+        group_as_subgroup.send(msg_size, [line](uint8_t* buf) {
+            line.copy(reinterpret_cast<char*>(buf), line.size());
         });
         msg_counter = msg_counter + 1;
     }

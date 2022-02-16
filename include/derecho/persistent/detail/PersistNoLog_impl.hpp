@@ -20,7 +20,7 @@ void saveNoLogObjectInFile(
     sprintf(tmpfilepath, "%s.tmp", filepath);
     // 2 - serialize
     auto size = mutils::bytes_size(obj);
-    char* buf = new char[size];
+    uint8_t* buf = new uint8_t[size];
     bzero(buf, size);
     mutils::to_bytes(obj, buf);
     // 3 - write to tmp file
@@ -70,7 +70,7 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
         throw PERSIST_EXP_READ_FILE(errno);
     }
 
-    char* buf = new char[stat_buf.st_size];
+    uint8_t* buf = new uint8_t[stat_buf.st_size];
     if(!buf) {
         close(fd);
         throw PERSIST_EXP_OOM(errno);
@@ -87,6 +87,6 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
 
     return ret;
 }
-}
+}  // namespace persistent
 
 #endif  //PERSIST_NO_LOG_IMPL_HPP

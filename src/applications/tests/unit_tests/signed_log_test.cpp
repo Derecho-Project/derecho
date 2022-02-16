@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
                                num_delivered = std::vector<uint32_t>{0u, 0u, 0u}](uint32_t subgroup,
                                                                                   uint32_t sender_id,
                                                                                   long long int index,
-                                                                                  std::optional<std::pair<char*, long long int>> data,
+                                                                                  std::optional<std::pair<uint8_t*, long long int>> data,
                                                                                   persistent::version_t ver) mutable {
         num_delivered[subgroup]++;
         if(num_delivered[subgroup] == subgroup_total_messages[subgroup]) {

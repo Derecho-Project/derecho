@@ -27,8 +27,8 @@ int main(int argc, char *argv[]) {
 
     Conf::initialize(argc, argv);
 
-    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
-        char* buf;
+    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, std::optional<std::pair<uint8_t*, long long int>> data, persistent::version_t ver) mutable {
+        uint8_t* buf;
         long long int msg_size;
         std::tie(buf, msg_size) = data.value();
         cout << "=== Delivered a message from sender with id " << sender_id << endl;
@@ -77,8 +77,8 @@ int main(int argc, char *argv[]) {
         if(!msg_str.size()) {
             continue;
         }
-        group_as_subgroup.send(msg_str.size(), [&](char* buf) {
-            msg_str.copy(buf, msg_str.size());
+        group_as_subgroup.send(msg_str.size(), [&](uint8_t* buf) {
+            memcpy(buf, msg_str.c_str(), msg_str.size());
         });
     }
 }

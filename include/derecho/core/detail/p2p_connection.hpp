@@ -37,8 +37,8 @@ class P2PConnection {
     const uint32_t my_node_id;
     const uint32_t remote_id;
     const RequestParams& request_params;
-    std::unique_ptr<volatile char[]> incoming_p2p_buffer;
-    std::unique_ptr<volatile char[]> outgoing_p2p_buffer;
+    std::unique_ptr<volatile uint8_t[]> incoming_p2p_buffer;
+    std::unique_ptr<volatile uint8_t[]> outgoing_p2p_buffer;
     std::unique_ptr<resources> res;
     std::map<REQUEST_TYPE, std::atomic<uint64_t>> incoming_seq_nums_map, outgoing_seq_nums_map;
     REQUEST_TYPE prev_mode;
@@ -60,7 +60,7 @@ public:
      * incoming message from the remote node, or a null pointer if there are
      * no new messages.
      */
-    char* probe();
+    uint8_t* probe();
     /**
      * Increments the sequence number of the incoming message type last
      * retrieved by probe(). This assumes that it is called immediately
@@ -72,7 +72,7 @@ public:
      * for the specified request type, or a null pointer if no message buffer
      * is available.
      */
-    char* get_sendbuffer_ptr(REQUEST_TYPE type);
+    uint8_t* get_sendbuffer_ptr(REQUEST_TYPE type);
     /**
      * Sends the next outgoing message, i.e. the one populated by the most
      * recent call to get_sendbuffer_ptr. This assumes the message's

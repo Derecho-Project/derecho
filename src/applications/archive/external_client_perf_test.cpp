@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
         if(is_sender) {
             Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
             uint64_t msg_size = max_msg_size - 128;
-            char* bbuf = (char*)malloc(msg_size);
+            uint8_t* bbuf = (uint8_t*)malloc(msg_size);
             bzero(bbuf, msg_size);
             Bytes bytes(bbuf, msg_size);
             struct timespec t1, t2;
@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
         std::vector<node_id_t> shard_members = group.get_shard_members(0, 0);
         ExternalClientCaller<TestObject, decltype(group)>& handle = group.get_subgroup_caller<TestObject>();
         uint64_t msg_size = max_msg_size - 128;
-        char* bbuf = (char*)malloc(msg_size);
+        uint8_t* bbuf = (uint8_t*)malloc(msg_size);
         bzero(bbuf, msg_size);
         Bytes bytes(bbuf, msg_size);
         struct timespec t1, t2;

@@ -43,8 +43,8 @@ int main() {
     volatile int b;
     a = b = 0;
     // create read and write buffers
-    char *write_buf = (char *)&a;
-    char *read_buf = (char *)&b;
+    uint8_t *write_buf = (uint8_t *)&a;
+    uint8_t *read_buf = (uint8_t *)&b;
 
     int r_index = num_nodes - 1 - node_rank;
 

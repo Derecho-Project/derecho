@@ -13,10 +13,10 @@
 #include "signed_store_mockup.hpp"
 
 /* ---------------- Blob implementation ---------------- */
-Blob::Blob(const char* const b, const decltype(size) s)
+Blob::Blob(const uint8_t* const b, const decltype(size) s)
         : is_temporary(false), bytes(nullptr), size(0) {
     if(s > 0) {
-        bytes = new char[s];
+        bytes = new uint8_t[s];
         if(b != nullptr) {
             memcpy(bytes, b, s);
         } else {
@@ -27,12 +27,12 @@ Blob::Blob(const char* const b, const decltype(size) s)
 }
 
 //Dangerous: copy the pointer to buffer and share ownership with it, even though these are raw pointers
-Blob::Blob(char* buffer, std::size_t size, bool temporary)
+Blob::Blob(uint8_t* buffer, std::size_t size, bool temporary)
         : is_temporary(true), bytes(buffer), size(size) {}
 
 Blob::Blob(const Blob& other) : bytes(nullptr), size(0) {
     if(other.size > 0) {
-        bytes = new char[other.size];
+        bytes = new uint8_t[other.size];
         memcpy(bytes, other.bytes, other.size);
         size = other.size;
     }
@@ -50,7 +50,7 @@ Blob::~Blob() {
 }
 
 Blob& Blob::operator=(Blob&& other) {
-    char* swp_bytes = other.bytes;
+    uint8_t* swp_bytes = other.bytes;
     std::size_t swp_size = other.size;
     other.bytes = bytes;
     other.size = size;
@@ -65,7 +65,7 @@ Blob& Blob::operator=(const Blob& other) {
     }
     size = other.size;
     if(size > 0) {
-        bytes = new char[size];
+        bytes = new uint8_t[size];
         memcpy(bytes, other.bytes, size);
     } else {
         bytes = nullptr;
@@ -73,7 +73,7 @@ Blob& Blob::operator=(const Blob& other) {
     return *this;
 }
 
-std::size_t Blob::to_bytes(char* v) const {
+std::size_t Blob::to_bytes(uint8_t* v) const {
     ((std::size_t*)(v))[0] = size;
     if(size > 0) {
         memcpy(v + sizeof(size), bytes, size);
@@ -85,35 +85,35 @@ std::size_t Blob::bytes_size() const {
     return size + sizeof(size);
 }
 
-void Blob::post_object(const std::function<void(char const* const, std::size_t)>& f) const {
-    f((char*)&size, sizeof(size));
+void Blob::post_object(const std::function<void(uint8_t const* const, std::size_t)>& f) const {
+    f((uint8_t*)&size, sizeof(size));
     f(bytes, size);
 }
 
-std::unique_ptr<Blob> Blob::from_bytes(mutils::DeserializationManager*, const char* const buffer) {
+std::unique_ptr<Blob> Blob::from_bytes(mutils::DeserializationManager*, const uint8_t* const buffer) {
     return std::make_unique<Blob>(buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0]);
 }
 
-mutils::context_ptr<Blob> Blob::from_bytes_noalloc(mutils::DeserializationManager* ctx, const char* const buffer) {
+mutils::context_ptr<Blob> Blob::from_bytes_noalloc(mutils::DeserializationManager* ctx, const uint8_t* const buffer) {
     //Wrap the buffer in a Blob, whose "bytes" pointer actually points to the buffer
-    return mutils::context_ptr<Blob>{new Blob((char*)buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0], true)};
+    return mutils::context_ptr<Blob>{new Blob((uint8_t*)buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0], true)};
 }
 
-mutils::context_ptr<const Blob> Blob::from_bytes_noalloc_const(mutils::DeserializationManager* m, const char* const buffer) {
-    return mutils::context_ptr<const Blob>{new Blob((char*)buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0], true)};
+mutils::context_ptr<const Blob> Blob::from_bytes_noalloc_const(mutils::DeserializationManager* m, const uint8_t* const buffer) {
+    return mutils::context_ptr<const Blob>{new Blob((uint8_t*)buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0], true)};
 }
 
 /* ------------------- ClientTier implementation ------------------- */
 
 ClientTier::ClientTier(){};
 
-std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTier::submit_update(const Blob& data) const {
+std::tuple<persistent::version_t, uint64_t, std::vector<uint8_t>> ClientTier::submit_update(const Blob& data) const {
     derecho::ExternalCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
     derecho::ExternalCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
     std::vector<std::vector<node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
-    std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size()-1);
-    std::uniform_int_distribution<> signature_distribution(0, signature_members[0].size()-1);
+    std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size() - 1);
+    std::uniform_int_distribution<> signature_distribution(0, signature_members[0].size() - 1);
     //Choose a random member of each subgroup to contact with the P2P message
     const node_id_t storage_member_to_contact = storage_members[0][storage_distribution(random_engine)];
     const node_id_t signature_member_to_contact = signature_members[0][signature_distribution(random_engine)];
@@ -140,7 +140,7 @@ std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTi
             storage_member_to_contact, version_and_timestamp.first);
     persistence_query_results.get().get(storage_member_to_contact);
     dbg_default_debug("Waiting for hash query to complete");
-    std::vector<unsigned char> signature_reply = signature_query_results.get().get(signature_member_to_contact);
+    std::vector<uint8_t> signature_reply = signature_query_results.get().get(signature_member_to_contact);
     return {version_and_timestamp.first, version_and_timestamp.second, signature_reply};
 }
 
@@ -149,12 +149,12 @@ std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTi
 SignatureStore::SignatureStore(persistent::PersistentRegistry* pr)
         : hashes(std::make_unique<SHA256Hash>, "SignedHashLog", pr, true) {}
 
-std::vector<unsigned char> SignatureStore::add_hash(const SHA256Hash& hash) const {
+std::vector<uint8_t> SignatureStore::add_hash(const SHA256Hash& hash) const {
     dbg_default_debug("Received call to add_hash");
     derecho::Replicated<SignatureStore>& this_subgroup = group->get_subgroup<SignatureStore>(this->subgroup_index);
     auto query_results = this_subgroup.ordered_send<RPC_NAME(ordered_add_hash)>(hash);
     std::pair<persistent::version_t, uint64_t> hash_log_version = query_results.get_persistent_version();
-    std::vector<unsigned char> signature(hashes.getSignatureSize());
+    std::vector<uint8_t> signature(hashes.getSignatureSize());
     dbg_default_debug("In add_hash, waiting for version {} to be verified", hash_log_version.first);
     query_results.await_signature_verification();
     persistent::version_t previous_signed_version;
@@ -299,7 +299,7 @@ int main(int argc, char** argv) {
             std::cout << "Update " << counter << " submitted. Result: Version = " << std::get<0>(version_and_signature)
                       << " timestamp = " << std::get<1>(version_and_signature) << " Signature = "
                       << std::hex << std::setw(2) << std::setfill('0');
-            for(unsigned char byte : std::get<2>(version_and_signature)) {
+            for(uint8_t byte : std::get<2>(version_and_signature)) {
                 std::cout << (int)byte;
             }
             std::cout << std::dec << std::endl;

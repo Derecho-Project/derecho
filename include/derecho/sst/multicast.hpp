@@ -107,7 +107,7 @@ public:
         initialize();
     }
 
-    volatile char* get_buffer(uint64_t msg_size) {
+    volatile uint8_t* get_buffer(uint64_t msg_size) {
         assert(my_sender_index >= 0);
         std::lock_guard<std::mutex> lock(msg_send_mutex);
         assert(msg_size <= max_msg_size);
@@ -166,7 +166,7 @@ public:
                 num_nulls_queued = 0;
             }
         }
-        sst->put((char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+        sst->put((uint8_t*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
                  size_to_push);
         send(committed_index, ready_to_be_sent, num_nulls_queued,
              first_null_index, header_size);

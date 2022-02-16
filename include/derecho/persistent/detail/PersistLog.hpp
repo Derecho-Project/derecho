@@ -170,7 +170,7 @@ public:
      * @param prev_signed_ver - THe previous version whose signature is
      * included in this signature
      */
-    virtual void addSignature(version_t ver, const unsigned char* signature,
+    virtual void addSignature(version_t ver, const uint8_t* signature,
                               version_t prev_signed_ver) = 0;
 
     /**
@@ -186,7 +186,7 @@ public:
      * no version in the log with the requested version number or signatures are
      * disabled.
      */
-    virtual bool getSignature(version_t ver, unsigned char* signature,
+    virtual bool getSignature(version_t ver, uint8_t* signature,
                               version_t& prev_signed_ver) = 0;
 
     /**
@@ -203,7 +203,7 @@ public:
      * @return true if a signature was successfully retrieved, false if the index is
      * invalid or signatures are disabled.
      */
-    virtual bool getSignatureByIndex(int64_t index, unsigned char* signature, version_t& prev_ver) = 0;
+    virtual bool getSignatureByIndex(int64_t index, uint8_t* signature, version_t& prev_ver) = 0;
     /**
      * Trim the log till entry number eno, inclusively.
      * For exmaple, there is a log: [7,8,9,4,5,6]. After trim(3), it becomes [5,6]
@@ -236,7 +236,7 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t to_bytes(char* buf, version_t ver) = 0;
+    virtual size_t to_bytes(uint8_t* buf, version_t ver) = 0;
 
     /**
      * Post the serialized log bytes to a function
@@ -244,7 +244,7 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
+    virtual void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f,
                              version_t ver)
             = 0;
 
@@ -253,7 +253,7 @@ public:
      * @PARAM dsm - deserialization manager
      * @PARAM v - serialized log bytes to be apllied
      */
-    virtual void applyLogTail(char const* v) = 0;
+    virtual void applyLogTail(uint8_t const* v) = 0;
 
     /**
      * Truncate the log strictly newer than 'ver'.

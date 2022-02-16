@@ -36,9 +36,9 @@ int main(int argc, char* argv[]) {
     auto stability_callback = [&done, num_nodes,
                                finished_nodes = std::set<uint32_t>()](uint32_t subgroup, int sender_id,
                                                                       long long int index,
-                                                                      std::optional<std::pair<char*, long long int>> data,
+                                                                      std::optional<std::pair<uint8_t*, long long int>> data,
                                                                       persistent::version_t ver) mutable {
-        char* buf;
+        uint8_t* buf;
         long long int msg_size;
         std::tie(buf, msg_size) = data.value();
         // terminal message is of size 1. This signals that the sender has finished sending
@@ -61,9 +61,7 @@ int main(int argc, char* argv[]) {
     // Use the standard layout manager provided by derecho
     // allocate a single subgroup with a single shard consisting of all the nodes
     SubgroupAllocationPolicy all_nodes_one_subgroup_policy = one_subgroup_policy(fixed_even_shards(1, num_nodes));
-    SubgroupInfo one_raw_group (DefaultSubgroupAllocator({
-        {std::type_index(typeid(RawObject)), all_nodes_one_subgroup_policy}
-    }));
+    SubgroupInfo one_raw_group(DefaultSubgroupAllocator({{std::type_index(typeid(RawObject)), all_nodes_one_subgroup_policy}}));
 
     // This is equivalent to the following manual layout function
     // auto membership_function = [num_nodes](const View& curr_view,
@@ -104,14 +102,14 @@ int main(int argc, char* argv[]) {
     for(uint i = 0; i < num_msgs; ++i) {
         // the lambda function writes the message contents into the provided memory buffer
         // message content is generated at random
-        raw_subgroup.send(msg_size, [msg_size](char* buf) {
+        raw_subgroup.send(msg_size, [msg_size](uint8_t* buf) {
             for(uint i = 0; i < msg_size; ++i) {
                 buf[i] = 'a' + rand() % 26;
             }
         });
     }
     // send a 1-byte message to signal completion
-    raw_subgroup.send(1, [](char* buf) {});
+    raw_subgroup.send(1, [](uint8_t* buf) {});
 
     // wait for delivery of all messages
     while(!done) {

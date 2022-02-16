@@ -44,7 +44,7 @@ using subgroup_type_id_t = uint32_t;
  * Parameter 4: Pair containing (message body, body size)
  * Parameter 5: Persistent version associated with the message
  */
-using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, std::optional<std::pair<char*, long long int>>, persistent::version_t)>;
+using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, std::optional<std::pair<uint8_t*, long long int>>, persistent::version_t)>;
 /**
  * The function type for persistence callback functions. Expected parameters:
  * Parameter 1: ID of the subgroup in which a version was persisted
@@ -61,7 +61,7 @@ using verified_callback_t = std::function<void(subgroup_id_t, persistent::versio
  * The type of the function used by MulticastGroup to notify RPCManager of a new message.
  * Matches the type signature of RPCManager::rpc_message_handler (but as a free function).
  */
-using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, persistent::version_t, uint64_t, char*, uint32_t)>;
+using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, persistent::version_t, uint64_t, uint8_t*, uint32_t)>;
 
 /**
  * Bundles together a set of callback functions for message delivery events.

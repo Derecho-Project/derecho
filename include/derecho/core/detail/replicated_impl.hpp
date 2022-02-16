@@ -104,10 +104,10 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) const {
         //Convert the user's desired tag into an "internal" function tag for a P2P function
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
                 //Invoke the sending function with a buffer-allocator that uses the P2P request buffers
-                [this, &dest_node](size_t size) -> char* {
+                [this, &dest_node](std::size_t size) -> uint8_t* {
                     const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_p2p_request_payload_size) {
-                        return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
+                        return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
@@ -132,12 +132,12 @@ auto Replicated<T>::ordered_send(Args&&... args) {
         //These pointers help "return" the PendingResults/QueryResults out of the lambda
         std::unique_ptr<rpc::QueryResults<Ret>> results_ptr;
         std::weak_ptr<rpc::PendingResults<Ret>> pending_ptr;
-        auto serializer = [&](char* buffer) {
+        auto serializer = [&](uint8_t* buffer) {
             //By the time this lambda runs, the current thread will be holding a read lock on view_mutex
             const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
             auto send_return_struct = wrapped_this->template send<rpc::to_internal_tag<false>(tag)>(
                     //Invoke the sending function with a buffer-allocator that uses the buffer supplied as an argument to the serializer
-                    [&buffer, &max_payload_size](size_t size) -> char* {
+                    [&buffer, &max_payload_size](size_t size) -> uint8_t* {
                         if(size <= max_payload_size) {
                             return buffer;
                         } else {
@@ -163,7 +163,7 @@ auto Replicated<T>::ordered_send(Args&&... args) {
 
 template <typename T>
 void Replicated<T>::send(unsigned long long int payload_size,
-                         const std::function<void(char* buf)>& msg_generator) {
+                         const std::function<void(uint8_t* buf)>& msg_generator) {
     group_rpc_manager.view_manager.send(subgroup_id, payload_size, msg_generator);
 }
 
@@ -174,7 +174,7 @@ std::size_t Replicated<T>::object_size() const {
 
 template <typename T>
 void Replicated<T>::send_object(tcp::socket& receiver_socket) const {
-    auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
+    auto bind_socket_write = [&receiver_socket](const uint8_t* bytes, std::size_t size) {
         receiver_socket.write(bytes, size);
     };
     dbg_default_trace("send_object sending object size {} to {}", object_size(), receiver_socket.get_remote_ip());
@@ -185,14 +185,14 @@ void Replicated<T>::send_object(tcp::socket& receiver_socket) const {
 
 template <typename T>
 void Replicated<T>::send_object_raw(tcp::socket& receiver_socket) const {
-    auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
+    auto bind_socket_write = [&receiver_socket](const uint8_t* bytes, std::size_t size) {
         receiver_socket.write(bytes, size);
     };
     mutils::post_object(bind_socket_write, **user_object_ptr);
 }
 
 template <typename T>
-std::size_t Replicated<T>::receive_object(char* buffer) {
+std::size_t Replicated<T>::receive_object(uint8_t* buffer) {
     // *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager.dsm, buffer));
     mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
     rdv.insert(rdv.begin(), persistent_registry.get());
@@ -210,7 +210,7 @@ void Replicated<T>::make_version(persistent::version_t ver, const HLC& hlc) {
 }
 
 template <typename T>
-persistent::version_t Replicated<T>::persist(persistent::version_t version, unsigned char* signature) {
+persistent::version_t Replicated<T>::persist(persistent::version_t version, uint8_t* signature) {
     if constexpr(!std::is_base_of_v<PersistsFields, T>) {
         // for replicated<T> without Persistent fields,
         // tell the persistent thread that we are done.
@@ -230,7 +230,7 @@ persistent::version_t Replicated<T>::persist(persistent::version_t version, unsi
 
 template <typename T>
 bool Replicated<T>::verify_log(persistent::version_t version, openssl::Verifier& verifier,
-                               const unsigned char* other_signature) {
+                               const uint8_t* other_signature) {
     //If there are no signatures in this object's log, it can't be verified
     if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
         return persistent_registry->verify(version, verifier, other_signature);
@@ -240,8 +240,8 @@ bool Replicated<T>::verify_log(persistent::version_t version, openssl::Verifier&
 }
 
 template <typename T>
-std::vector<unsigned char> Replicated<T>::get_signature(persistent::version_t version) {
-    std::vector<unsigned char> signature(signature_size);
+std::vector<uint8_t> Replicated<T>::get_signature(persistent::version_t version) {
+    std::vector<uint8_t> signature(signature_size);
     if(persistent_registry->getSignature(version, signature.data())) {
         return signature;
     } else {
@@ -301,10 +301,10 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                                          + std::to_string(dest_node) + ": it is not a member of the Group.");
         }
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
-                [this, &dest_node](size_t size) -> char* {
+                [this, &dest_node](size_t size) -> uint8_t* {
                     const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
                     if(size <= max_payload_size) {
-                        return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
+                        return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");

@@ -187,7 +187,7 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
     //Receive the joining node's saved View
     std::size_t size_of_view;
     client_socket.read(size_of_view);
-    char view_buffer[size_of_view];
+    uint8_t view_buffer[size_of_view];
     client_socket.read(view_buffer, size_of_view);
     std::unique_ptr<View> client_view = mutils::from_bytes<View>(nullptr, view_buffer);
 
@@ -212,7 +212,7 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
     for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
         std::size_t size_of_ragged_trim;
         client_socket.read(size_of_ragged_trim);
-        char buffer[size_of_ragged_trim];
+        uint8_t buffer[size_of_ragged_trim];
         client_socket.read(buffer, size_of_ragged_trim);
         std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
         dbg_default_trace("Received ragged trim for subgroup {}, shard {} from node {}",
@@ -273,8 +273,8 @@ int64_t RestartLeaderState::send_restart_view() {
         waiting_sockets_iter != waiting_join_sockets.end();) {
         std::size_t view_buffer_size = mutils::bytes_size(*restart_view);
         std::size_t leaders_buffer_size = mutils::bytes_size(nodes_with_longest_log);
-        char view_buffer[view_buffer_size];
-        char leaders_buffer[leaders_buffer_size];
+        uint8_t view_buffer[view_buffer_size];
+        uint8_t leaders_buffer[leaders_buffer_size];
         try {
             dbg_default_debug("Sending post-recovery view {} to node {}", restart_view->vid, waiting_sockets_iter->first);
             waiting_sockets_iter->second.write(view_buffer_size);
@@ -287,7 +287,7 @@ int64_t RestartLeaderState::send_restart_view() {
             for(const auto& subgroup_to_shard_map : restart_state.logged_ragged_trim) {
                 for(const auto& shard_trim_pair : subgroup_to_shard_map.second) {
                     std::size_t trim_buffer_size = mutils::bytes_size(*shard_trim_pair.second);
-                    char trim_buffer[trim_buffer_size];
+                    uint8_t trim_buffer[trim_buffer_size];
                     waiting_sockets_iter->second.write(trim_buffer_size);
                     mutils::to_bytes(*shard_trim_pair.second, trim_buffer);
                     waiting_sockets_iter->second.write(trim_buffer, trim_buffer_size);

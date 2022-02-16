@@ -42,9 +42,9 @@ int main(int argc, char *argv[]) {
     uint num_messages_received = 0;
 
     auto stability_callback = [&num_messages_received](
-                                      uint32_t subgroup, int sender_id, std::optional<std::pair<char*, long long int>> data,
+                                      uint32_t subgroup, int sender_id, std::optional<std::pair<uint8_t*, long long int>> data,
                                       persistent::version_t ver) mutable {
-        char* buf;
+        uint8_t* buf;
         long long int size;
         std::tie(buf,size) = data.value();
         cout << "Here" << endl;
@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
     cout << endl;
     derecho::Replicated<RawObject> &group_as_subgroup = managed_group->get_subgroup<RawObject>();
     for(int i = 0; i < num_messages; ++i) {
-        char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
+        uint8_t *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
         while(!buf) {
             buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
         }

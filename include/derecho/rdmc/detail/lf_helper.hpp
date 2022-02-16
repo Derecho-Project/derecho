@@ -51,14 +51,14 @@ class unsupported_feature : public exception {};
 //};
 
 /**
- * A C++ wrapper for the libfabric fid_mr struct. Registers a memory region for 
+ * A C++ wrapper for the libfabric fid_mr struct. Registers a memory region for
  * the provided buffer on construction, and deregisters it on destruction.
  */
 class memory_region {
     /** Smart pointer for managing the registered memory region */
     std::unique_ptr<fid_mr, std::function<void(fid_mr*)>> mr;
     /** Smart pointer for managing the buffer the mr uses */
-    std::unique_ptr<char[]> allocated_buffer;
+    std::unique_ptr<uint8_t[]> allocated_buffer;
 
     friend class endpoint;
     friend class task;
@@ -66,7 +66,7 @@ class memory_region {
 public:
     /**
      * Constructor
-     * Creates a buffer of the specified size and then calls the second 
+     * Creates a buffer of the specified size and then calls the second
      * constructor with the new buffer as an argument.
      *
      * @param size The size in bytes of the buffer to be associated with
@@ -75,13 +75,13 @@ public:
     memory_region(size_t size);
     /**
      * Constructor
-     * Registers a memory region using the specified buffer and size. 
+     * Registers a memory region using the specified buffer and size.
      *
      * @param buffer The allocated memory that will be registered.
      * @param size The size in bytes of the buffer to be associated with
      *      the memory region.
      */
-    memory_region(char* buffer, size_t size);
+    memory_region(uint8_t* buffer, size_t size);
     /**
      * get_key
      * Returns the key associated with the registered memory region, which
@@ -89,7 +89,7 @@ public:
      */
     uint64_t get_key() const;
 
-    char* const buffer;
+    uint8_t* const buffer;
     const size_t size;
 };
 
@@ -187,13 +187,13 @@ public:
      *     If is_lf_server is true, it waits on PEP for connection from remote
      *     side. Otherwise, it initiate a connection to remote side.
      * @param post_recvs A lambda that is called at the end of initializing the
-     *     endpoints on the client and remote sides to avoid race conditions 
+     *     endpoints on the client and remote sides to avoid race conditions
      *     between post_send() and post_recv().
      */
     endpoint(size_t remote_index, bool is_lf_server,
              std::function<void(endpoint*)> post_recvs);
     /**
-     * Constructor 
+     * Constructor
      * Default move constructor
      */
     endpoint(endpoint&&) = default;
@@ -201,7 +201,7 @@ public:
      * init
      * Creates an endpoint, and then initializes/enables it
      *
-     * @param fi A struct containing information about the current 
+     * @param fi A struct containing information about the current
      *     fabric services.
      */
     int init(struct fi_info* fi);
@@ -209,12 +209,12 @@ public:
      * connect
      * Uses the initialized endpoint to connect to a remote node
      *
-     * @param remote_index The index of the remote node in the group. 
+     * @param remote_index The index of the remote node in the group.
      * @param is_lf_server This parameter decide local role in connection.
      *     If is_lf_server is true, it waits on PEP for connection from remote
      *     side. Otherwise, it initiate a connection to remote side.
      * @param post_recvs A lambda that is called at the end of initializing the
-     *     endpoints on the client and remote sides to avoid race conditions 
+     *     endpoints on the client and remote sides to avoid race conditions
      *     between post_send() and post_recv().
      */
     void connect(size_t remote_index, bool is_lf_server,
@@ -229,7 +229,7 @@ public:
      * @param size The size (in bytes) of the buffer being sent.
      * @param wr_id A parameter used to differentiate types of messages.
      * @param immediate A parameter used only for send operations.
-     * @param message_type 
+     * @param message_type
      */
     bool post_send(const memory_region& mr, size_t offset,
                    size_t size, uint64_t wr_id, uint32_t immediate,
@@ -242,7 +242,7 @@ public:
      * @param offset The offset into the buffer managed by mr.
      * @param size The size (in bytes) of the buffer.
      * @param wr_id A parameter used to differentiate types of messages.
-     * @param message_type  
+     * @param message_type
      */
     bool post_recv(const memory_region& mr, size_t offset,
                    size_t size, uint64_t wr_id,

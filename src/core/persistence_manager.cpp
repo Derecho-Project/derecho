@@ -103,7 +103,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
         //To reduce the time this thread holds the View lock, put the signature in a local array
         //and copy it into the SST once signing is done. (We could use the SST signatures field
         //directly as the signature array, but that would require holding the lock for longer.)
-        unsigned char signature[signature_size];
+        uint8_t signature[signature_size];
 
         bool object_has_signature = false;
         auto search = objects_by_subgroup_id.find(subgroup_id);
@@ -127,7 +127,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
             gmssst::set(&(Vc.gmsSST->signatures[Vc.gmsSST->get_local_index()][subgroup_id * signature_size]),
                         signature, signature_size);
             Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
-                           (char*)(&Vc.gmsSST->signatures[0][subgroup_id * signature_size]) - Vc.gmsSST->getBaseAddress(),
+                           (uint8_t*)(&Vc.gmsSST->signatures[0][subgroup_id * signature_size]) - Vc.gmsSST->getBaseAddress(),
                            signature_size);
         }
         gmssst::set(Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id], persisted_version);
@@ -162,7 +162,7 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
             //The signature in the other node's "signatures" column should correspond to the version in its "persisted_num" column
             const persistent::version_t other_signed_version = Vc.gmsSST->persisted_num[shard_member_rank][subgroup_id];
             //Copy out the signature so it can't change during verification
-            std::vector<unsigned char> other_signature(signature_size);
+            std::vector<uint8_t> other_signature(signature_size);
             gmssst::set(other_signature.data(),
                         &Vc.gmsSST->signatures[shard_member_rank][subgroup_id * signature_size],
                         signature_size);

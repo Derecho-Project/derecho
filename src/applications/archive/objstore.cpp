@@ -21,13 +21,13 @@ using namespace std::chrono_literals;
 // The binary large object for serialized objects.
 class Blob : public mutils::ByteRepresentable {
 public:
-    char * bytes;
+    uint8_t*  bytes;
     std::size_t size;
 
     // constructor - we always copy to 'own' the data
-    Blob(const char * const b, const decltype(size) s) : bytes(nullptr),size(s) {
+    Blob(const uint8_t*  const b, const decltype(size) s) : bytes(nullptr),size(s) {
         if ( s > 0 ) {
-            bytes = new char[s];
+            bytes = new uint8_t[s];
             memcpy(bytes, b, s);
         }
     }
@@ -36,7 +36,7 @@ public:
     Blob(const Blob & other): bytes(nullptr),size(other.size) {
         bytes = nullptr;
         if ( size > 0 ) {
-            bytes = new char[size];
+            bytes = new uint8_t[size];
             memcpy(bytes, other.bytes, other.size);
         }
     }
@@ -51,7 +51,7 @@ public:
 
     // move evaluator:
     Blob & operator = (Blob &&other) {
-        char *swp_bytes = other.bytes;
+        uint8_t* swp_bytes = other.bytes;
         std::size_t swp_size = other.size;
         other.bytes = bytes;
         other.size = size;
@@ -67,7 +67,7 @@ public:
         }
         size = other.size;
         if(size > 0) {
-            bytes = new char[size];
+            bytes = new uint8_t[size];
             memcpy(bytes, other.bytes, size);
         } else {
             bytes = nullptr;
@@ -75,7 +75,7 @@ public:
         return *this;
     }
 
-    std::size_t to_bytes(char *v) const {
+    std::size_t to_bytes(uint8_t* v) const {
         ((std::size_t *)(v))[0] = size;
         if(size > 0) {
             memcpy(v + sizeof(size), bytes, size);
@@ -87,14 +87,14 @@ public:
         return size + sizeof(size);
     }
 
-    void post_object(const std::function<void(char const *const, std::size_t)> &f) const {
-        f((char *)&size, sizeof(size));
+    void post_object(const std::function<void(uint8_t const *const, std::size_t)> &f) const {
+        f((uint8_t* )&size, sizeof(size));
         f(bytes, size);
     }
 
     void ensure_registered(mutils::DeserializationManager &) {}
 
-    static std::unique_ptr<Blob> from_bytes(mutils::DeserializationManager *, const char *const v) {
+    static std::unique_ptr<Blob> from_bytes(mutils::DeserializationManager *, const uint8_t* const v) {
         return std::make_unique<Blob>(v + sizeof(std::size_t), ((std::size_t *)(v))[0]);
     }
 
@@ -119,7 +119,7 @@ public:
         oid(_oid),
         blob(_blob) {}
     // constructor 1 : raw
-    OSObject(const uint64_t _oid, const char * const _b, const std::size_t _s):
+    OSObject(const uint64_t _oid, const uint8_t*  const _b, const std::size_t _s):
         oid(_oid),
         blob(_b,_s) {}
     // constructor 2 : move
@@ -183,7 +183,7 @@ void initialize_objects(uint32_t num_of_objs) {
   uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
   // We just reserved 128 bytes for the message header and serialization.
 #define VALUE_SIZE(x) ((x) - 128)
-  char default_value[VALUE_SIZE(max_msg_size)];
+  uint8_t default_value[VALUE_SIZE(max_msg_size)];
   if (g_objs == nullptr) {
     g_objs = new POSObject[num_of_objs];
     uint32_t i;
@@ -215,7 +215,7 @@ int main(int argc, char* argv[]) {
     persistent::version_t latest_version = INVALID_VERSION;
 
     derecho::UserMessageCallbacks callback_set{
-            [&](derecho::subgroup_id_t subgroup, uint32_t nid, int32_t mid, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver){
+            [&](derecho::subgroup_id_t subgroup, uint32_t nid, int32_t mid, std::optional<std::pair<uint8_t*, long long int>> data, persistent::version_t ver){
                 msg_counter ++;
                 latest_version = ver;
                 if (msg_counter == (total_num_messages + num_of_nodes)) {

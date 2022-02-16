@@ -223,9 +223,9 @@ bool ViewManager::receive_initial_view() {
             //Receive the size of the IP address, then the IP address, then the port (which is a fixed size)
             std::size_t ip_addr_size;
             leader_connection->read(ip_addr_size);
-            char buffer[ip_addr_size];
+            uint8_t buffer[ip_addr_size];
             leader_connection->read(buffer, ip_addr_size);
-            ip_addr_t leader_ip(buffer);
+            ip_addr_t leader_ip(&buffer[0], &buffer[ip_addr_size]);
             uint16_t leader_gms_port;
             leader_connection->read(leader_gms_port);
             dbg_default_info("That node was not the leader! Redirecting to {}:{}", leader_ip, leader_gms_port);
@@ -239,7 +239,7 @@ bool ViewManager::receive_initial_view() {
     if(in_total_restart) {
         dbg_default_info("Logged state found on disk. Restarting in recovery mode.");
         dbg_default_debug("Sending view {} to leader", curr_view->vid);
-        auto leader_socket_write = [this](const char* bytes, std::size_t size) {
+        auto leader_socket_write = [this](const uint8_t* bytes, std::size_t size) {
             leader_connection->write(bytes, size);
         };
         try {
@@ -292,7 +292,7 @@ bool ViewManager::receive_view_and_leaders() {
         std::size_t size_of_view;
         leader_connection->read(size_of_view);
         dbg_default_trace("Read size_of_view = {} from leader over joiner socket", size_of_view);
-        char buffer[size_of_view];
+        uint8_t buffer[size_of_view];
         dbg_default_trace("Receiving initial view over joiner socket");
         leader_connection->read(buffer, size_of_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
@@ -305,7 +305,7 @@ bool ViewManager::receive_view_and_leaders() {
             for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
                 std::size_t size_of_ragged_trim;
                 leader_connection->read(size_of_ragged_trim);
-                char buffer[size_of_ragged_trim];
+                uint8_t buffer[size_of_ragged_trim];
                 leader_connection->read(buffer, size_of_ragged_trim);
                 std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
                 //operator[] is intentional: Create an empty inner map at subgroup_id if one does not exist
@@ -582,7 +582,7 @@ void ViewManager::await_first_view() {
         for(auto waiting_sockets_iter = waiting_join_sockets.begin();
             waiting_sockets_iter != waiting_join_sockets.end();) {
             std::size_t view_buffer_size = mutils::bytes_size(*curr_view);
-            char view_buffer[view_buffer_size];
+            uint8_t view_buffer[view_buffer_size];
             try {
                 //First send the View
                 waiting_sockets_iter->second.write(view_buffer_size);
@@ -965,7 +965,7 @@ void ViewManager::redirect_join_attempt(tcp::socket& client_socket) {
     const int rank_of_leader = curr_view->find_rank_of_leader();
     client_socket.write(mutils::bytes_size(
             curr_view->member_ips_and_ports[rank_of_leader].ip_address));
-    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
+    auto bind_socket_write = [&client_socket](const uint8_t* bytes, std::size_t size) {
         client_socket.write(bytes, size);
     };
     mutils::post_object(bind_socket_write,
@@ -1202,7 +1202,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
             auto sst_receive_handler_lambda =
                     [this, subgroup_id, curr_subgroup_settings,
                      shard_ranks_by_sender_rank, num_shard_senders](
-                            uint32_t sender_rank, volatile char* data, uint32_t size) {
+                            uint32_t sender_rank, volatile uint8_t* data, uint32_t size) {
                         curr_view->multicast_group->sst_receive_handler(
                                 subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank,
                                 num_shard_senders, sender_rank, data, size);
@@ -1395,9 +1395,9 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         //Standard procedure for receiving a View, copied from receive_view_and_leaders
         const node_id_t leader_id = curr_view->members[curr_view->find_rank_of_leader()];
         std::size_t size_of_view;
-        tcp_sockets.read(leader_id, reinterpret_cast<char*>(&size_of_view), sizeof(size_of_view));
+        tcp_sockets.read(leader_id, reinterpret_cast<uint8_t*>(&size_of_view), sizeof(size_of_view));
         dbg_default_debug("Read size of view: {}. Receiving view from leader.", size_of_view);
-        char buffer[size_of_view];
+        uint8_t buffer[size_of_view];
         tcp_sockets.read(leader_id, buffer, size_of_view);
         next_view = mutils::from_bytes<View>(nullptr, buffer);
         next_view->subgroup_type_order = subgroup_type_order;
@@ -1426,7 +1426,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
             std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
             dbg_default_debug("Sending node {} the old shard leaders vector on the joiner socket. size_of_vector is {}", proposed_join_sockets.front().first, size_of_vector);
             proposed_join_sockets.front().second.write(size_of_vector);
-            mutils::post_object([this](const char* bytes, std::size_t size) {
+            mutils::post_object([this](const uint8_t* bytes, std::size_t size) {
                 proposed_join_sockets.front().second.write(bytes, size);
             },
                                 old_shard_leaders_by_id);
@@ -1686,7 +1686,7 @@ std::vector<int> ViewManager::process_suspicions(DerechoSST& gmsSST) {
                     dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. num_failed - num_departed = {} but num_members - num_departed + 1 = {}",
                                      curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 } else {
-                    throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+                    throw derecho_partitioning_exception(curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 }
             }
 
@@ -1705,7 +1705,7 @@ std::vector<int> ViewManager::process_suspicions(DerechoSST& gmsSST) {
                     dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. num_failed - num_left = {} but num_members - num_departed + 1 = {}",
                                      curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 } else {
-                    throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+                    throw derecho_partitioning_exception(curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 }
             }
 
@@ -1719,7 +1719,7 @@ std::vector<int> ViewManager::process_suspicions(DerechoSST& gmsSST) {
 }
 
 void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
-    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
+    auto bind_socket_write = [&client_socket](const uint8_t* bytes, std::size_t size) {
         client_socket.write(bytes, size);
     };
     std::size_t size_of_view = mutils::bytes_size(new_view);
@@ -2272,7 +2272,7 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
     Vc.gmsSST->put(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
-            (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
+            (uint8_t*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    Vc.gmsSST->global_min_ready, subgroup_num);
@@ -2300,7 +2300,7 @@ void ViewManager::follower_ragged_edge_cleanup(
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
     Vc.gmsSST->put(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
-            (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
+            (uint8_t*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    Vc.gmsSST->global_min_ready, subgroup_num);
@@ -2381,7 +2381,7 @@ void ViewManager::report_failure(const node_id_t who) {
             dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. failed_cnt = {} but num_members - rip_cnt + 1 = {}",
                              failed_cnt, curr_view->num_members - rip_cnt + 1);
         } else {
-            throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+            throw derecho_partitioning_exception(failed_cnt, curr_view->num_members - rip_cnt + 1);
         }
     }
     curr_view->gmsSST->put(curr_view->gmsSST->suspected, failed_rank);
@@ -2405,7 +2405,7 @@ void ViewManager::leave() {
 }
 
 void ViewManager::send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-                       const std::function<void(char* buf)>& msg_generator, bool cooked_send) {
+                       const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send) {
     shared_lock_t lock(view_mutex);
     view_change_cv.wait(lock, [&]() {
         return curr_view->multicast_group->send(subgroup_num, payload_size,
