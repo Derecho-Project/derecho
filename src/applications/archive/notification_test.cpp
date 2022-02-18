@@ -16,7 +16,7 @@ class TestObject: public derecho::NotificationSupport, public mutils::ByteRepres
 public:
     REGISTER_RPC_FUNCTIONS_WITH_NOTIFICATION(TestObject);
 
-    std::size_t to_bytes(char* v) const {
+    std::size_t to_bytes(uint8_t* v) const {
         return 0;
 
     }
@@ -25,20 +25,20 @@ public:
         return 0;
     }
 
-    void post_object(const std::function<void(char const* const, std::size_t)>& f) const {
+    void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f) const {
         // f((char*)&size, sizeof(size));
         // f(bytes, size);
     }
 
-    static std::unique_ptr<TestObject> from_bytes(mutils::DeserializationManager *, const char *const v) {
+    static std::unique_ptr<TestObject> from_bytes(mutils::DeserializationManager *, const uint8_t *const v) {
         return nullptr;
     }
 
-    static mutils::context_ptr<TestObject> from_bytes_noalloc(mutils::DeserializationManager *, const char *const v) {
+    static mutils::context_ptr<TestObject> from_bytes_noalloc(mutils::DeserializationManager *, const uint8_t *const v) {
         return nullptr;
     }
 
-    static mutils::context_ptr<TestObject> from_bytes_noalloc_const(mutils::DeserializationManager *, const char *const v) {
+    static mutils::context_ptr<TestObject> from_bytes_noalloc_const(mutils::DeserializationManager *, const uint8_t *const v) {
         return nullptr;
     }
 

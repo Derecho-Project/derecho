@@ -70,23 +70,23 @@ struct NotificationMessage : mutils::ByteRepresentable {
     virtual ~NotificationMessage();
 
     // serialization/deserialization support
-    std::size_t to_bytes(char* buffer) const;
+    std::size_t to_bytes(uint8_t* buffer) const;
 
     std::size_t bytes_size() const;
 
-    void post_object(const std::function<void(char const* const, std::size_t)>& allocator) const;
+    void post_object(const std::function<void(uint8_t const* const, std::size_t)>& allocator) const;
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
-    static std::unique_ptr<NotificationMessage> from_bytes(mutils::DeserializationManager*, const char* const buffer);
+    static std::unique_ptr<NotificationMessage> from_bytes(mutils::DeserializationManager*, const uint8_t* const buffer);
 
     static mutils::context_ptr<NotificationMessage> from_bytes_noalloc(
             mutils::DeserializationManager* ctx,
-            const char* const buffer);
+            const uint8_t* const buffer);
 
     static mutils::context_ptr<const NotificationMessage> from_bytes_noalloc_const(
             mutils::DeserializationManager* ctx,
-            const char* const buffer);
+            const uint8_t* const buffer);
 };
 
 struct NotificationSupport {

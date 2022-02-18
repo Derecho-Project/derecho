@@ -337,12 +337,12 @@ auto ExternalClientCallback<T>::p2p_send(node_id_t dest_node, Args&&... args) {
         std::cout << "starting to send notification! " << dest_node << " " << node_id << std::endl;
         assert(dest_node != node_id);
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
-                [this, &dest_node](size_t size) -> char* {
+                [this, &dest_node](size_t size) -> uint8_t* {
                     std::cout << "Running in the lambda haha" << std::endl;
                     const std::size_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_payload_size) {
-                        return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                           sst::REQUEST_TYPE::P2P_REQUEST);
+                        return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
+                                                                              sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }

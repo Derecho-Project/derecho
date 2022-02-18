@@ -96,7 +96,7 @@ std::size_t NotificationMessage::bytes_size() const {
     return sizeof(message_type) + sizeof(size) + size;
 }
 
-std::size_t NotificationMessage::to_bytes(char* buffer) const {
+std::size_t NotificationMessage::to_bytes(uint8_t* buffer) const {
     std::size_t offset = 0;
     memcpy(buffer + offset, &message_type, sizeof(message_type));
     offset += sizeof(message_type);
@@ -108,14 +108,14 @@ std::size_t NotificationMessage::to_bytes(char* buffer) const {
     return offset + size;
 }
 
-void NotificationMessage::post_object(const std::function<void(char const* const, std::size_t)>& post_func) const {
-    post_func((char*)&message_type, sizeof(message_type));
-    post_func((char*)&size, sizeof(size));
-    post_func((char*)body, size);
+void NotificationMessage::post_object(const std::function<void(uint8_t const* const, std::size_t)>& post_func) const {
+    post_func(reinterpret_cast<const uint8_t*>(&message_type), sizeof(message_type));
+    post_func(reinterpret_cast<const uint8_t*>(&size), sizeof(size));
+    post_func(body, size);
 }
 
 std::unique_ptr<NotificationMessage> NotificationMessage::from_bytes(
-        mutils::DeserializationManager*, const char* const buffer) {
+        mutils::DeserializationManager*, const uint8_t* const buffer) {
     std::size_t offset = 0;
     uint64_t message_type;
     memcpy(&message_type, buffer + offset, sizeof(message_type));
@@ -123,12 +123,11 @@ std::unique_ptr<NotificationMessage> NotificationMessage::from_bytes(
     std::size_t size;
     memcpy(&size, buffer + offset, sizeof(size));
     offset += sizeof(size);
-    //Get rid of this reinterpret_cast once serialization is fixed to use unsigned char
-    return std::make_unique<NotificationMessage>(message_type, reinterpret_cast<const uint8_t*>(buffer + offset), size);
+    return std::make_unique<NotificationMessage>(message_type, buffer + offset, size);
 }
 
 mutils::context_ptr<NotificationMessage> NotificationMessage::from_bytes_noalloc(
-        mutils::DeserializationManager*, const char* const buffer) {
+        mutils::DeserializationManager*, const uint8_t* const buffer) {
     std::size_t offset = 0;
     uint64_t message_type;
     memcpy(&message_type, buffer + offset, sizeof(message_type));
@@ -138,16 +137,15 @@ mutils::context_ptr<NotificationMessage> NotificationMessage::from_bytes_noalloc
     offset += sizeof(size);
     //This is dangerous, because we store the const buffer pointer in the non-const body pointer,
     //but from_bytes_noalloc *should* only be used to make a read-only temporary
-    //Note: get rid of the reinterpret_cast once serialization is fixed to use unsigned char
     return mutils::context_ptr<NotificationMessage>{
             new NotificationMessage(message_type,
-                                    reinterpret_cast<uint8_t*>(const_cast<char*>(buffer + offset)),
+                                    const_cast<uint8_t*>(buffer + offset),
                                     size,
                                     false)};
 }
 
 mutils::context_ptr<const NotificationMessage> NotificationMessage::from_bytes_noalloc_const(
-        mutils::DeserializationManager*, const char* const buffer) {
+        mutils::DeserializationManager*, const uint8_t* const buffer) {
     std::size_t offset = 0;
     uint64_t message_type;
     memcpy(&message_type, buffer + offset, sizeof(message_type));
@@ -158,7 +156,7 @@ mutils::context_ptr<const NotificationMessage> NotificationMessage::from_bytes_n
     //We shouldn't need const_cast to create a const NotificationMessage, but we do
     return mutils::context_ptr<const NotificationMessage>{
             new NotificationMessage(message_type,
-                                    reinterpret_cast<uint8_t*>(const_cast<char*>(buffer + offset)),
+                                    const_cast<uint8_t*>(buffer + offset),
                                     size,
                                     false)};
 }

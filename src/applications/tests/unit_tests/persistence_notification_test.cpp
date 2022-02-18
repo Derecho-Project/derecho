@@ -128,8 +128,8 @@ void StorageNode::notification_thread_function() {
                 std::size_t message_size = mutils::bytes_size(requested_version) + mutils::bytes_size(my_subgroup_id);
                 derecho::NotificationMessage message(requests_iter->second.notification_type, message_size);
                 std::size_t body_offset = 0;
-                body_offset += mutils::to_bytes(requested_version, (char*)(message.body + body_offset));
-                body_offset += mutils::to_bytes(my_subgroup_id, (char*)(message.body + body_offset));
+                body_offset += mutils::to_bytes(requested_version, message.body + body_offset);
+                body_offset += mutils::to_bytes(my_subgroup_id, message.body + body_offset);
                 derecho::ExternalClientCallback<StorageNode>& client_callback = group->template get_client_callback<StorageNode>(subgroup_index);
                 //Do we need to wait for the p2p_send to complete here, to avoid message going out of scope while p2p_send is still using it?
                 client_callback.p2p_send<RPC_NAME(notify)>(requests_iter->second.client_id, message);
@@ -168,8 +168,8 @@ void StorageNode::notification_thread_function() {
         std::size_t message_size = mutils::bytes_size(requests_by_version.begin()->first) + mutils::bytes_size(my_subgroup_id);
         derecho::NotificationMessage message(requests_by_version.begin()->second.notification_type, message_size);
         std::size_t body_offset = 0;
-        body_offset += mutils::to_bytes(requests_by_version.begin()->first, (char*)(message.body + body_offset));
-        body_offset += mutils::to_bytes(my_subgroup_id, (char*)(message.body + body_offset));
+        body_offset += mutils::to_bytes(requests_by_version.begin()->first, message.body + body_offset);
+        body_offset += mutils::to_bytes(my_subgroup_id, message.body + body_offset);
         client_callback.p2p_send<RPC_NAME(notify)>(requests_by_version.begin()->second.client_id, message);
         //Remove the request from the list
         requests_by_version.erase(requests_by_version.begin());
@@ -216,9 +216,9 @@ int main(int argc, char** argv) {
 
     auto client_callback_function = [](const derecho::NotificationMessage& message) {
         std::size_t body_offset = 0;
-        auto version = mutils::from_bytes<persistent::version_t>(nullptr, (char*)(message.body + body_offset));
+        auto version = mutils::from_bytes<persistent::version_t>(nullptr, message.body + body_offset);
         body_offset += mutils::bytes_size(*version);
-        auto subgroup_id = mutils::from_bytes<derecho::subgroup_id_t>(nullptr, (char*)(message.body + body_offset));
+        auto subgroup_id = mutils::from_bytes<derecho::subgroup_id_t>(nullptr,message.body + body_offset);
         if(message.message_type == NotificationMessageType::GLOBAL_PERSISTENCE) {
             std::cout << "Got a client-side callback for global persistence of version "
                       << *version << " from subgroup " << *subgroup_id << std::endl;

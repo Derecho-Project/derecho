@@ -4,10 +4,10 @@
 #include "client_callback_mockup.hpp"
 
 /* ---------------- Blob implementation ---------------- */
-Blob::Blob(const char* const b, const decltype(size) s)
+Blob::Blob(const uint8_t* const b, const decltype(size) s)
         : is_temporary(false), bytes(nullptr), size(0) {
     if(s > 0) {
-        bytes = new char[s];
+        bytes = new uint8_t[s];
         if(b != nullptr) {
             memcpy(bytes, b, s);
         } else {
@@ -18,12 +18,12 @@ Blob::Blob(const char* const b, const decltype(size) s)
 }
 
 //Dangerous: copy the pointer to buffer and share ownership with it, even though these are raw pointers
-Blob::Blob(char* buffer, std::size_t size, bool temporary)
+Blob::Blob(uint8_t* buffer, std::size_t size, bool temporary)
         : is_temporary(true), bytes(buffer), size(size) {}
 
 Blob::Blob(const Blob& other) : bytes(nullptr), size(0) {
     if(other.size > 0) {
-        bytes = new char[other.size];
+        bytes = new uint8_t[other.size];
         memcpy(bytes, other.bytes, other.size);
         size = other.size;
     }
@@ -41,7 +41,7 @@ Blob::~Blob() {
 }
 
 Blob& Blob::operator=(Blob&& other) {
-    char* swp_bytes = other.bytes;
+    uint8_t* swp_bytes = other.bytes;
     std::size_t swp_size = other.size;
     other.bytes = bytes;
     other.size = size;
@@ -56,7 +56,7 @@ Blob& Blob::operator=(const Blob& other) {
     }
     size = other.size;
     if(size > 0) {
-        bytes = new char[size];
+        bytes = new uint8_t[size];
         memcpy(bytes, other.bytes, size);
     } else {
         bytes = nullptr;
@@ -64,7 +64,7 @@ Blob& Blob::operator=(const Blob& other) {
     return *this;
 }
 
-std::size_t Blob::to_bytes(char* v) const {
+std::size_t Blob::to_bytes(uint8_t* v) const {
     ((std::size_t*)(v))[0] = size;
     if(size > 0) {
         memcpy(v + sizeof(size), bytes, size);
@@ -76,22 +76,22 @@ std::size_t Blob::bytes_size() const {
     return size + sizeof(size);
 }
 
-void Blob::post_object(const std::function<void(char const* const, std::size_t)>& f) const {
-    f((char*)&size, sizeof(size));
+void Blob::post_object(const std::function<void(uint8_t const* const, std::size_t)>& f) const {
+    f((uint8_t*)&size, sizeof(size));
     f(bytes, size);
 }
 
-std::unique_ptr<Blob> Blob::from_bytes(mutils::DeserializationManager*, const char* const buffer) {
+std::unique_ptr<Blob> Blob::from_bytes(mutils::DeserializationManager*, const uint8_t* const buffer) {
     return std::make_unique<Blob>(buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0]);
 }
 
-mutils::context_ptr<Blob> Blob::from_bytes_noalloc(mutils::DeserializationManager* ctx, const char* const buffer) {
+mutils::context_ptr<Blob> Blob::from_bytes_noalloc(mutils::DeserializationManager* ctx, const uint8_t* const buffer) {
     //Wrap the buffer in a Blob, whose "bytes" pointer actually points to the buffer
-    return mutils::context_ptr<Blob>{new Blob((char*)buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0], true)};
+    return mutils::context_ptr<Blob>{new Blob((uint8_t*)buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0], true)};
 }
 
-mutils::context_ptr<const Blob> Blob::from_bytes_noalloc_const(mutils::DeserializationManager* m, const char* const buffer) {
-    return mutils::context_ptr<const Blob>{new Blob((char*)buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0], true)};
+mutils::context_ptr<const Blob> Blob::from_bytes_noalloc_const(mutils::DeserializationManager* m, const uint8_t* const buffer) {
+    return mutils::context_ptr<const Blob>{new Blob((uint8_t*)buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0], true)};
 }
 
 std::ostream& operator<<(std::ostream& os, const ClientCallbackType& cb_type) {
@@ -123,7 +123,7 @@ InternalClientNode::~InternalClientNode() {
 }
 
 std::pair<persistent::version_t, uint64_t> InternalClientNode::submit_update(uint32_t update_counter,
-                                                                     const Blob& new_data) const {
+                                                                             const Blob& new_data) const {
     derecho::PeerCaller<StorageNode>& storage_subgroup = group->template get_nonmember_subgroup<StorageNode>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<StorageNode>();
 

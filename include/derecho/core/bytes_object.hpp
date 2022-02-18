@@ -9,21 +9,18 @@ namespace derecho {
 
 /**
  * A very thin wrapper around a byte array that implements the ByteRepresentable
- * interface for serialization. Although a true byte array should use the type
- * unsigned char, not signed char, this class uses a signed char array to match
- * the type signature of the "byte buffer" provided by the mutils serialization
- * methods (which all used signed char*, not unsigned char*).
+ * interface for serialization.
  */
 class Bytes : public mutils::ByteRepresentable {
     //A pointer to a byte array
-    char* bytes;
+    uint8_t* bytes;
     //The length of the array. Can't be named size because that would conflict with the method.
     std::size_t length;
     //Indicates that this instance was created inside from_bytes_noalloc and doesn't own the bytes
     bool is_temporary;
     //Private constructor only used by from_bytes_noalloc.
     //The third parameter is just to make it distinct from the public one; it always sets is_temporary to true
-    Bytes(char* buffer, std::size_t size, bool is_temporary);
+    Bytes(uint8_t* buffer, std::size_t size, bool is_temporary);
 
 public:
     /**
@@ -31,18 +28,18 @@ public:
      * the array pointer itself to be reassigned.
      * @return a pointer to the beginning of this object's byte array.
      */
-    char* get() const;
+    uint8_t* get() const;
     /**
      * @returns the size of the wrapped byte array
      */
     std::size_t size() const;
     /**
-     * Constructs a byte array by copying the contents of a char array into the
+     * Constructs a byte array by copying the contents of an existing array into the
      * internal buffer.
-     * @param buffer A pointer to the char array
-     * @param size The size of the char array
+     * @param buffer A pointer to the byte array
+     * @param size The size of the byte array
      */
-    Bytes(const char* buffer, std::size_t size);
+    Bytes(const uint8_t* buffer, std::size_t size);
     /**
      * Constructs an empty byte array of the specified size. This will create a
      * new array for the internal buffer, but not copy anything into it.
@@ -69,19 +66,19 @@ public:
 
     /* ---- ByteRepresentable serialization interface ---- */
 
-    std::size_t to_bytes(char* buffer) const;
+    std::size_t to_bytes(uint8_t* buffer) const;
 
     std::size_t bytes_size() const;
 
-    void post_object(const std::function<void(char const* const, std::size_t)>& post_func) const;
+    void post_object(const std::function<void(uint8_t const* const, std::size_t)>& post_func) const;
 
     void ensure_registered(mutils::DeserializationManager&);
 
-    static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager* m, const char* const buffer);
+    static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager* m, const uint8_t* const buffer);
 
-    static mutils::context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager* m, const char* const buffer);
+    static mutils::context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager* m, const uint8_t* const buffer);
 
-    static mutils::context_ptr<const Bytes> from_bytes_noalloc_const(mutils::DeserializationManager* m, const char* const buffer);
+    static mutils::context_ptr<const Bytes> from_bytes_noalloc_const(mutils::DeserializationManager* m, const uint8_t* const buffer);
 };
 
 }
