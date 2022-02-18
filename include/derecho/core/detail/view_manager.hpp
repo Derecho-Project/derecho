@@ -658,7 +658,7 @@ private:
         if(buffer_size == 0) {
             return std::make_unique<std::vector<std::vector<ValueType>>>();
         }
-        char buffer[buffer_size];
+        uint8_t buffer[buffer_size];
         dbg_default_debug("Reading a serialized vector from {}", socket.get_remote_ip());
         socket.read(buffer, buffer_size);
         return mutils::from_bytes<std::vector<std::vector<ValueType>>>(nullptr, buffer);
@@ -874,7 +874,7 @@ public:
      * issued in this call.
      */
     void send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-              const std::function<void(char* buf)>& msg_generator, bool cooked_send = false);
+              const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send = false);
 
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
 

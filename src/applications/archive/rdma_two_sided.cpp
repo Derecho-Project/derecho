@@ -53,7 +53,7 @@ void wait_for_completion(std::thread::id tid) {
     // if waiting for a completion entry timed out
     if(!ce) {
         std::cerr << "Failed to get recv completion" << std::endl;
-    } 
+    }
 }
 
 int main() {
@@ -81,8 +81,8 @@ int main() {
     volatile int b;
     a = b = 0;
     // create read and write buffers
-    char *write_buf = (char *)&a;
-    char *read_buf = (char *)&b;
+    uint8_t *write_buf = (uint8_t *)&a;
+    uint8_t *read_buf = (uint8_t *)&b;
 
     int r_index = num_nodes - 1 - node_rank;
 
@@ -117,12 +117,12 @@ int main() {
         res->post_two_sided_send(sizeof(int));
         util::polling_data.set_waiting(tid);
         res->post_two_sided_receive(&sctxt, sizeof(int));
- 
+
         cout << "Receive buffer posted" << endl;
         wait_for_completion(tid);
         util::polling_data.reset_waiting(tid);
         cout << "Data received" << endl;
- 
+
         while(b == 0) {
         }
     }

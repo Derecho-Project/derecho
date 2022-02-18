@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../derecho_type_definitions.hpp"
-#include "derecho_internal.hpp"
 #include "derecho/sst/sst.hpp"
+#include "derecho_internal.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -165,7 +165,7 @@ public:
      */
     SSTFieldVector<bool> global_min_ready;
     /** for SST multicast */
-    SSTFieldVector<char> slots;
+    SSTFieldVector<uint8_t> slots;
     SSTFieldVector<int32_t> num_received_sst;
     SSTFieldVector<int32_t> index;
 

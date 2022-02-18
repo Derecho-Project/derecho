@@ -84,11 +84,11 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
     add_p2p_connection(dest_node);
 
     auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
-            [this, &dest_node](size_t size) -> char* {
+            [this, &dest_node](size_t size) -> uint8_t* {
                 const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                 if(size <= max_p2p_request_payload_size) {
-                    return (char*)group_client.get_sendbuffer_ptr(dest_node,
-                                                                  sst::REQUEST_TYPE::P2P_REQUEST);
+                    return (uint8_t*)group_client.get_sendbuffer_ptr(dest_node,
+                                                                     sst::REQUEST_TYPE::P2P_REQUEST);
                 } else {
                     throw derecho_exception("The size of serialized args exceeds the maximum message size (CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE).");
                 }
@@ -216,7 +216,7 @@ bool ExternalGroupClient<ReplicatedTypes...>::get_view(const node_id_t nid) {
 
         std::size_t size_of_view;
         sock.read(size_of_view);
-        char buffer[size_of_view];
+        uint8_t buffer[size_of_view];
         sock.read(buffer, size_of_view);
         prev_view = std::move(curr_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
@@ -311,8 +311,8 @@ ExternalClientCaller<SubgroupType, ExternalGroupClient<ReplicatedTypes...>>& Ext
 }
 
 template <typename... ReplicatedTypes>
-volatile char* ExternalGroupClient<ReplicatedTypes...>::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {
-    volatile char* buf;
+volatile uint8_t* ExternalGroupClient<ReplicatedTypes...>::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {
+    volatile uint8_t* buf;
     do {
         try {
             buf = p2p_connections->get_sendbuffer_ptr(dest_id, type);
@@ -340,8 +340,8 @@ void ExternalGroupClient<ReplicatedTypes...>::finish_p2p_send(node_id_t dest_id,
 
 template <typename... ReplicatedTypes>
 std::exception_ptr ExternalGroupClient<ReplicatedTypes...>::receive_message(
-        const rpc::Opcode& indx, const node_id_t& received_from, char const* const buf,
-        std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
+        const rpc::Opcode& indx, const node_id_t& received_from, uint8_t const* const buf,
+        std::size_t payload_size, const std::function<uint8_t*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
     auto receiver_function_entry = receivers->find(indx);
@@ -368,7 +368,7 @@ std::exception_ptr ExternalGroupClient<ReplicatedTypes...>::receive_message(
 }
 
 template <typename... ReplicatedTypes>
-void ExternalGroupClient<ReplicatedTypes...>::p2p_message_handler(node_id_t sender_id, char* msg_buf) {
+void ExternalGroupClient<ReplicatedTypes...>::p2p_message_handler(node_id_t sender_id, uint8_t* msg_buf) {
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
@@ -380,10 +380,10 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_message_handler(node_id_t send
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
-                        [this, &reply_size, &sender_id](size_t _size) -> char* {
+                        [this, &reply_size, &sender_id](size_t _size) {
                             reply_size = _size;
                             if(reply_size <= p2p_connections->get_max_p2p_reply_size()) {
-                                return (char*)p2p_connections->get_sendbuffer_ptr(
+                                return p2p_connections->get_sendbuffer_ptr(
                                         sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             } else {
                                 throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply message size");
@@ -437,10 +437,10 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
         //a reply, since it should never need to send a reply back to a group member.
         reply_size = 0;
         receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
-                        [this, &reply_size, &request](size_t _size) -> char* {
+                        [this, &reply_size, &request](size_t _size) {
                             reply_size = _size;
                             if(reply_size <= p2p_connections->get_max_p2p_reply_size()) {
-                                return (char*)p2p_connections->get_sendbuffer_ptr(
+                                return p2p_connections->get_sendbuffer_ptr(
                                         request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             } else {
                                 throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply size.");
@@ -450,7 +450,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
             p2p_connections->send(request.sender_id);
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
-            char* buf = p2p_connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
+            uint8_t* buf = p2p_connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
             buf[0] = 0;
             p2p_connections->send(request.sender_id);
         }
@@ -473,7 +473,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop() {
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
             if(reply_pair.first != INVALID_NODE_ID) {
-                p2p_message_handler(reply_pair.first, (char*)reply_pair.second);
+                p2p_message_handler(reply_pair.first, (uint8_t*)reply_pair.second);
                 p2p_connections->update_incoming_seq_num(reply_pair.first);
             }
 

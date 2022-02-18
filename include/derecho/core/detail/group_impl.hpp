@@ -230,7 +230,7 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
     //Set up the multicast groups (including RDMA initialization) and register their callbacks
     MulticastGroupCallbacks internal_callbacks{
             //RPC message handler
-            [this](subgroup_id_t subgroup, node_id_t sender, persistent::version_t version, uint64_t timestamp, char* buf, uint32_t size) {
+            [this](subgroup_id_t subgroup, node_id_t sender, persistent::version_t version, uint64_t timestamp, uint8_t* buf, uint32_t size) {
                 rpc_manager.rpc_message_handler(subgroup, sender, version, timestamp, buf, size);
             },
             //Post-next-version callback (set in ViewManager)
@@ -473,7 +473,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
                               subgroup_and_leader.first, subgroup_and_leader.second);
             std::size_t buffer_size;
             leader_socket.get().read(buffer_size);
-            std::unique_ptr<char[]> buffer = std::make_unique<char[]>(buffer_size);
+            std::unique_ptr<uint8_t[]> buffer = std::make_unique<uint8_t[]>(buffer_size);
             leader_socket.get().read(buffer.get(), buffer_size);
             dbg_default_trace("Deserializing Replicated Object from buffer of size {}", buffer_size);
             subgroup_object->receive_object(buffer.get());

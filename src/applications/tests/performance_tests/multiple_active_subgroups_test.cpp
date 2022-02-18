@@ -1,3 +1,7 @@
+#include "aggregate_bandwidth.hpp"
+#include "log_results.hpp"
+#include <derecho/core/derecho.hpp>
+
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -6,10 +10,6 @@
 #include <optional>
 #include <time.h>
 #include <vector>
-
-#include "aggregate_bandwidth.hpp"
-#include "log_results.hpp"
-#include <derecho/core/derecho.hpp>
 
 using std::cout;
 using std::endl;
@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
                                &num_subgroups,
                                num_delivered = 0u](uint32_t subgroup, uint32_t sender_id,
                                                    long long int index,
-                                                   std::optional<std::pair<char*, long long int>> data,
+                                                   std::optional<std::pair<uint8_t*, long long int>> data,
                                                    persistent::version_t ver) mutable {
         // increment the total number of messages delivered
         ++num_delivered;
@@ -112,7 +112,7 @@ int main(int argc, char* argv[]) {
         }
         for(uint i = 0; i < num_messages; ++i) {
             for(uint j = 0; j < num_subgroups; ++j) {
-                raw_subgroups[j].get().send(max_msg_size, [](char* buf) {});
+                raw_subgroups[j].get().send(max_msg_size, [](uint8_t* buf) {});
             }
         }
     };

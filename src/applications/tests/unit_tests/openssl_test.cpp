@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
         std::cout << "For test object " << i << ":" << std::endl;
         std::size_t serialized_obj_size = mutils::bytes_size(test_objects[i]);
         std::cout << "Serialized object size is " << serialized_obj_size << std::endl;
-        std::unique_ptr<char[]> serialized_obj = std::make_unique<char[]>(serialized_obj_size);
+        std::unique_ptr<uint8_t[]> serialized_obj = std::make_unique<uint8_t[]>(serialized_obj_size);
         mutils::to_bytes(test_objects[i], serialized_obj.get());
 
         my_signer.init();
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     }
     for(std::size_t i = 0; i < test_objects.size(); ++i) {
         std::size_t serialized_obj_size = mutils::bytes_size(test_objects[i]);
-        std::unique_ptr<char[]> serialized_obj = std::make_unique<char[]>(serialized_obj_size);
+        std::unique_ptr<uint8_t[]> serialized_obj = std::make_unique<uint8_t[]>(serialized_obj_size);
         mutils::to_bytes(test_objects[i], serialized_obj.get());
 
         my_verifier.init();

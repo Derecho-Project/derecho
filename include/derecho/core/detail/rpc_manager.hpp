@@ -178,11 +178,11 @@ class RPCManager {
      *  Encapsulates the parameters to a p2p_message_handler call. */
     struct p2p_req {
         node_id_t sender_id;
-        char* msg_buf;
+        uint8_t* msg_buf;
         p2p_req() : sender_id(0),
                     msg_buf(nullptr) {}
         p2p_req(node_id_t _sender_id,
-                char* _msg_buf)
+                uint8_t* _msg_buf)
                 : sender_id(_sender_id),
                   msg_buf(_msg_buf) {}
     };
@@ -204,7 +204,7 @@ class RPCManager {
      * @param sender_id The ID of the node that sent the message
      * @param msg_buf A pointer to a buffer containing the message
      */
-    void p2p_message_handler(node_id_t sender_id, char* msg_buf);
+    void p2p_message_handler(node_id_t sender_id, uint8_t* msg_buf);
 
     /**
      * Reports to the view manager that the given node has failed if it's an
@@ -226,8 +226,8 @@ class RPCManager {
      * if the message was an RPC function call and the function threw an exception.
      */
     std::exception_ptr receive_message(const Opcode& indx, const node_id_t& received_from,
-                                       char const* const buf, std::size_t payload_size,
-                                       const std::function<char*(int)>& out_alloc);
+                                       uint8_t const* const buf, std::size_t payload_size,
+                                       const std::function<uint8_t*(int)>& out_alloc);
 
     /**
      * Entry point for receiving a single RPC message for a function managed by
@@ -240,8 +240,8 @@ class RPCManager {
      * @return A pointer to the exception caused by invoking this RPC function,
      * if the message was an RPC function call and the function threw an exception.
      */
-    std::exception_ptr parse_and_receive(char* buf, std::size_t size,
-                                         const std::function<char*(int)>& out_alloc);
+    std::exception_ptr parse_and_receive(uint8_t* buf, std::size_t size,
+                                         const std::function<uint8_t*(int)>& out_alloc);
 
 public:
     RPCManager(ViewManager& group_view_manager,
@@ -333,7 +333,7 @@ public:
     void rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id,
                              persistent::version_t version,
                              uint64_t timestamp,
-                             char* msg_buf, uint32_t buffer_size);
+                             uint8_t* msg_buf, uint32_t buffer_size);
 
     /**
      * Callback to be called by PersistenceManager when it has finished
@@ -389,7 +389,7 @@ public:
      * @param dest_id The ID of the node that the P2P message will be sent to
      * @param type The type of P2P message that will be sent
      */
-    volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
+    volatile uint8_t* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
 
     /**
      * Sends the next P2P message buffer over an RDMA connection to the specified node,

@@ -169,11 +169,11 @@ using namespace impl;
  * Memory region constructors and member functions
  */
 
-memory_region::memory_region(size_t s) : memory_region(new char[s], s) {
+memory_region::memory_region(size_t s) : memory_region(new uint8_t[s], s) {
     allocated_buffer.reset(buffer);
 }
 
-memory_region::memory_region(char* buf, size_t s) : buffer(buf), size(s) {
+memory_region::memory_region(uint8_t* buf, size_t s) : buffer(buf), size(s) {
     if(!buffer || size <= 0) throw rdma::invalid_args();
 
     const int mr_access = FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE;

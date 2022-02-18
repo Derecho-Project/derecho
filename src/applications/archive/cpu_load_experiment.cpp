@@ -71,7 +71,7 @@ int main() {
         while(true) {
             std::this_thread::sleep_for(chrono::microseconds(100));
             if(sst) {
-                sst->put_with_completion((char*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
+                sst->put_with_completion((uint8_t*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
             }
         }
     };
@@ -83,7 +83,7 @@ int main() {
     iota(indices.begin(), indices.end(), 0);
     auto sst_receive_handler = [&start_time, &last_message_index, &done, &node_id, &num_nodes](
                                        uint32_t sender_rank, uint64_t index,
-                                       volatile char* msg, uint32_t size) {
+                                       volatile uint8_t* msg, uint32_t size) {
         // cout << "Sender rank = " << sender_rank << ", index = " << index << ", last message index = " << last_message_index << endl;
         if(sender_rank == node_id && index >= last_message_index) {
             cpuNow(pthread_self(), start_time);
@@ -121,7 +121,7 @@ int main() {
 
     sst::multicast_group<multicast_sst> g(sst, indices, window_size);
     auto send = [&]() {
-        volatile char* buf;
+        volatile uint8_t* buf;
         while((buf = g.get_buffer(max_msg_size)) == NULL) {
         }
         g.send();

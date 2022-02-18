@@ -8,11 +8,11 @@
 #include "derecho/core/detail/view_manager.hpp"
 
 #include <cassert>
-#include <iostream>
 #include <exception>
-#include <mutex>
-#include <memory>
 #include <functional>
+#include <iostream>
+#include <memory>
+#include <mutex>
 #include <thread>
 
 namespace derecho {
@@ -91,8 +91,8 @@ void RPCManager::start_listening() {
 }
 
 std::exception_ptr RPCManager::receive_message(
-        const Opcode& indx, const node_id_t& received_from, char const* const buf,
-        std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
+        const Opcode& indx, const node_id_t& received_from, uint8_t const* const buf,
+        std::size_t payload_size, const std::function<uint8_t*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
     auto receiver_function_entry = receivers->find(indx);
@@ -119,8 +119,8 @@ std::exception_ptr RPCManager::receive_message(
     return reply_return.possible_exception;
 }
 
-std::exception_ptr RPCManager::parse_and_receive(char* buf, std::size_t size,
-                                                 const std::function<char*(int)>& out_alloc) {
+std::exception_ptr RPCManager::parse_and_receive(uint8_t* buf, std::size_t size,
+                                                 const std::function<uint8_t*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(size >= header_space());
     std::size_t payload_size = size;
@@ -134,7 +134,7 @@ std::exception_ptr RPCManager::parse_and_receive(char* buf, std::size_t size,
 
 void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id,
                                      persistent::version_t version, uint64_t timestamp,
-                                     char* msg_buf, uint32_t buffer_size) {
+                                     uint8_t* msg_buf, uint32_t buffer_size) {
     // WARNING: This assumes the current view doesn't change during execution!
     // (It accesses curr_view without a lock).
 
@@ -143,12 +143,12 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
 
     //Use the reply-buffer allocation lambda to detect whether parse_and_receive generated a reply
     size_t reply_size = 0;
-    char* reply_buf;
+    uint8_t* reply_buf;
     parse_and_receive(msg_buf, buffer_size,
-                      [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
+                      [this, &reply_buf, &reply_size, &sender_id](size_t size) -> uint8_t* {
                           reply_size = size;
                           if(reply_size <= connections->get_max_rpc_reply_size()) {
-                              reply_buf = (char*)connections->get_sendbuffer_ptr(
+                              reply_buf = (uint8_t*)connections->get_sendbuffer_ptr(
                                       sender_id, sst::REQUEST_TYPE::RPC_REPLY);
                               return reply_buf;
                           } else {
@@ -192,7 +192,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             //Since this was a self-receive, the reply also goes to myself
             parse_and_receive(
                     reply_buf, reply_size,
-                    [](size_t size) -> char* { assert_always(false); });
+                    [](size_t size) -> uint8_t* { assert_always(false); });
         }
     } else if(reply_size > 0) {
         //Otherwise, the only thing to do is send the reply (if there was one)
@@ -203,7 +203,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
     _in_rpc_handler = false;
 }
 
-void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf) {
+void RPCManager::p2p_message_handler(node_id_t sender_id, uint8_t* msg_buf) {
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
@@ -217,10 +217,10 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf) {
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
-                        [this, &reply_size, &sender_id](size_t _size) -> char* {
+                        [this, &reply_size, &sender_id](size_t _size) -> uint8_t* {
                             reply_size = _size;
                             if(reply_size <= connections->get_max_p2p_reply_size()) {
-                                return (char*)connections->get_sendbuffer_ptr(
+                                return (uint8_t*)connections->get_sendbuffer_ptr(
                                         sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             } else {
                                 throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply message size");
@@ -410,8 +410,8 @@ void RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<Abstra
     pending_results_cv.notify_all();
 }
 
-volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {
-    volatile char* buf;
+volatile uint8_t* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {
+    volatile uint8_t* buf;
     int curr_vid = -1;
     do {
         //ViewManager's view_mutex also prevents connections from being removed (because
@@ -479,10 +479,10 @@ void RPCManager::p2p_request_worker() {
         }
         reply_size = 0;
         receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
-                        [this, &reply_size, &request](size_t _size) -> char* {
+                        [this, &reply_size, &request](size_t _size) -> uint8_t* {
                             reply_size = _size;
                             if(reply_size <= connections->get_max_p2p_reply_size()) {
-                                return (char*)connections->get_sendbuffer_ptr(
+                                return (uint8_t*)connections->get_sendbuffer_ptr(
                                         request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             } else {
                                 throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply size.");
@@ -494,7 +494,7 @@ void RPCManager::p2p_request_worker() {
             connections->send(request.sender_id);
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
-            char* buf = connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
+            uint8_t* buf = connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
             if(buf != nullptr) {
                 buf[0] = 0;
                 connections->send(request.sender_id);
@@ -534,7 +534,7 @@ void RPCManager::p2p_receive_loop() {
                 auto reply_pair = optional_reply_pair.value();
                 if(reply_pair.first != INVALID_NODE_ID) {
                     dbg_default_trace("P2P thread detected a message from {}", reply_pair.first);
-                    p2p_message_handler(reply_pair.first, (char*)reply_pair.second);
+                    p2p_message_handler(reply_pair.first, (uint8_t*)reply_pair.second);
                     connections->update_incoming_seq_num(reply_pair.first);
                 }
                 // update last time

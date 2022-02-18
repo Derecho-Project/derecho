@@ -3,7 +3,7 @@
 namespace sst {
 class multicast_sst : public SST<multicast_sst> {
 public:
-    SSTFieldVector<char> slots;
+    SSTFieldVector<uint8_t> slots;
     SSTFieldVector<int32_t> index;
     SSTFieldVector<int64_t> num_received_sst;
     SSTField<bool> heartbeat;

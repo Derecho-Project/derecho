@@ -35,7 +35,7 @@ SST<DerivedSST>::~SST() {
     }
 
     if(rows != nullptr) {
-        delete[](const_cast<char*>(rows));
+        delete[](const_cast<uint8_t*>(rows));
     }
 }
 

@@ -23,7 +23,7 @@ int main() {
     long long unsigned int block_size = 10;
     const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
 
-    auto stability_callback = [](uint32_t subgroup, uint32_t sender_id, long long int index, char* buf,
+    auto stability_callback = [](uint32_t subgroup, uint32_t sender_id, long long int index, uint8_t* buf,
                                  long long int msg_size) {
         cout << "Some message is stable" << endl;
     };
@@ -47,7 +47,7 @@ int main() {
     if(node_id == 0) {
         derecho::RawSubgroup& sg = g->get_subgroup<RawObject>();
         int msg_size = 50;
-        char* buf = sg.get_sendbuffer_ptr(msg_size);
+        uint8_t* buf = sg.get_sendbuffer_ptr(msg_size);
         for(int i = 0; i < msg_size; ++i) {
             buf[i] = 'a';
         }

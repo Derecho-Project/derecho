@@ -98,7 +98,7 @@ public:
      * @param signature The last signature in the log (in a byte buffer)
      * @param signature_size The size of the signature, in bytes
      */
-    void initializeLastSignature(version_t version, const unsigned char* signature, std::size_t signature_size);
+    void initializeLastSignature(version_t version, const uint8_t* signature, std::size_t signature_size);
 
     /** Make a new version capturing the current state of the object. */
     void makeVersion(version_t ver, const HLC& mhlc);
@@ -120,7 +120,7 @@ public:
      * @param signature_buffer A byte buffer in which the latest signature will
      * be placed after running this function
      */
-    void sign(version_t latest_version, openssl::Signer& signer, unsigned char* signature_buffer);
+    void sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer);
 
     /**
      * Retrieves a signature from the log for a specific version of the object,
@@ -131,7 +131,7 @@ public:
      * @return True if a signature was retrieved successfully, false if there
      * was no version matching the requested version number
      */
-    bool getSignature(version_t version, unsigned char* signature_buffer);
+    bool getSignature(version_t version, uint8_t* signature_buffer);
 
     /**
      * Verifies the log up to the specified version against the specified
@@ -143,7 +143,7 @@ public:
      * @param signature A signature over the log up to the specified version
      * @return True if the signature verifies, false if it doesn't
      */
-    bool verify(version_t version, openssl::Verifier& verifier, const unsigned char* signature);
+    bool verify(version_t version, openssl::Verifier& verifier, const uint8_t* signature);
 
     /**
      * Persist versions up to a specified version, which should be the result of
@@ -281,7 +281,7 @@ protected:
      * in order to include the previous entry's signature in the next entry's
      * signed data.
      */
-    std::vector<unsigned char> m_lastSignature;
+    std::vector<uint8_t> m_lastSignature;
     /**
      * The version number associated with the last signature to be added to a
      * persistent log entry.
@@ -321,7 +321,7 @@ protected:
  * @param arg1 a pointer to the buffer
  * @param arg2 the buffer's size
  */
-using DeltaFinalizer = std::function<void(char const* const, std::size_t)>;
+using DeltaFinalizer = std::function<void(uint8_t const* const, std::size_t)>;
 
 template <typename DeltaObjectType>
 class IDeltaObjectFactory {
@@ -335,7 +335,7 @@ template <typename ObjectType>
 class IDeltaSupport : public IDeltaObjectFactory<ObjectType> {
 public:
     virtual void finalizeCurrentDelta(const DeltaFinalizer&) = 0;
-    virtual void applyDelta(char const* const) = 0;
+    virtual void applyDelta(uint8_t const* const) = 0;
 };
 
 // _NameMaker is a tool makeing the name for the log corresponding to a
@@ -444,7 +444,7 @@ public:
             const char* object_name,
             std::unique_ptr<ObjectType>& wrapped_obj_ptr,
             bool enable_signatures,
-            const char* log_tail = nullptr,
+            const uint8_t* log_tail = nullptr,
             PersistentRegistry* persistent_registry = nullptr,
             mutils::DeserializationManager dm = {{}});
 
@@ -668,6 +668,7 @@ public:
      * @tparam Func         User-specified function type, which is usually deduced.
      *
      * @param ver   version
+     * @param exact true for the version only, otherwise, a recent version before asked version also works.
      * @param fun   the user function to process a const DeltaType& object
      * @param dm    the deserialization manager
      *
@@ -678,6 +679,7 @@ public:
     template <typename DeltaType, typename Func>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
     getDelta(const version_t ver,
+             bool exact,
              const Func& fun,
              mutils::DeserializationManager* dm = nullptr) const;
 
@@ -691,6 +693,7 @@ public:
      * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
      *
      * @param ver   version
+     * @param exact true for the version only, otherwise, a recent version before asked version also works.
      * @param dm    the deserialization manager
      *
      * @return Returns a unique pointer to the copied DeltaType object.
@@ -700,6 +703,7 @@ public:
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
     getDelta(const version_t ver,
+             bool exact,
              mutils::DeserializationManager* dm = nullptr) const;
 
     /**
@@ -729,7 +733,7 @@ public:
     std::enable_if_t<std::is_base_of<IDeltaSupport<DummyObjectType>, DummyObjectType>::value, bool>
     getDeltaSignature(const version_t ver,
                       const std::function<bool(const DeltaType&)>& search_predicate,
-                      unsigned char* signature, version_t& prev_ver,
+                      uint8_t* signature, version_t& prev_ver,
                       mutils::DeserializationManager* dm = nullptr) const;
 
     /**
@@ -963,7 +967,7 @@ public:
      * @param pervious_signed_version The previous version that this signature
      * depends on (i.e. whose signature was signed when creating this signature).
      */
-    virtual void addSignature(version_t ver, const unsigned char* signature,
+    virtual void addSignature(version_t ver, const uint8_t* signature,
                               version_t previous_signed_version);
 
     /**
@@ -989,7 +993,7 @@ public:
      * no version in the log with the requested version number, or if signatures
      * are disabled.
      */
-    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& prev_ver) const;
+    virtual bool getSignature(version_t ver, uint8_t* signature, version_t& prev_ver) const;
 
     /**
      * Retrieves the signature associated with the specified log index and copies
@@ -1003,7 +1007,7 @@ public:
      * @return true if a signature was successfully retrieved, false if the index is
      * invalid or signatures are disabled.
      */
-    virtual bool getSignatureByIndex(int64_t index, unsigned char* signature, version_t& prev_ver) const;
+    virtual bool getSignatureByIndex(int64_t index, uint8_t* signature, version_t& prev_ver) const;
 
     /**
      * Update the provided Verifier with the state of T at the specified version.
@@ -1034,18 +1038,18 @@ public:
     // 4) the log entries from the earliest to the latest
     // TODO.
     //Note: this rely on PersistentRegistry::earliest_version_to_serialize
-    std::size_t to_bytes(char* ret) const;
+    std::size_t to_bytes(uint8_t* ret) const;
     std::size_t bytes_size() const;
-    void post_object(const std::function<void(char const* const, std::size_t)>& f) const;
+    void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f) const;
     // NOTE: we do not set up the registry here. This will only happen in the
     // construction of Replicated<T>
-    static std::unique_ptr<Persistent> from_bytes(mutils::DeserializationManager* dsm, char const* v);
+    static std::unique_ptr<Persistent> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* v);
     // derived from ByteRepresentable
     virtual void ensure_registered(mutils::DeserializationManager&) {}
     // apply the serialized log tail to existing log
     // @dsm - deserialization manager
     // @v - bytes representation of the log tail)
-    void applyLogTail(mutils::DeserializationManager* dsm, char const* v);
+    void applyLogTail(mutils::DeserializationManager* dsm, uint8_t const* v);
 
 #if defined(_PERFORMANCE_DEBUG)
     uint64_t ns_in_persist = 0ul;
@@ -1094,7 +1098,7 @@ public:
             const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
             const char* object_name,
             std::unique_ptr<ObjectType>& wrapped_obj_ptr,
-            const char* log_tail,
+            const uint8_t* log_tail,
             PersistentRegistry* persistent_registry = nullptr,
             mutils::DeserializationManager dm = {{}})
             : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, false, log_tail, persistent_registry, std::move(dm)) {}

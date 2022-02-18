@@ -371,7 +371,7 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
 }
 
 void FilePersistLog::addSignature(version_t version,
-                                  const unsigned char* signature,
+                                  const uint8_t* signature,
                                   version_t prev_signed_ver) {
     if(signature_size == 0) {
         return;
@@ -398,7 +398,7 @@ void FilePersistLog::addSignature(version_t version,
     }
 }
 
-bool FilePersistLog::getSignature(version_t version, unsigned char* signature, version_t& previous_signed_version) {
+bool FilePersistLog::getSignature(version_t version, uint8_t* signature, version_t& previous_signed_version) {
     if(signature_size == 0) {
         return false;
     }
@@ -425,7 +425,7 @@ bool FilePersistLog::getSignature(version_t version, unsigned char* signature, v
     return false;
 }
 
-bool FilePersistLog::getSignatureByIndex(int64_t index, unsigned char* signature, version_t& previous_signed_version) {
+bool FilePersistLog::getSignatureByIndex(int64_t index, uint8_t* signature, version_t& previous_signed_version) {
     if(signature_size == 0) {
         return false;
     }
@@ -772,9 +772,9 @@ int64_t FilePersistLog::getMinimumIndexBeyondVersion(version_t ver) {
 // the log entry is from the earliest to the latest.
 // two functions for serialization/deserialization for log entries:
 // 1) size_t byteSizeOfLogEntry(const LogEntry * ple);
-// 2) size_t writeLogEntryToByteArray(const LogEntry * ple, char * ba);
-// 3) size_t postLogEntry(const std::function<void (char const *const, std::size_t)> f, const LogEntry *ple);
-// 4) size_t mergeLogEntryFromByteArray(const char * ba);
+// 2) size_t writeLogEntryToByteArray(const LogEntry * ple, uint8_t * ba);
+// 3) size_t postLogEntry(const std::function<void (uint8_t const *const, std::size_t)> f, const LogEntry *ple);
+// 4) size_t mergeLogEntryFromByteArray(const uint8_t * ba);
 size_t FilePersistLog::bytes_size(version_t ver) {
     size_t bsize = (sizeof(int64_t) + sizeof(int64_t));
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
@@ -787,7 +787,7 @@ size_t FilePersistLog::bytes_size(version_t ver) {
     return bsize;
 }
 
-size_t FilePersistLog::to_bytes(char* buf, version_t ver) {
+size_t FilePersistLog::to_bytes(uint8_t* buf, version_t ver) {
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     size_t ofst = 0;
     // latest_version
@@ -807,15 +807,15 @@ size_t FilePersistLog::to_bytes(char* buf, version_t ver) {
     return ofst;
 }
 
-void FilePersistLog::post_object(const std::function<void(char const* const, std::size_t)>& f,
+void FilePersistLog::post_object(const std::function<void(uint8_t const* const, std::size_t)>& f,
                                  version_t ver) {
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     // latest_version
     int64_t latest_version = this->getLatestVersion();
-    f((char*)&latest_version, sizeof(int64_t));
+    f((uint8_t*)&latest_version, sizeof(int64_t));
     // nr_log_entry
     int64_t nr_log_entry = (idx == INVALID_INDEX) ? 0 : (m_currMetaHeader.fields.tail - idx);
-    f((char*)&nr_log_entry, sizeof(int64_t));
+    f((uint8_t*)&nr_log_entry, sizeof(int64_t));
     // log_entries
     if(idx != INVALID_INDEX) {
         while(idx < m_currMetaHeader.fields.tail) {
@@ -825,7 +825,7 @@ void FilePersistLog::post_object(const std::function<void(char const* const, std
     }
 }
 
-void FilePersistLog::applyLogTail(char const* v) {
+void FilePersistLog::applyLogTail(uint8_t const* v) {
     size_t ofst = 0;
     // latest_version
     int64_t latest_version = *(const int64_t*)(v + ofst);
@@ -845,7 +845,7 @@ size_t FilePersistLog::byteSizeOfLogEntry(const LogEntry* ple) {
     return sizeof(LogEntry) + ple->fields.sdlen;
 }
 
-size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry* ple, char* ba) {
+size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry* ple, uint8_t* ba) {
     size_t nr_written = 0;
     memcpy(ba, ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
@@ -856,18 +856,18 @@ size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry* ple, char* ba) {
     return nr_written;
 }
 
-size_t FilePersistLog::postLogEntry(const std::function<void(char const* const, std::size_t)>& f, const LogEntry* ple) {
+size_t FilePersistLog::postLogEntry(const std::function<void(uint8_t const* const, std::size_t)>& f, const LogEntry* ple) {
     size_t nr_written = 0;
-    f((const char*)ple, sizeof(LogEntry));
+    f((const uint8_t*)ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
     if(ple->fields.sdlen > 0) {
-        f((const char*)LOG_ENTRY_SIGNATURE(ple), ple->fields.sdlen);
+        f((const uint8_t*)LOG_ENTRY_SIGNATURE(ple), ple->fields.sdlen);
         nr_written += ple->fields.sdlen;
     }
     return nr_written;
 }
 
-size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) {
+size_t FilePersistLog::mergeLogEntryFromByteArray(const uint8_t* ba) {
     const LogEntry* cple = (const LogEntry*)ba;
     // valid check
     // 0) version grows monotonically.

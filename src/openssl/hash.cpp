@@ -54,21 +54,21 @@ void Hasher::add_bytes(const void* buffer, std::size_t buffer_size) {
     }
 }
 
-void Hasher::finalize(unsigned char* hash_buffer) {
+void Hasher::finalize(uint8_t* hash_buffer) {
     if(EVP_DigestFinal_ex(digest_context.get(), hash_buffer, NULL) != 1) {
         throw openssl_error(ERR_get_error(), "EVP_DigestFinal_ex");
     }
 }
 
-std::vector<unsigned char> Hasher::finalize() {
-    std::vector<unsigned char> hash_buffer(get_hash_size());
+std::vector<uint8_t> Hasher::finalize() {
+    std::vector<uint8_t> hash_buffer(get_hash_size());
     if(EVP_DigestFinal_ex(digest_context.get(), hash_buffer.data(), NULL) != 1) {
         throw openssl_error(ERR_get_error(), "EVP_DigestFinal_ex");
     }
     return hash_buffer;
 }
 
-void Hasher::hash_bytes(const void* buffer, std::size_t buffer_size, unsigned char* hash_buffer) {
+void Hasher::hash_bytes(const void* buffer, std::size_t buffer_size, uint8_t* hash_buffer) {
     if(EVP_MD_CTX_reset(digest_context.get()) != 1) {
         throw openssl_error(ERR_get_error(), "EVP_MD_CTX_reset");
     }

@@ -43,7 +43,7 @@ public:
      * @param prev_signed_ver The previous version whose signature is included
      * in (signed as part of) this signature
      */
-    virtual void addSignature(version_t version, const unsigned char* signature, version_t prev_signed_ver) = 0;
+    virtual void addSignature(version_t version, const uint8_t* signature, version_t prev_signed_ver) = 0;
     /**
      * Retrieves the signature associated with a specific version of the
      * Persistent object, as well as the previous signed version. Does
@@ -57,7 +57,7 @@ public:
      * was no version matching the requested version number (in which case the
      * output parameters will be unmodified), or if signatures are disabled.
      */
-    virtual bool getSignature(version_t version, unsigned char* signature, version_t& prev_signed_ver) const = 0;
+    virtual bool getSignature(version_t version, uint8_t* signature, version_t& prev_signed_ver) const = 0;
     /**
      * @return the size, in bytes, of each signature in this Persistent object's log.
      * Useful for allocating a correctly-sized buffer before calling get_signature.

@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
     const uint32_t num_params = std::stoi(argv[1]);
 
     uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    
+
     // input the ip addresses
     std::map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
     for(uint i = 0; i < num_nodes; ++i) {
@@ -116,9 +116,9 @@ int main(int argc, char* argv[]) {
                 }
                 sst.ml_parameters[my_rank][param] = sum / (sst.get_num_rows() - 1);
             }
-            sst.put_with_completion((char*)std::addressof(sst.ml_parameters[0][0]) - sst.getBaseAddress(), sizeof(sst.ml_parameters[0][0]) * sst.ml_parameters.size());
+            sst.put_with_completion((uint8_t*)std::addressof(sst.ml_parameters[0][0]) - sst.getBaseAddress(), sizeof(sst.ml_parameters[0][0]) * sst.ml_parameters.size());
             sst.round[my_rank]++;
-            sst.put_with_completion((char*)std::addressof(sst.round[0]) - sst.getBaseAddress(), sizeof(sst.round[0]));
+            sst.put_with_completion((uint8_t*)std::addressof(sst.round[0]) - sst.getBaseAddress(), sizeof(sst.round[0]));
         };
 
         sst.predicates.insert(round_complete, compute_average, PredicateType::RECURRENT);
@@ -134,9 +134,9 @@ int main(int argc, char* argv[]) {
             for(uint param = 0; param < sst.ml_parameters.size(); ++param) {
                 sst.ml_parameters[my_rank][param] = rand() % 100;
             }
-            sst.put_with_completion((char*)std::addressof(sst.ml_parameters[0][0]) - sst.getBaseAddress(), sizeof(sst.ml_parameters[0][0]) * sst.ml_parameters.size());
+            sst.put_with_completion((uint8_t*)std::addressof(sst.ml_parameters[0][0]) - sst.getBaseAddress(), sizeof(sst.ml_parameters[0][0]) * sst.ml_parameters.size());
             sst.round[my_rank]++;
-            sst.put_with_completion((char*)std::addressof(sst.round[0]) - sst.getBaseAddress(), sizeof(sst.round[0]));
+            sst.put_with_completion((uint8_t*)std::addressof(sst.round[0]) - sst.getBaseAddress(), sizeof(sst.round[0]));
         };
 
         sst.predicates.insert(server_done, compute_new_parameters, PredicateType::RECURRENT);

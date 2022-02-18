@@ -420,7 +420,7 @@ bool set_contiguous_memory_mode(bool enabled) {
 }  // namespace impl
 
 using ibv_mr_unique_ptr = unique_ptr<ibv_mr, std::function<void(ibv_mr*)>>;
-static ibv_mr_unique_ptr create_mr(char* buffer, size_t size) {
+static ibv_mr_unique_ptr create_mr(uint8_t* buffer, size_t size) {
     if(!buffer || size == 0) throw rdma::invalid_args();
 
     int mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
@@ -453,8 +453,8 @@ static ibv_mr_unique_ptr create_contiguous_mr(size_t size) {
     return mr;
 }
 memory_region::memory_region(size_t s, bool contiguous)
-        : mr(contiguous ? create_contiguous_mr(s) : create_mr(new char[s], s)),
-          buffer((char*)mr->addr),
+        : mr(contiguous ? create_contiguous_mr(s) : create_mr(new uint8_t[s], s)),
+          buffer((uint8_t*)mr->addr),
           size(s) {
     if(contiguous) {
         memset(buffer, 0, size);
@@ -463,13 +463,13 @@ memory_region::memory_region(size_t s, bool contiguous)
     }
 }
 #else
-memory_region::memory_region(size_t s, bool contiguous) : memory_region(new char[s], s) {
+memory_region::memory_region(size_t s, bool contiguous) : memory_region(new uint8_t[s], s) {
     allocated_buffer.reset(buffer);
 }
 #endif
 
 memory_region::memory_region(size_t s) : memory_region(s, contiguous_memory_mode) {}
-memory_region::memory_region(char* buf, size_t s) : mr(create_mr(buf, s)), buffer(buf), size(s) {}
+memory_region::memory_region(uint8_t* buf, size_t s) : mr(create_mr(buf, s)), buffer(buf), size(s) {}
 
 uint32_t memory_region::get_rkey() const { return mr->rkey; }
 

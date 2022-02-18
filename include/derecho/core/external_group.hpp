@@ -137,7 +137,7 @@ private:
      */
     bool get_view(const node_id_t nid);
     void clean_up();
-    volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
+    volatile uint8_t* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
     void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
     uint32_t get_index_of_type(const std::type_info& ti) const;
     /**
@@ -153,13 +153,13 @@ private:
     std::thread request_worker_thread;
     struct p2p_req {
         node_id_t sender_id;
-        char* msg_buf;
+        uint8_t* msg_buf;
         uint32_t buffer_size;
         p2p_req() : sender_id(0),
                     msg_buf(nullptr) {}
         p2p_req(node_id_t _sender_id,
-                char* _msg_buf) : sender_id(_sender_id),
-                                  msg_buf(_msg_buf) {}
+                uint8_t* _msg_buf) : sender_id(_sender_id),
+                                     msg_buf(_msg_buf) {}
     };
     std::queue<p2p_req> p2p_request_queue;
     std::mutex request_queue_mutex;
@@ -167,10 +167,10 @@ private:
     mutils::RemoteDeserialization_v rdv;
     void p2p_receive_loop();
     void p2p_request_worker();
-    void p2p_message_handler(node_id_t sender_id, char* msg_buf);
+    void p2p_message_handler(node_id_t sender_id, uint8_t* msg_buf);
     std::exception_ptr receive_message(const rpc::Opcode& indx, const node_id_t& received_from,
-                                       char const* const buf, std::size_t payload_size,
-                                       const std::function<char*(int)>& out_alloc);
+                                       uint8_t const* const buf, std::size_t payload_size,
+                                       const std::function<uint8_t*(int)>& out_alloc);
     /** ======================== copy/paste from rpc_manager ======================== **/
 
 public:

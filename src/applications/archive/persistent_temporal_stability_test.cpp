@@ -192,7 +192,7 @@ int main(int argc, char *argv[]) {
     dbg_default_debug("querying thread started.");
 
     if(is_sending) {
-        char *bbuf = new char[msg_size];
+        uint8_t *bbuf = new uint8_t[msg_size];
         bzero(bbuf, msg_size);
         Bytes bs(bbuf, msg_size);
 

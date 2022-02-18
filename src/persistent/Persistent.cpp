@@ -45,7 +45,7 @@ version_t PersistentRegistry::getMinimumLatestVersion() {
 }
 
 void PersistentRegistry::initializeLastSignature(version_t version,
-                                                 const unsigned char* signature, std::size_t signature_size) {
+                                                 const uint8_t* signature, std::size_t signature_size) {
     if(signature_size != m_lastSignature.size()) {
         m_lastSignature.resize(signature_size);
         //On the first call to initialize_signature with version == INVALID_VERSION,
@@ -58,7 +58,7 @@ void PersistentRegistry::initializeLastSignature(version_t version,
     }
 }
 
-void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, unsigned char* signature_buffer) {
+void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer) {
     for(version_t version = m_lastSignedVersion + 1; version <= latest_version; ++version) {
         signer.init();
         std::size_t bytes_signed = 0;
@@ -82,7 +82,7 @@ void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer,
     }
 }
 
-bool PersistentRegistry::getSignature(version_t version, unsigned char* signature_buffer) {
+bool PersistentRegistry::getSignature(version_t version, uint8_t* signature_buffer) {
     version_t previous_signed_version;
     for(auto& field : m_registry) {
         if(field.second->getSignature(version, signature_buffer, previous_signed_version)) {
@@ -92,7 +92,7 @@ bool PersistentRegistry::getSignature(version_t version, unsigned char* signatur
     return false;
 }
 
-bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, const unsigned char* signature) {
+bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, const uint8_t* signature) {
     //For objects with no persistent fields, verification should always "succeed"
     if(m_registry.empty()) {
         return true;
@@ -106,8 +106,8 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     version_t prev_signed_version;
     //Find a field that has a signature for this version; not all entries will
     //On that field, get the previous signed version, and retrieve that signature
-    unsigned char current_sig[signature_size];
-    unsigned char previous_sig[signature_size];
+    uint8_t current_sig[signature_size];
+    uint8_t previous_sig[signature_size];
     for(auto& field : m_registry) {
         if(field.second->getSignature(version, current_sig, prev_signed_version)) {
             if(prev_signed_version == INVALID_VERSION) {
@@ -200,7 +200,7 @@ std::string PersistentRegistry::generate_prefix(
     const char* subgroup_type_name = subgroup_type.name();
 
     // SHA256 subgroup_type_name to avoid a long file name
-    unsigned char subgroup_type_name_digest[32];
+    uint8_t subgroup_type_name_digest[32];
     openssl::Hasher sha256(openssl::DigestAlgorithm::SHA256);
     try {
         sha256.hash_bytes(subgroup_type_name, strlen(subgroup_type_name), subgroup_type_name_digest);

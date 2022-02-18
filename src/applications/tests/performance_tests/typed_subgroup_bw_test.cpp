@@ -1,20 +1,20 @@
+#include "aggregate_bandwidth.cpp"
+#include "aggregate_bandwidth.hpp"
+#include "bytes_object.hpp"
+#include "log_results.hpp"
+#include "partial_senders_allocator.hpp"
+
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/persistent/Persistent.hpp>
+
+#include <chrono>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
-#include <chrono>
-
-#include "aggregate_bandwidth.cpp"
-#include "aggregate_bandwidth.hpp"
-#include "bytes_object.hpp"
-#include "log_results.hpp"
-#include <derecho/conf/conf.hpp>
-#include <derecho/core/derecho.hpp>
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <derecho/persistent/Persistent.hpp>
-#include "partial_senders_allocator.hpp"
-
 
 using std::endl;
 using test::Bytes;
@@ -96,7 +96,6 @@ int main(int argc, char* argv[]) {
                                                             ? PartialSendMode::HALF_SENDERS
                                                             : PartialSendMode::ONE_SENDER);
 
-
     // Compute the total number of messages that should be delivered
     uint64_t total_num_messages = 0;
     switch(senders_mode) {
@@ -119,7 +118,7 @@ int main(int argc, char* argv[]) {
                                num_delivered = 0u](uint32_t subgroup,
                                                    uint32_t sender_id,
                                                    long long int index,
-                                                   std::optional<std::pair<char*, long long int>> data,
+                                                   std::optional<std::pair<uint8_t*, long long int>> data,
                                                    persistent::version_t ver) mutable {
         // Count the total number of messages delivered
         ++num_delivered;
@@ -168,25 +167,32 @@ int main(int argc, char* argv[]) {
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     //std::string str_1k(max_msg_size, 'x');
-    char* bbuf = (char*)malloc(max_msg_size);
+    uint8_t* bbuf = (uint8_t*)malloc(max_msg_size);
     bzero(bbuf, max_msg_size);
     Bytes bytes(bbuf, max_msg_size);
 
+    // this function sends all the messages
+    auto send_all = [&]() {
+        for(uint i = 0; i < count; i++) {
+            derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
+            handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
+        }
+    };
+
     int node_rank = group.get_my_rank();
 
-    bool is_sending = true;
-    if((senders_mode == PartialSendMode::HALF_SENDERS) && (node_rank <= (num_nodes - 1) / 2)) {
-        is_sending = false;
-    }
-    if((senders_mode == PartialSendMode::ONE_SENDER) && (node_rank != num_nodes - 1)) {
-        is_sending = false;
-    }
-
+    // Begin Clock Timer
     begin_time = std::chrono::steady_clock::now();
-    if (is_sending){
-        derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
-        for (uint i = 0; i < count; i++){
-            handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
+
+    if(senders_mode == PartialSendMode::ALL_SENDERS) {
+        send_all();
+    } else if(senders_mode == PartialSendMode::HALF_SENDERS) {
+        if(node_rank > (num_nodes - 1) / 2) {
+            send_all();
+        }
+    } else {
+        if(node_rank == num_nodes - 1) {
+            send_all();
         }
     }
     /*
@@ -199,12 +205,12 @@ int main(int argc, char* argv[]) {
     }
     */
 
-    while(!done){
+    while(!done) {
     }
 
     free(bbuf);
 
-    int64_t nsec = duration_cast<nanoseconds>(send_complete_time - begin_time).count(); 
+    int64_t nsec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
 
     double thp_gbps = (static_cast<double>(total_num_messages) * max_msg_size) / nsec;
     double thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / nsec;
@@ -216,7 +222,7 @@ int main(int argc, char* argv[]) {
     std::cout << std::flush;
 
     // aggregate bandwidth from all nodes
-    std::pair<double, double> bw_laten(thp_gbps,msec);
+    std::pair<double, double> bw_laten(thp_gbps, msec);
 
     auto members_order = group.get_members();
     bw_laten = aggregate_bandwidth(members_order, members_order[node_rank], bw_laten);

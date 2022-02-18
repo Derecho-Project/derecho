@@ -69,9 +69,9 @@ int main() {
         for(uint j = 0; j < size_arr.size(); ++j) {
             int size = size_arr[j];
             // create buffer for write and read
-            char *write_buf, *read_buf;
-            write_buf = (char *)malloc(size);
-            read_buf = (char *)malloc(size);
+            uint8_t *write_buf, *read_buf;
+            write_buf = (uint8_t *)malloc(size);
+            read_buf = (uint8_t *)malloc(size);
 #ifdef USE_VERBS_API
             resources res(remote_rank, read_buf, write_buf, size, size);
 #else
@@ -107,9 +107,9 @@ int main() {
         for(uint j = 0; j < size_arr.size(); ++j) {
             int size = size_arr[j];
             // create buffer for write and read
-            char *write_buf, *read_buf;
-            write_buf = (char *)malloc(size);
-            read_buf = (char *)malloc(size);
+            uint8_t *write_buf, *read_buf;
+            write_buf = (uint8_t *)malloc(size);
+            read_buf = (uint8_t *)malloc(size);
 
 #ifdef USE_VERBS_API
             resources res(remote_rank, read_buf, write_buf, size, size);

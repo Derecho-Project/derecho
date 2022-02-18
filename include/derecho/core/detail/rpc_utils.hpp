@@ -196,7 +196,7 @@ struct sender_removed_from_group_exception : public derecho_exception {
 struct recv_ret {
     Opcode opcode;
     std::size_t size;
-    char* payload;
+    uint8_t* payload;
     std::exception_ptr possible_exception;
 };
 
@@ -206,8 +206,8 @@ struct recv_ret {
  * some RPC message is received.
  */
 using receive_fun_t = std::function<recv_ret(
-        mutils::RemoteDeserialization_v* rdv, const node_id_t&, const char* recv_buf,
-        const std::function<char*(int)>& out_alloc)>;
+        mutils::RemoteDeserialization_v* rdv, const node_id_t&, const uint8_t* recv_buf,
+        const std::function<uint8_t*(int)>& out_alloc)>;
 
 //Forward declaration of PendingResults, to be used by QueryResults
 template <typename Ret>
@@ -1095,12 +1095,12 @@ inline std::size_t header_space() {
     //            size                  operation        from                flags
 }
 
-inline char* extra_alloc(int i) {
+inline uint8_t* extra_alloc(int i) {
     const auto hs = header_space();
-    return (char*)calloc(i + hs, sizeof(char)) + hs;
+    return (uint8_t*)calloc(i + hs, sizeof(char)) + hs;
 }
 
-inline void populate_header(char* reply_buf,
+inline void populate_header(uint8_t* reply_buf,
                             const std::size_t& payload_size,
                             const Opcode& op, const node_id_t& from,
                             const uint32_t& flags) {
@@ -1117,7 +1117,7 @@ inline void populate_header(char* reply_buf,
 
 //inline void retrieve_header(mutils::DeserializationManager* dsm,
 inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
-                            const char* reply_buf,
+                            const uint8_t* reply_buf,
                             std::size_t& payload_size, Opcode& op,
                             node_id_t& from, uint32_t& flags) {
     std::size_t offset = 0;

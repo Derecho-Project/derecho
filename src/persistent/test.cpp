@@ -39,18 +39,18 @@ class ReplicatedT {
 class VariableBytes : public ByteRepresentable {
 public:
     std::size_t data_len;
-    char buf[MAX_VB_SIZE];
+    uint8_t buf[MAX_VB_SIZE];
 
     VariableBytes() {
         data_len = MAX_VB_SIZE;
     }
 
-    virtual std::size_t to_bytes(char* v) const {
+    virtual std::size_t to_bytes(uint8_t* v) const {
         memcpy(v, buf, this->data_len);
         return data_len;
     };
 
-    virtual void post_object(const std::function<void(char const* const, std::size_t)>& func) const {
+    virtual void post_object(const std::function<void(uint8_t const* const, std::size_t)>& func) const {
         func(this->buf, this->data_len);
     };
 
@@ -63,21 +63,21 @@ public:
     };
 
     virtual std::string to_string() const {
-        return std::string{buf};
+        return std::string{&buf[0], &buf[MAX_VB_SIZE]};
     };
 
-    static std::unique_ptr<VariableBytes> from_bytes(DeserializationManager* dsm, char const* const v) {
+    static std::unique_ptr<VariableBytes> from_bytes(DeserializationManager* dsm, uint8_t const* const v) {
         std::unique_ptr<VariableBytes> pvb = std::make_unique<VariableBytes>();
-        strcpy(pvb->buf, v);
-        pvb->data_len = strlen(v) + 1;
+        pvb->data_len = strlen((char const* const)v) + 1;
+        memcpy(pvb->buf, v, pvb->data_len);
         return pvb;
     };
 
-    static mutils::context_ptr<VariableBytes> from_bytes_noalloc(DeserializationManager*dsm, char const* const v) {
+    static mutils::context_ptr<VariableBytes> from_bytes_noalloc(DeserializationManager*dsm, uint8_t const* const v) {
         return mutils::context_ptr<VariableBytes>(from_bytes(dsm,v).release());
     }
 
-    static mutils::context_ptr<const VariableBytes> from_bytes_noalloc_const(DeserializationManager*dsm, char const* const v) {
+    static mutils::context_ptr<const VariableBytes> from_bytes_noalloc_const(DeserializationManager*dsm, uint8_t const* const v) {
         return mutils::context_ptr<const VariableBytes>(from_bytes(dsm,v).release());
     }
 };
@@ -102,11 +102,11 @@ public:
     }
     virtual void finalizeCurrentDelta(const DeltaFinalizer& dp) {
         // finalize current delta
-        dp((char const* const) & (this->delta), sizeof(this->delta));
+        dp((uint8_t const* const) & (this->delta), sizeof(this->delta));
         // clear delta
         this->delta = 0;
     }
-    virtual void applyDelta(char const* const pdat) {
+    virtual void applyDelta(uint8_t const* const pdat) {
         // apply delta
         this->value += *((const int* const)pdat);
     }
@@ -267,8 +267,8 @@ int main(int argc, char** argv) {
     std::unique_ptr<openssl::Verifier> verifier;
 
     std::size_t sig_size;
-    unsigned char sig_buf[512];
-    unsigned char prev_sig[512];
+    uint8_t sig_buf[512];
+    uint8_t prev_sig[512];
 
     if (use_signature) {
         prikey = std::make_unique<openssl::EnvelopeKey>(
@@ -342,7 +342,7 @@ int main(int argc, char** argv) {
             version_t prev_ver = npx.getLatestVersion();
             char* v = argv[2];
             int64_t ver = (int64_t)atoi(argv[3]);
-            sprintf((*npx).buf, "%s", v);
+            memcpy((*npx).buf, v, strlen(v) + 1);
             (*npx).data_len = strlen(v) + 1;
             npx.version(ver);
             if (use_signature) {
@@ -385,7 +385,7 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "logtail-set") == 0) {
             char* v = argv[2];
             int64_t ver = (int64_t)atoi(argv[3]);
-            sprintf((*npx_logtail).buf, "%s", v);
+            memcpy((*npx_logtail).buf, v, strlen(v) + 1);
             (*npx_logtail).data_len = strlen(v) + 1;
             npx_logtail.version(ver);
             npx_logtail.persist(ver);
@@ -399,7 +399,7 @@ int main(int argc, char** argv) {
             PersistentRegistry::setEarliestVersionToSerialize(ver);
             ssize_t ds1 = npx_logtail.bytes_size();
             ssize_t prefix = mutils::bytes_size(npx_logtail.getObjectName()) + mutils::bytes_size(*npx_logtail);
-            char* buf = (char*)malloc(ds1);
+            uint8_t* buf = (uint8_t*)malloc(ds1);
             if(buf == NULL) {
                 cerr << "faile to allocate " << ds1 << " bytes for serialized data. prefix=" << prefix << " bytes" << endl;
                 return -1;
@@ -441,7 +441,7 @@ int main(int argc, char** argv) {
             }
 
             cout << "before applyLogTail." << endl;
-            npx_logtail.applyLogTail(nullptr, (char*)buf);
+            npx_logtail.applyLogTail(nullptr, (uint8_t*)buf);
             cout << "after applyLogTail." << endl;
 
             munmap(buf, (size_t)fsize);
@@ -542,8 +542,8 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "delta-getbyver") == 0) {
             int64_t version = std::stoi(argv[2]);
             cout << "dx[ver:" << version << "] = " << dx[version]->value << endl;
-            cout << "dx.delta[ver:" << version << "] = " << *dx.template getDelta<int>(version) << "\t- by copy" << endl;
-            dx.template getDelta<int>(version, [version](const int& x){ cout << "dx.delta[ver:" << version << "] = " << x << "\t- by lambda" << std::endl;});
+            cout << "dx.delta[ver:" << version << "] = " << *dx.template getDelta<int>(version,true) << "\t- by copy" << endl;
+            dx.template getDelta<int>(version, true, [version](const int& x){ cout << "dx.delta[ver:" << version << "] = " << x << "\t- by lambda" << std::endl;});
         } else if(strcmp(argv[1], "delta-verify") == 0) {
             if (!use_signature) {
                 std::cout << "unable to verify without signature...exit." << std::endl;
