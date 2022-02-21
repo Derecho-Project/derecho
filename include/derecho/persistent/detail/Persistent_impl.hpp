@@ -232,6 +232,12 @@ ObjectType* Persistent<ObjectType, storageType>::operator->() {
 
 template <typename ObjectType,
           StorageType storageType>
+const ObjectType* Persistent<ObjectType, storageType>::operator->() const {
+    return this->m_pWrappedObject.get();
+}
+
+template <typename ObjectType,
+          StorageType storageType>
 const ObjectType& Persistent<ObjectType, storageType>::getConstRef() const {
     return *this->m_pWrappedObject;
 }

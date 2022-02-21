@@ -503,6 +503,15 @@ public:
     ObjectType* operator->();
 
     /**
+     * const version of -> operator
+     *
+     * overload the '->' operator to access the wrapped object
+     *
+     * @return a pointer to the current ObjectType object.
+     */
+    const ObjectType* operator->() const;
+
+    /**
      * getConstRef()
      *
      * get a const reference to the wrapped object
