@@ -357,13 +357,16 @@ private:
      * The minimum (persistent) version number that has finished persisting in
      * each subgroup, indexed by subgroup number.
      */
-    std::vector<persistent::version_t> minimum_persisted_version;
+    std::vector<std::unique_ptr<std::atomic<persistent::version_t>>> minimum_persisted_version;
+    mutable std::vector<std::condition_variable> minimum_persisted_cv;
+    mutable std::vector<std::mutex> minimum_persisted_mtx; // for use with minimum_persisted_cv, It does not guard minimum_persisted_version
     /**
      * The minimum (persistent) version number that has had its signature verified
      * in each subgroup, indexed by subgroup number, if the signed log feature is
      * enabled. (If the features is disabled, this will stay at INVALID_VERSION).
      */
-    std::vector<persistent::version_t> minimum_verified_version;
+    std::vector<std::unique_ptr<std::atomic<persistent::version_t>>> minimum_verified_version;
+
 
     std::recursive_mutex msg_state_mtx;
     std::condition_variable_any sender_cv;
@@ -553,7 +556,13 @@ public:
     bool send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
               const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send);
 
-    const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
+    const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num) const;
+
+    const persistent::version_t get_global_persistence_frontier(subgroup_id_t subgroup_num) const;
+
+    bool wait_for_global_persistence_frontier(subgroup_id_t subgroup_num, persistent::version_t version) const;
+
+    const persistent::version_t get_global_verified_frontier(subgroup_id_t subgroup_num) const;
 
     /** Stops all sending and receiving in this group, in preparation for shutting it down. */
     void wedge();
@@ -567,6 +576,6 @@ public:
     const std::map<subgroup_id_t, SubgroupSettings>& get_subgroup_settings() {
         return subgroup_settings_map;
     }
-    std::vector<uint32_t> get_shard_sst_indices(subgroup_id_t subgroup_num);
+    std::vector<uint32_t> get_shard_sst_indices(subgroup_id_t subgroup_num) const;
 };
 }  // namespace derecho

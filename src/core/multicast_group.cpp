@@ -2,11 +2,14 @@
 
 #include "derecho/core/detail/derecho_internal.hpp"
 #include "derecho/persistent/Persistent.hpp"
+#include "derecho/persistent/PersistentInterface.hpp"
+#include "derecho/persistent/detail/PersistLog.hpp"
 #include "derecho/rdmc/detail/util.hpp"
 #include "derecho/utils/logger.hpp"
 #include "derecho/utils/time.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <limits>
@@ -54,13 +57,19 @@ MulticastGroup::MulticastGroup(
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
-          minimum_persisted_version(total_num_subgroups, persistent::INVALID_VERSION),
-          minimum_verified_version(total_num_subgroups, persistent::INVALID_VERSION),
+          minimum_persisted_version(total_num_subgroups),
+          minimum_persisted_cv(total_num_subgroups),
+          minimum_persisted_mtx(total_num_subgroups),
+          minimum_verified_version(total_num_subgroups),
           sender_timeout(sender_timeout),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
           persistence_manager(persistence_manager_ref) {
+    for(uint i = 0; i < total_num_subgroups; ++i) {
+        minimum_persisted_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
+        minimum_verified_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
+    }
     for(uint i = 0; i < num_members; ++i) {
         node_id_to_sst_index[members[i]] = i;
     }
@@ -117,8 +126,8 @@ MulticastGroup::MulticastGroup(
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
-          minimum_persisted_version(total_num_subgroups, persistent::INVALID_VERSION),
-          minimum_verified_version(total_num_subgroups, persistent::INVALID_VERSION),
+          minimum_persisted_version(total_num_subgroups),
+          minimum_verified_version(total_num_subgroups),
           sender_timeout(old_group.sender_timeout),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
@@ -126,6 +135,12 @@ MulticastGroup::MulticastGroup(
           persistence_manager(old_group.persistence_manager) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
+
+    // initialize persisted_version and verified_version
+    for (uint i = 0; i< total_num_subgroups; ++i) {
+        minimum_persisted_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
+        minimum_verified_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
+    }
 
     // Just in case
     old_group.wedge();
@@ -919,7 +934,7 @@ void MulticastGroup::update_min_persisted_num(subgroup_id_t subgroup_num, const 
         min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
     }
     // callbacks
-    if(min_persisted_num > minimum_persisted_version[subgroup_num]) {
+    if(min_persisted_num > minimum_persisted_version[subgroup_num]->load(std::memory_order_relaxed)) {
         if(callbacks.global_persistence_callback) {
             callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
         }
@@ -927,7 +942,8 @@ void MulticastGroup::update_min_persisted_num(subgroup_id_t subgroup_num, const 
             internal_callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
         }
         persistence_manager.post_verify_request(subgroup_num, min_persisted_num);
-        minimum_persisted_version[subgroup_num] = min_persisted_num;
+        minimum_persisted_version[subgroup_num]->store(min_persisted_num,std::memory_order_relaxed);
+        minimum_persisted_cv[subgroup_num].notify_all();
     }
 }
 
@@ -941,14 +957,14 @@ void MulticastGroup::update_min_verified_num(subgroup_id_t subgroup_num, const S
                                                                     [subgroup_num];
         min_verified_num = std::min(min_verified_num, member_verified_num);
     }
-    if(min_verified_num > minimum_verified_version[subgroup_num]) {
+    if(min_verified_num > minimum_verified_version[subgroup_num]->load(std::memory_order_relaxed)) {
         if(callbacks.global_verified_callback) {
             callbacks.global_verified_callback(subgroup_num, min_verified_num);
         }
         if(internal_callbacks.global_verified_callback) {
             internal_callbacks.global_verified_callback(subgroup_num, min_verified_num);
         }
-        minimum_verified_version[subgroup_num] = min_verified_num;
+        minimum_verified_version[subgroup_num]->store(min_verified_num,std::memory_order_relaxed);
     }
 }
 
@@ -1186,7 +1202,7 @@ void MulticastGroup::send_loop() {
     }
 }
 
-const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgroup_num) {
+const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgroup_num) const {
     uint64_t global_stability_frontier = sst->local_stability_frontier[member_index][subgroup_num];
     auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
     for(auto index : shard_sst_indices) {
@@ -1194,6 +1210,30 @@ const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgro
         global_stability_frontier = std::min(global_stability_frontier, local_stability_frontier_copy);
     }
     return global_stability_frontier;
+}
+
+const persistent::version_t MulticastGroup::get_global_persistence_frontier(uint32_t subgroup_num) const {
+    return this->minimum_persisted_version[subgroup_num]->load(std::memory_order_relaxed);
+}
+
+bool MulticastGroup::wait_for_global_persistence_frontier(subgroup_id_t subgroup_num, persistent::version_t version) const {
+    if (this->minimum_persisted_version[subgroup_num]->load(std::memory_order_relaxed) >= version) {
+        // global persistence number has advanced beyond the requested version
+        return true;
+    }
+
+    if (version > static_cast<const persistent::version_t>(compute_global_stability_frontier(subgroup_num))) {
+        return false;
+    }
+
+    std::unique_lock<std::mutex> lck{minimum_persisted_mtx[subgroup_num]};
+    minimum_persisted_cv[subgroup_num].wait(lck, [this,subgroup_num,version]{return this->minimum_persisted_version[subgroup_num]->load(std::memory_order_relaxed) > version;});
+
+    return true;
+}
+
+const persistent::version_t MulticastGroup::get_global_verified_frontier(uint32_t subgroup_num) const {
+    return this->minimum_verified_version[subgroup_num]->load(std::memory_order_relaxed);
 }
 
 void MulticastGroup::check_failures_loop() {
@@ -1427,7 +1467,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     }
 }
 
-std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgroup_num) {
+std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgroup_num) const {
     std::vector<node_id_t> shard_members = subgroup_settings_map.at(subgroup_num).members;
 
     std::vector<uint32_t> shard_sst_indices;

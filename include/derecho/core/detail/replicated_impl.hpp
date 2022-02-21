@@ -281,6 +281,22 @@ const uint64_t Replicated<T>::compute_global_stability_frontier() {
 }
 
 template <typename T>
+persistent::version_t Replicated<T>::get_global_persistence_frontier () {
+    return group_rpc_manager.view_manager.get_global_persistence_frontier(subgroup_id);
+}
+
+template <typename T>
+bool Replicated<T>::wait_for_global_persistence_frontier(persistent::version_t version) {
+    return group_rpc_manager.view_manager.wait_for_global_persistence_frontier(subgroup_id,version);
+}
+
+template <typename T>
+persistent::version_t Replicated<T>::get_global_verified_frontier () {
+    return group_rpc_manager.view_manager.get_global_verified_frontier(subgroup_id);
+}
+
+
+template <typename T>
 ExternalCaller<T>::ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id,
                                   rpc::RPCManager& group_rpc_manager)
         : node_id(nid),
