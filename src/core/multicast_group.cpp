@@ -61,6 +61,7 @@ MulticastGroup::MulticastGroup(
           minimum_persisted_cv(total_num_subgroups),
           minimum_persisted_mtx(total_num_subgroups),
           minimum_verified_version(total_num_subgroups),
+          delivered_version(total_num_subgroups),
           sender_timeout(sender_timeout),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
@@ -69,6 +70,7 @@ MulticastGroup::MulticastGroup(
     for(uint i = 0; i < total_num_subgroups; ++i) {
         minimum_persisted_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
         minimum_verified_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
+        delivered_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
     }
     for(uint i = 0; i < num_members; ++i) {
         node_id_to_sst_index[members[i]] = i;
@@ -128,6 +130,7 @@ MulticastGroup::MulticastGroup(
           next_message_to_deliver(total_num_subgroups),
           minimum_persisted_version(total_num_subgroups),
           minimum_verified_version(total_num_subgroups),
+          delivered_version(total_num_subgroups),
           sender_timeout(old_group.sender_timeout),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
@@ -140,6 +143,7 @@ MulticastGroup::MulticastGroup(
     for (uint i = 0; i< total_num_subgroups; ++i) {
         minimum_persisted_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
         minimum_verified_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
+        delivered_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
     }
 
     // Just in case
@@ -613,6 +617,7 @@ void MulticastGroup::deliver_messages_upto(
                 uint64_t msg_ts = ((header*)buf)->timestamp;
                 //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
                 deliver_message(msg, subgroup_num, assigned_version, msg_ts / 1000);
+                delivered_version[subgroup_num]->store(assigned_version,std::memory_order_release);
                 non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
                 // free the message buffer only after it version_message has been called
                 free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -624,6 +629,7 @@ void MulticastGroup::deliver_messages_upto(
                 uint8_t* buf = (uint8_t*)msg.buf;
                 uint64_t msg_ts = ((header*)buf)->timestamp;
                 deliver_message(msg, subgroup_num, assigned_version, msg_ts / 1000);
+                delivered_version[subgroup_num]->store(assigned_version,std::memory_order_release);
                 non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
                 locally_stable_sst_messages[subgroup_num].erase(seq_num);
             }
@@ -855,6 +861,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
                 //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
                 assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_rdmc_seq_num);
                 deliver_message(msg, subgroup_num, assigned_version, msg_ts / 1000);
+                delivered_version[subgroup_num]->store(assigned_version,std::memory_order_release);
                 non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
                 // free the message buffer only after version_message has been called
                 free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -869,6 +876,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
                 uint64_t msg_ts = ((header*)buf)->timestamp;
                 assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_sst_seq_num);
                 deliver_message(msg, subgroup_num, assigned_version, msg_ts / 1000);
+                delivered_version[subgroup_num]->store(assigned_version,std::memory_order_release);
                 non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
                 sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
                 locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
@@ -1222,7 +1230,7 @@ bool MulticastGroup::wait_for_global_persistence_frontier(subgroup_id_t subgroup
         return true;
     }
 
-    if (version > static_cast<const persistent::version_t>(compute_global_stability_frontier(subgroup_num))) {
+    if (version > delivered_version[subgroup_num]->load(std::memory_order_relaxed)) {
         return false;
     }
 

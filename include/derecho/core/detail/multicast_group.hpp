@@ -368,6 +368,11 @@ private:
     std::vector<std::unique_ptr<std::atomic<persistent::version_t>>> minimum_verified_version;
 
 
+    /**
+     * store the delivered_version
+     */
+    std::vector<std::unique_ptr<std::atomic<persistent::version_t>>> delivered_version;
+
     std::recursive_mutex msg_state_mtx;
     std::condition_variable_any sender_cv;
 
