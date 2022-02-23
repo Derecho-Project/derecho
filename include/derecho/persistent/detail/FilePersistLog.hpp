@@ -192,6 +192,7 @@ public:
     virtual int64_t getLatestIndex() override;
     virtual int64_t getVersionIndex(version_t ver, bool exact) override;
     virtual int64_t getHLCIndex(const HLC& hlc) override;
+    virtual version_t getHLCVersion(const HLC& hlc) override;
     virtual version_t getEarliestVersion() override;
     virtual version_t getLatestVersion() override;
     virtual version_t getLastPersistedVersion() override;

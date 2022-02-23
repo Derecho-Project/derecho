@@ -898,6 +898,13 @@ public:
     virtual int64_t getIndexAtTime(const HLC& hlc) const;
 
     /**
+     * getVersionAtTime
+     *
+     * Get the latest version invlusively before time.
+     */
+    virtual persistent::version_t getVersionAtTime(const HLC& hlc) const;
+
+    /**
      * set(ObjectType&, version_t,const HLC&)
      *
      * Make a version with a version number and mhlc clock

@@ -507,6 +507,12 @@ int64_t Persistent<ObjectType, storageType>::getIndexAtTime(const HLC& hlc) cons
 
 template <typename ObjectType,
           StorageType storageType>
+version_t Persistent<ObjectType, storageType>::getVersionAtTime(const HLC& hlc) const {
+    return this->m_pLog->getHLCVersion(hlc);
+}
+
+template <typename ObjectType,
+          StorageType storageType>
 void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, const HLC& mhlc) {
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
