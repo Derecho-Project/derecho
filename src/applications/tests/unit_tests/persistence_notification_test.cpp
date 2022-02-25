@@ -149,8 +149,12 @@ void StorageNode::notification_thread_function() {
         {
             std::unique_lock<std::mutex> query_results_lock(notification_thread_mutex);
             auto result_search = update_results.find(requests_by_version.begin()->first);
-            queryresults_for_requests.emplace(std::move(*result_search));
-            update_results.erase(result_search);
+            if(result_search != update_results.end()) {
+                queryresults_for_requests.emplace(std::move(*result_search));
+                update_results.erase(result_search);
+            } else {
+                dbg_default_warn("Notification thread could not find a QueryResults for version {}", requests_by_version.begin()->first);
+            }
         }
         switch(requests_by_version.begin()->second.notification_type) {
             case NotificationMessageType::LOCAL_PERSISTENCE:
@@ -252,10 +256,11 @@ int main(int argc, char** argv) {
         derecho::ExternalClientCaller<StorageNode, decltype(client)>& storage_caller = client.get_subgroup_caller<StorageNode>(0);
         //Since we know there is only 1 subgroup and 1 shard of StorageNode, getting the node IDs is easy
         std::vector<node_id_t> storage_node_ids = client.get_shard_members<StorageNode>(0, 0);
-        //Pick one node to contact to send updates
+        //Pick a node to contact to send updates
         node_id_t update_node = storage_node_ids[0];
-        //Pick another node to get notifications from
-        node_id_t notification_node = storage_node_ids[storage_node_ids.size() - 1];
+        //Right now, we must request notifications from that same node, because only the P2P
+        //update method can record QueryResults; other replicas have no way of tracking their updates
+        node_id_t notification_node = update_node;
         //Register the client callback handler
         storage_caller.register_notification(client_callback_function, notification_node);
         //Send some updates to the storage nodes and request callbacks when they have globally persisted

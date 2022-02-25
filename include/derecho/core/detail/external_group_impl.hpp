@@ -203,12 +203,14 @@ bool ExternalGroupClient<ReplicatedTypes...>::get_view(const node_id_t nid) {
         uint64_t leader_version_hashcode;
         sock.exchange(my_version_hashcode, leader_version_hashcode);
         if(leader_version_hashcode != my_version_hashcode) {
+            dbg_default_error("Leader refused connection because Derecho or compiler version did not match! Local version hashcode = {}, leader version hashcode = {}", my_version_hashcode, leader_version_hashcode);
+            dbg_default_flush();
             return false;
         }
         sock.write(JoinRequest{my_id, true});
         sock.read(leader_response);
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
-            dbg_default_error("Error! Leader refused connection because ID {} is already in use!", my_id);
+            dbg_default_error("Leader refused connection because ID {} is already in use!", my_id);
             dbg_default_flush();
             return false;
         }
