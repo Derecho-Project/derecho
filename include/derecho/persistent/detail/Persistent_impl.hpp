@@ -313,7 +313,7 @@ auto Persistent<ObjectType, storageType>::get(
     }
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
-        return f(*this->get(ver, dm));
+        return fun(*this->get(ver, dm));
     } else {
         return mutils::deserialize_and_run(dm, pdat, fun);
     }
