@@ -1235,7 +1235,9 @@ bool MulticastGroup::wait_for_global_persistence_frontier(subgroup_id_t subgroup
     }
 
     std::unique_lock<std::mutex> lck{minimum_persisted_mtx[subgroup_num]};
-    minimum_persisted_cv[subgroup_num].wait(lck, [this,subgroup_num,version]{return this->minimum_persisted_version[subgroup_num]->load(std::memory_order_relaxed) > version;});
+    minimum_persisted_cv[subgroup_num].wait(lck, [this,subgroup_num,version]{
+        return this->minimum_persisted_version[subgroup_num]->load(std::memory_order_relaxed) >= version;
+    });
 
     return true;
 }
