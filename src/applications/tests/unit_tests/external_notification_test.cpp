@@ -115,8 +115,9 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
                 handle.p2p_send<RPC_NAME(notify)>(external_node_id, message);
             }
         }
-        while(true) {
-        }
+        std::cout << "Done sending all notifications" << std::endl;
+        std::cout << "Press enter when finished with test." << std::endl;
+        std::cin.get();
 
     } else {
         auto dummy_object_factory = []() { return std::make_unique<TestObject>(); };
@@ -125,7 +126,6 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
         cout << "Finished constructing ExternalGroupClient" << endl;
 
         std::vector<node_id_t> members = group.get_members();
-        std::vector<node_id_t> shard_members = group.get_shard_members(0, 0);
         ExternalClientCaller<TestObject, decltype(group)>& handle1 = group.get_subgroup_caller<TestObject>(0);
         ExternalClientCaller<TestObject, decltype(group)>& handle2 = group.get_subgroup_caller<TestObject>(1);
 
@@ -133,26 +133,22 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
         handle1.register_notification([](const derecho::NotificationMessage& message) {
             std::cout << "Notification Successful from 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
-                                      0);
+                                      members[0]);
         handle2.register_notification([](const derecho::NotificationMessage& message) {
             std::cout << "Notification Successful from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
-                                      1);
+                                      members[1]);
         handle2.register_notification([](const derecho::NotificationMessage& message) {
             std::cout << "Another Victory from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
-                                      1);
+                                      members[1]);
 
-        cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
-        while(true) {
-        }
+        std::cout << "Awaiting notifications." << std::endl;
+        std::cout << "Press enter when finished with test." << std::endl;
+        std::cin.get();
     }
 }
 
-/*
- * This will not compile because TestPersistentObject does not have a no-argument constructor.
- * Subgroups with persistent members never have no-argument constructors, because they need the PersistentRegistry* argument
- */
 void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_nodes, uint32_t num_messages) {
     node_id_t my_id = derecho::getConfUInt64(CONF_DERECHO_LOCAL_ID);
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
@@ -184,8 +180,9 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
                 handle.p2p_send<RPC_NAME(notify)>(external_node_id, message);
             }
         }
-        while(true) {
-        }
+        std::cout << "Done sending all notifications" << std::endl;
+        std::cout << "Press enter when finished with test." << std::endl;
+        std::cin.get();
 
     } else {
         //A Persistent<T> constructed with a null PersistentRegistry won't work, but we don't need it to work
@@ -196,7 +193,6 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
         cout << "Finished constructing ExternalGroupClient" << endl;
 
         std::vector<node_id_t> members = group.get_members();
-        std::vector<node_id_t> shard_members = group.get_shard_members(0, 0);
         ExternalClientCaller<TestPersistentObject, decltype(group)>& handle1 = group.get_subgroup_caller<TestPersistentObject>(0);
         ExternalClientCaller<TestPersistentObject, decltype(group)>& handle2 = group.get_subgroup_caller<TestPersistentObject>(1);
 
@@ -204,18 +200,18 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
         handle1.register_notification([](const derecho::NotificationMessage& message) {
             std::cout << "Notification Successful from 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
-                                      0);
+                                      members[0]);
         handle2.register_notification([](const derecho::NotificationMessage& message) {
             std::cout << "Notification Successful from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
-                                      1);
+                                      members[1]);
         handle2.register_notification([](const derecho::NotificationMessage& message) {
             std::cout << "Another Victory from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
-                                      1);
-        cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
-        while(true) {
-        }
+                                      members[1]);
+        std::cout << "Awaiting notifications." << std::endl;
+        std::cout << "Press enter when finished with test." << std::endl;
+        std::cin.get();
     }
 }
 

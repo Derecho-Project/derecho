@@ -453,7 +453,9 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
             uint8_t* buf = p2p_connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
-            buf[0] = 0;
+            assert(buf != nullptr);
+            dbg_default_trace("Sending a null reply to node {} for a void P2P call", request.sender_id);
+            reinterpret_cast<size_t*>(buf)[0] = 0;
             p2p_connections->send(request.sender_id);
         }
     }

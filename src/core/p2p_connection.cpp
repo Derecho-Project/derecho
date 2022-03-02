@@ -76,6 +76,7 @@ uint8_t* P2PConnection::probe() {
 }
 
 void P2PConnection::update_incoming_seq_num() {
+    dbg_default_trace("P2PConnection updating incoming_seq_num for type {} to {}", last_type, incoming_seq_nums_map[last_type] + 1);
     incoming_seq_nums_map[last_type]++;
 }
 
@@ -90,6 +91,7 @@ uint8_t* P2PConnection::get_sendbuffer_ptr(REQUEST_TYPE type) {
         return const_cast<uint8_t*>(outgoing_p2p_buffer.get())
                + getOffsetBuf(type, outgoing_seq_nums_map[type]);
     }
+    dbg_default_trace("P2PConnection: Send buffer was full: incoming_seq_nums[REPLY] = {}, but outgoing_seq_nums[REQUEST] = {}", incoming_seq_nums_map[REQUEST_TYPE::P2P_REPLY], outgoing_seq_nums_map[REQUEST_TYPE::P2P_REQUEST]);
     return nullptr;
 }
 

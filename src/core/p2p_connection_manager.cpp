@@ -121,6 +121,7 @@ std::optional<std::pair<node_id_t, uint8_t*>> P2PConnectionManager::probe_all() 
         } else if(buf) {
             // this means that we have a null reply
             // we don't need to process it, but we still want to increment the seq num
+            dbg_default_trace("Got a null reply from node {} for a void P2P call", node_id);
             p2p_connections[node_id].second->update_incoming_seq_num();
             return std::pair<node_id_t, uint8_t*>(INVALID_NODE_ID, nullptr);
         }
