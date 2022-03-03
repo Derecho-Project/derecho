@@ -349,7 +349,6 @@ auto ExternalClientCallback<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                 },
                 std::forward<Args>(args)...);
         std::cout << "Finishing p2p send..." << std::endl;
-        // 0xffff is the "destination subgroup ID", since there is no subgroup at the destination
         group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
