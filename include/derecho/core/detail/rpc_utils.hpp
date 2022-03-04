@@ -28,6 +28,7 @@
 #include <typeindex>
 #include <utility>
 #include <vector>
+#include <cstdarg>
 
 namespace derecho {
 
@@ -87,6 +88,15 @@ constexpr bool well_formed_macro(Carr&& c_str) {
             return false;
     }
     return true;
+}
+
+template <typename Carr,typename...RestArgs>
+constexpr bool well_formed_macro(Carr&& first, Carr&& second, RestArgs... args) {
+    if (!well_formed_macro(first)) {
+        return false;
+    }
+    
+    return well_formed_macro(second,args...);
 }
 
 using FunctionTag = unsigned long long;

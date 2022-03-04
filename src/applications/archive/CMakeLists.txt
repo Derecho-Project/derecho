@@ -141,5 +141,5 @@ add_executable(multicast_latency multicast_latency.cpp initialize.cpp aggregate_
 target_link_libraries(multicast_latency derecho)
 
 # notification_test
-add_executable(notification_test notification_test.cpp)
-target_link_libraries(notification_test derecho)
+# add_executable(notification_test notification_test.cpp)
+# target_link_libraries(notification_test derecho)
