@@ -356,6 +356,10 @@ private:
     /**
      * The minimum (persistent) version number that has finished persisting in
      * each subgroup, indexed by subgroup number.
+     * We use atomic counters because they will be accessed by multiple threads:
+     * 1) the predicate thread will update it on delivery
+     * 2) Any threads holding a handle to Replicated<T> can read it throught get_global_persistence_frontier() and
+     * wait_for_global_persistence_frontier()
      */
     std::vector<std::unique_ptr<std::atomic<persistent::version_t>>> minimum_persisted_version;
     mutable std::vector<std::condition_variable> minimum_persisted_cv;
@@ -364,6 +368,7 @@ private:
      * The minimum (persistent) version number that has had its signature verified
      * in each subgroup, indexed by subgroup number, if the signed log feature is
      * enabled. (If the features is disabled, this will stay at INVALID_VERSION).
+     * for a similar reason as that for minimum_persisted_version, we use atomic counters.
      */
     std::vector<std::unique_ptr<std::atomic<persistent::version_t>>> minimum_verified_version;
 
@@ -561,12 +566,25 @@ public:
     bool send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
               const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send);
 
+    /** Compute the global real-time stability frontier in nano seconds.
+     */
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num) const;
 
+    /** Get the global persistence frontier version of local shard in a subgroup. The global persistence frontier
+     *  version is the latest version which has been persisted by all shard members, meaning that this version can
+     *  survive system restart.
+     */
     const persistent::version_t get_global_persistence_frontier(subgroup_id_t subgroup_num) const;
 
+    /** Wait until the global persistence frontier of local shard in a subgroup goes beyond a given version. If the
+     * version specified is a future version (greater than the latest delivered version), this call will return
+     * immediately with a false return value. Otherwise, wait if necessary and return true.
+     */
     bool wait_for_global_persistence_frontier(subgroup_id_t subgroup_num, persistent::version_t version) const;
 
+    /** Get the global verified version of local shard in a subgroup. The global verified frontier version is the latest
+     * version which has been verified by all shard members.
+     */
     const persistent::version_t get_global_verified_frontier(subgroup_id_t subgroup_num) const;
 
     /** Stops all sending and receiving in this group, in preparation for shutting it down. */
