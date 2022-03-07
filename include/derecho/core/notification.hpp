@@ -93,7 +93,7 @@ struct NotificationSupport {
 public:
     std::vector<std::function<void(const NotificationMessage&)>> handlers;
 
-    void notify(const NotificationMessage& msg) const {
+    virtual void notify(const NotificationMessage& msg) const {
         for(auto func : handlers) {
             func(msg);
         }
