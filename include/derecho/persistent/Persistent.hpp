@@ -503,6 +503,15 @@ public:
     ObjectType* operator->();
 
     /**
+     * const version of -> operator
+     *
+     * overload the '->' operator to access the wrapped object
+     *
+     * @return a pointer to the current ObjectType object.
+     */
+    const ObjectType* operator->() const;
+
+    /**
      * getConstRef()
      *
      * get a const reference to the wrapped object
@@ -887,6 +896,13 @@ public:
      * Get the latest index inclusively before time.
      */
     virtual int64_t getIndexAtTime(const HLC& hlc) const;
+
+    /**
+     * getVersionAtTime
+     *
+     * Get the latest version invlusively before time.
+     */
+    virtual persistent::version_t getVersionAtTime(const HLC& hlc) const;
 
     /**
      * set(ObjectType&, version_t,const HLC&)
