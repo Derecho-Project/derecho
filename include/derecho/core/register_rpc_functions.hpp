@@ -132,6 +132,186 @@
     std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_7(rest_args)
 #define REGISTER_RPC_FUNCTIONS_TUPLE_9(first_args,rest_args...)                                                       \
     std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_8(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_10(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_9(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_11(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_10(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_12(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_11(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_13(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_12(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_14(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_13(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_15(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_14(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_16(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_15(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_17(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_16(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_18(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_17(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_19(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_18(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_20(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_19(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_21(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_20(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_22(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_21(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_23(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_22(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_24(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_23(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_25(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_24(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_26(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_25(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_27(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_26(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_28(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_27(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_29(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_28(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_30(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_29(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_31(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_30(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_32(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_31(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_33(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_32(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_34(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_33(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_35(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_34(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_36(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_35(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_37(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_36(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_38(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_37(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_39(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_38(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_40(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_39(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_41(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_40(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_42(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_41(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_43(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_42(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_44(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_43(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_45(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_44(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_46(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_45(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_47(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_46(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_48(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_47(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_49(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_48(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_50(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_49(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_51(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_50(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_52(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_51(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_53(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_52(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_54(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_53(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_55(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_54(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_56(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_55(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_57(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_56(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_58(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_57(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_59(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_58(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_60(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_59(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_61(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_60(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_62(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_61(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_63(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_62(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_64(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_63(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_65(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_64(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_66(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_65(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_67(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_66(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_68(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_67(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_69(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_68(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_70(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_69(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_71(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_70(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_72(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_71(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_73(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_72(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_74(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_73(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_75(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_74(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_76(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_75(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_77(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_76(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_78(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_77(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_79(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_78(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_80(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_79(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_81(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_80(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_82(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_81(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_83(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_82(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_84(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_83(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_85(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_84(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_86(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_85(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_87(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_86(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_88(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_87(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_89(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_88(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_90(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_89(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_91(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_90(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_92(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_91(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_93(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_92(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_94(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_93(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_95(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_94(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_96(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_95(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_97(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_96(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_98(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_97(rest_args)
+#define REGISTER_RPC_FUNCTIONS_TUPLE_99(first_args,rest_args...)                                                      \
+    std::make_tuple(first_args),REGISTER_RPC_FUNCTIONS_TUPLE_98(rest_args)
 
 #define REGISTER_RPC_FUNCTIONS_TUPLE_(nargs,...)                                                                      \
     REGISTER_RPC_FUNCTIONS_CONCAT(REGISTER_RPC_FUNCTIONS_TUPLE_,nargs) (__VA_ARGS__)
