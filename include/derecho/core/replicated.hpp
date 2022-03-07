@@ -301,6 +301,25 @@ public:
     virtual persistent::version_t get_minimum_latest_persisted_version();
 
     /**
+     * Returns the current global persistence frontier, aka, stable frontier that will survive whole system restart.
+     * Please note this applies to persistent data ONLY. The data not in Persistent<> are not saved.
+     */
+    virtual persistent::version_t get_global_persistence_frontier();
+
+    /**
+     * Wait until the current global persistence frontier advanced beyond a version.
+     * @param version   the version
+     * @return false if the given version is beyond the latest atomic broadcast.
+     */
+    virtual bool wait_for_global_persistence_frontier(persistent::version_t version);
+
+    /**
+     * Returns the current global verified frontier, aka, stable frontier that will survive whole system restart.
+     * Please note this applies to persistent data ONLY. The data not in Persistent<> are not saved.
+     */
+    virtual persistent::version_t get_global_verified_frontier();
+
+    /**
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */

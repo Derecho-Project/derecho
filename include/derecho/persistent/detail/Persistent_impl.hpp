@@ -313,7 +313,7 @@ auto Persistent<ObjectType, storageType>::get(
     }
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
-        return f(*this->get(ver, dm));
+        return fun(*this->get(ver, dm));
     } else {
         return mutils::deserialize_and_run(dm, pdat, fun);
     }
@@ -503,6 +503,12 @@ template <typename ObjectType,
           StorageType storageType>
 int64_t Persistent<ObjectType, storageType>::getIndexAtTime(const HLC& hlc) const {
     return this->m_pLog->getHLCIndex(hlc);
+}
+
+template <typename ObjectType,
+          StorageType storageType>
+version_t Persistent<ObjectType, storageType>::getVersionAtTime(const HLC& hlc) const {
+    return this->m_pLog->getHLCVersion(hlc);
 }
 
 template <typename ObjectType,

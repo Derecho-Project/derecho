@@ -2418,6 +2418,18 @@ const uint64_t ViewManager::compute_global_stability_frontier(subgroup_id_t subg
     return curr_view->multicast_group->compute_global_stability_frontier(subgroup_num);
 }
 
+const persistent::version_t ViewManager::get_global_persistence_frontier(subgroup_id_t subgroup_num) const {
+    return curr_view->multicast_group->get_global_persistence_frontier(subgroup_num);
+}
+
+bool ViewManager::wait_for_global_persistence_frontier(subgroup_id_t subgroup_num, persistent::version_t version) const {
+    return curr_view->multicast_group->wait_for_global_persistence_frontier(subgroup_num, version);
+}
+
+const persistent::version_t ViewManager::get_global_verified_frontier(subgroup_id_t subgroup_num) const {
+    return curr_view->multicast_group->get_global_verified_frontier(subgroup_num);
+}
+
 void ViewManager::add_view_upcall(const view_upcall_t& upcall) {
     view_upcalls.emplace_back(upcall);
 }

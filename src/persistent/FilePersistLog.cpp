@@ -596,6 +596,16 @@ int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) {
     return INVALID_INDEX;
 }
 
+version_t FilePersistLog::getHLCVersion(const HLC& rhlc) {
+    int64_t idx = getHLCIndex(rhlc);
+
+    if (idx != INVALID_INDEX) {
+        return LOG_ENTRY_AT(idx)->fields.ver;
+    }
+
+    return INVALID_VERSION;
+}
+
 const void* FilePersistLog::getEntry(const HLC& rhlc) {
     LogEntry* ple = nullptr;
 
