@@ -123,6 +123,9 @@ public:
     // Get the Index corresponding to an HLC timestamp
     virtual int64_t getHLCIndex(const HLC& hlc) = 0;
 
+    // Get the version corresponding to an HLC timestamp
+    virtual version_t getHLCVersion(const HLC& hlc) = 0;
+
     // Get the Earlist version
     virtual version_t getEarliestVersion() = 0;
 

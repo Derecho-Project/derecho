@@ -879,6 +879,28 @@ public:
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
 
     /**
+     * Get the current global persistence frontier. For persisted data ONLY.
+     * @param subgroup_num  the subgroup id
+     * @return the current persistence_frontier version
+     */
+    const persistent::version_t get_global_persistence_frontier(subgroup_id_t subgroup_num) const;
+
+    /**
+     * Wait on global persistent frontier
+     * @param subgroup_num  the subgroup id
+     * @param version   the version to wait on
+     * @return false if the given version is beyond the latest atomic broadcast.
+     */
+    bool wait_for_global_persistence_frontier(subgroup_id_t subgroup_num,persistent::version_t version) const;
+
+    /**
+     * Get the current global verified frontier. For persisted and signed data ONLY.
+     * @param subgroup_num  the subgroup id
+     * @return the current verified frontier version
+     */
+    const persistent::version_t get_global_verified_frontier(subgroup_id_t subgroup_num) const;
+
+    /**
      * @return a reference to the current View, wrapped in a container that
      * holds a read-lock on the View pointer. This allows the Group that
      * contains this ViewManager to look at the current View (and set it up
