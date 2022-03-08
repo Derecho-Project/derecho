@@ -9,7 +9,9 @@ ExternalClientCaller<T, ExternalGroupType>::ExternalClientCaller(subgroup_type_i
           subgroup_id(subgroup_id),
           group_client(group_client),
           wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
-                                                   T::register_functions(), *group_client.receivers)) {}
+                                                   T::register_functions(), *group_client.receivers)) {
+    this->support_map_mutex = std::make_unique<std::mutex>();
+}
 
 template <typename T, typename ExternalGroupType>
 template <typename CopyOfT>
@@ -17,6 +19,7 @@ std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
 ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<void(const derecho::NotificationMessage&)> func, node_id_t nid) {
     // Dirty fix for adding a p2p connection
     add_p2p_connection(nid);
+    std::lock_guard<std::mutex> lck(*support_map_mutex);
     if(support_map.find(nid) == support_map.end()) {
         // Create the support pointer
         support_map[nid] = group_client.factories.template get<T>()();
@@ -30,9 +33,6 @@ ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<
         },
                                                          T::register_functions());
     }
-    // for (auto it = (*group_client.receivers).begin(); it != (*group_client.receivers).end(); it++){
-    //     std::cout << nid << " " << it->first.class_id << " " << it->first.subgroup_id << " " << it->first.function_id << " " << it->first.is_reply << std::endl;
-    // }
     // Register client handle
     support_map[nid]->add_notification_handler(func);
 }

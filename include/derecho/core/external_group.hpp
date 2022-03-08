@@ -47,6 +47,7 @@ private:
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
 
     std::unordered_map<node_id_t, std::unique_ptr<T>> support_map;
+    mutable std::unique_ptr<std::mutex> support_map_mutex;
     std::unordered_map<node_id_t, std::unique_ptr<rpc::RemoteInvocableOf<T>>> remote_invocable_ptr_map;
 
 public:
