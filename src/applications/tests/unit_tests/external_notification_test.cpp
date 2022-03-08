@@ -130,15 +130,15 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
         ExternalClientCaller<TestObject, decltype(group)>& handle2 = group.get_subgroup_caller<TestObject>(1);
 
         // register notification handler
-        handle1.register_notification([](const derecho::NotificationMessage& message) {
+        handle1.register_notification_handler([](const derecho::NotificationMessage& message) {
             std::cout << "Notification Successful from 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
                                       members[0]);
-        handle2.register_notification([](const derecho::NotificationMessage& message) {
+        handle2.register_notification_handler([](const derecho::NotificationMessage& message) {
             std::cout << "Notification Successful from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
                                       members[1]);
-        handle2.register_notification([](const derecho::NotificationMessage& message) {
+        handle2.register_notification_handler([](const derecho::NotificationMessage& message) {
             std::cout << "Another Victory from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
                                       members[1]);
@@ -197,15 +197,15 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
         ExternalClientCaller<TestPersistentObject, decltype(group)>& handle2 = group.get_subgroup_caller<TestPersistentObject>(1);
 
         // register notification handler
-        handle1.register_notification([](const derecho::NotificationMessage& message) {
+        handle1.register_notification_handler([](const derecho::NotificationMessage& message) {
             std::cout << "Notification Successful from 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
                                       members[0]);
-        handle2.register_notification([](const derecho::NotificationMessage& message) {
+        handle2.register_notification_handler([](const derecho::NotificationMessage& message) {
             std::cout << "Notification Successful from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
                                       members[1]);
-        handle2.register_notification([](const derecho::NotificationMessage& message) {
+        handle2.register_notification_handler([](const derecho::NotificationMessage& message) {
             std::cout << "Another Victory from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
         },
                                       members[1]);

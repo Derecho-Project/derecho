@@ -16,7 +16,7 @@ ExternalClientCaller<T, ExternalGroupType>::ExternalClientCaller(subgroup_type_i
 template <typename T, typename ExternalGroupType>
 template <typename CopyOfT>
 std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
-ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<void(const derecho::NotificationMessage&)> func, node_id_t nid) {
+ExternalClientCaller<T, ExternalGroupType>::register_notification_handler(std::function<void(const derecho::NotificationMessage&)> func, node_id_t nid) {
     // Dirty fix for adding a p2p connection
     add_p2p_connection(nid);
     std::lock_guard<std::mutex> lck(*support_map_mutex);
@@ -27,7 +27,6 @@ ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<
         // We have to store this pointer in ExternalClientCaller, although it is of no use to us in the future. This is to
         // keep it as well as the lambda inside alive throughout the entire program
         remote_invocable_ptr_map[nid] = mutils::callFunc([&](const auto&... unpacked_functions) {
-            // 0xffff should be changed to concrete subgroup index that this node wants to connect to
             return build_remote_invocable_class<T>(node_id, 0, subgroup_id, *group_client.receivers,
                                                    bind_to_instance(&support_map[nid], unpacked_functions)...);
         },
@@ -35,6 +34,16 @@ ExternalClientCaller<T, ExternalGroupType>::register_notification(std::function<
     }
     // Register client handle
     support_map[nid]->add_notification_handler(func);
+}
+
+template <typename T, typename ExternalGroupType>
+template <typename CopyOfT>
+std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
+ExternalClientCaller<T, ExternalGroupType>::unregister_notification(node_id_t nid) {
+    std::lock_guard<std::mutex> lck(*support_map_mutex);
+    if (support_map.find(nid) != support_map.end()) {
+        support_map[nid]->handlers.clear();
+    }
 }
 
 // Factor out add_p2p_connections out of p2p_send()
