@@ -417,6 +417,7 @@ volatile uint8_t* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_
         //ViewManager's view_mutex also prevents connections from being removed (because
         //that happens in new_view_callback)
         SharedLockedReference<View> view_and_lock = view_manager.get_current_view();
+
         //Check to see if the view changed between iterations of the loop, and re-get the rank
         if(curr_vid != view_and_lock.get().vid) {
             curr_vid = view_and_lock.get().vid;

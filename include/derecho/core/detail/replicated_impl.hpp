@@ -350,11 +350,9 @@ template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto ExternalClientCallback<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
-        std::cout << "starting to send notification! " << dest_node << " " << node_id << std::endl;
         assert(dest_node != node_id);
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
                 [this, &dest_node](size_t size) -> uint8_t* {
-                    std::cout << "Running in the lambda haha" << std::endl;
                     const std::size_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_payload_size) {
                         return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
@@ -364,7 +362,6 @@ auto ExternalClientCallback<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                     }
                 },
                 std::forward<Args>(args)...);
-        std::cout << "Finishing p2p send..." << std::endl;
         group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
         return std::move(*return_pair.results);
     } else {

@@ -133,9 +133,12 @@ uint8_t* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYP
     std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
     if(p2p_connections[node_id].second) {
         return p2p_connections[node_id].second->get_sendbuffer_ptr(type);
-    } else {
-        return nullptr;
     }
+
+    // return nullptr;
+    // Weijia: we should report an exception instead of just return a nullptr because a connection to node_id does not
+    // exists.
+    throw std::out_of_range(std::string(__PRETTY_FUNCTION__) + " cannot find a connection to node:" + std::to_string(node_id));
 }
 
 void P2PConnectionManager::send(node_id_t node_id) {
