@@ -33,7 +33,7 @@ ExternalClientCaller<T, ExternalGroupType>::register_notification_handler(std::f
                                                          T::register_functions());
     }
     // Register client handle
-    support_map[nid]->add_notification_handler(func);
+    support_map[nid]->set_notification_handler(func);
 }
 
 template <typename T, typename ExternalGroupType>
@@ -42,7 +42,7 @@ std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
 ExternalClientCaller<T, ExternalGroupType>::unregister_notification(node_id_t nid) {
     std::lock_guard<std::mutex> lck(*support_map_mutex);
     if (support_map.find(nid) != support_map.end()) {
-        support_map[nid]->handlers.clear();
+        support_map[nid]->remove_notification_handler();
     }
 }
 

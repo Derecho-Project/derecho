@@ -71,7 +71,8 @@ public:
     /**
      * Registers a new notification function that will be called when the specified
      * node sends a notification to this external client. The node must be within
-     * this ExternalClientCaller's subgroup.
+     * this ExternalClientCaller's subgroup. Otherwise, it throws an exception. If 
+     * such a lambda function has been registered, it will be replaced by the new one.
      * @param func The notification function
      * @param nid The Derecho node to receive notifications from.
      */
@@ -79,7 +80,7 @@ public:
     std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
     register_notification_handler(std::function<void(const derecho::NotificationMessage&)> func, node_id_t nid);
     /**
-     * Unregisters all notification handlers from a node.
+     * Unregister the notification function corresponding to a node.
      * @param nid The Derecho node to receive notifications from.
      */
     template<typename CopyOfT = T>
