@@ -6,7 +6,7 @@
 
 #include <functional>
 #include <memory>
-#include <vector>
+#include <optional>
 
 namespace derecho {
 
@@ -91,29 +91,20 @@ struct NotificationMessage : mutils::ByteRepresentable {
 
 struct NotificationSupport {
 public:
-    std::vector<std::function<void(const NotificationMessage&)>> handlers;
+    std::optional<std::function<void(const NotificationMessage&)>> handler;
 
-    void notify(const NotificationMessage& msg) const {
-        for(auto func : handlers) {
-            func(msg);
+    virtual void notify(const NotificationMessage& msg) const {
+        if (handler) {
+            (*handler)(msg);
         }
     }
 
-    // extend blob to add a tag, header and body
+    void set_notification_handler(std::function<void(const NotificationMessage&)> func) {
+        handler = func;
+    }
 
-    // REGISTER_RPC_FUNCTIONS(NotificationSupport, P2P_TARGETS(notify));
-
-    // extend blob to add a tag, header and body
-
-    // merge NotificationSupport and "ConcreteNotificationSupport"
-    // server side: class A:// opcode hardcoding?
-    // virtual void notify(const Bytes& msg) const {NotificationSupport::notify(msg);}
-    // REGISTER_RPC_FUNCTIONS(A, P2P_TARGETS(notify));
-    // external client:
-
-    // DEFAULT_SERIALIZATION_SUPPORT(NotificationSupport, handler);
-    void add_notification_handler(std::function<void(const NotificationMessage&)> func) {
-        handlers.push_back(func);
+    void remove_notification_handler() {
+        handler.reset();
     }
 };
 

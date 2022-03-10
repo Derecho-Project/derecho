@@ -47,6 +47,7 @@ private:
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
 
     std::unordered_map<node_id_t, std::unique_ptr<T>> support_map;
+    mutable std::unique_ptr<std::mutex> support_map_mutex;
     std::unordered_map<node_id_t, std::unique_ptr<rpc::RemoteInvocableOf<T>>> remote_invocable_ptr_map;
 
 public:
@@ -70,13 +71,21 @@ public:
     /**
      * Registers a new notification function that will be called when the specified
      * node sends a notification to this external client. The node must be within
-     * this ExternalClientCaller's subgroup.
+     * this ExternalClientCaller's subgroup. Otherwise, it throws an exception. If 
+     * such a lambda function has been registered, it will be replaced by the new one.
      * @param func The notification function
      * @param nid The Derecho node to receive notifications from.
      */
     template<typename CopyOfT = T>
     std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
-    register_notification(std::function<void(const derecho::NotificationMessage&)> func, node_id_t nid);
+    register_notification_handler(std::function<void(const derecho::NotificationMessage&)> func, node_id_t nid);
+    /**
+     * Unregister the notification function corresponding to a node.
+     * @param nid The Derecho node to receive notifications from.
+     */
+    template<typename CopyOfT = T>
+    std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
+    unregister_notification(node_id_t nid);
     /** Sets up a P2P connection to the specified node, if one does not yet exist. */
     void add_p2p_connection(node_id_t dest_node);
     /**
@@ -126,7 +135,7 @@ private:
      * These will be used to construct "empty" instances of the Replicated Types
      * in order to create receiver functions for notifications. This can be
      * empty if no ReplicatedTypes in the list have notifications enabled, in
-     * which case the register_notification() function will be removed.
+     * which case the register_notification_handler() function will be removed.
      */
     mutils::KindMap<NoArgFactory, ReplicatedTypes...> factories;
 
