@@ -89,6 +89,8 @@ struct NotificationMessage : mutils::ByteRepresentable {
             const uint8_t* const buffer);
 };
 
+using notification_handler_t = std::function<void(const NotificationMessage&)>;
+
 struct NotificationSupport {
 public:
     std::optional<std::function<void(const NotificationMessage&)>> handler;
