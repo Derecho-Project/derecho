@@ -21,6 +21,8 @@ namespace rpc {
 
 thread_local bool _in_rpc_handler = false;
 
+thread_local node_id_t RPCManager::rpc_caller_id;
+
 RPCManager::~RPCManager() {
     thread_shutdown = true;
     if(rpc_listener_thread.joinable()) {
@@ -128,6 +130,7 @@ std::exception_ptr RPCManager::parse_and_receive(uint8_t* buf, std::size_t size,
     node_id_t received_from;
     uint32_t flags;
     retrieve_header(&rdv, buf, payload_size, indx, received_from, flags);
+    RPCManager::rpc_caller_id = received_from;
     return receive_message(indx, received_from, buf + header_space(),
                            payload_size, out_alloc);
 }
@@ -479,6 +482,7 @@ void RPCManager::p2p_request_worker() {
             throw derecho::derecho_exception("invalid rpc message in fifo queue...crash.");
         }
         reply_size = 0;
+        RPCManager::rpc_caller_id = received_from;
         receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
                         [this, &reply_size, &request](size_t _size) -> uint8_t* {
                             reply_size = _size;
@@ -558,6 +562,10 @@ void RPCManager::p2p_receive_loop() {
     // stop fifo worker.
     request_queue_cv.notify_one();
     request_worker_thread.join();
+}
+
+node_id_t RPCManager::get_rpc_caller_id() {
+    return rpc_caller_id;
 }
 
 bool in_rpc_handler() {
