@@ -78,7 +78,7 @@ public:
      */
     template<typename CopyOfT = T>
     std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
-    register_notification_handler(std::function<void(const derecho::NotificationMessage&)> func, node_id_t nid);
+    register_notification_handler(const notification_handler_t& func, node_id_t nid);
     /**
      * Unregister the notification function corresponding to a node.
      * @param nid The Derecho node to receive notifications from.
