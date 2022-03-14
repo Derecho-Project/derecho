@@ -262,7 +262,8 @@ int main(int argc, char** argv) {
         //update method can record QueryResults; other replicas have no way of tracking their updates
         node_id_t notification_node = update_node;
         //Register the client callback handler
-        storage_caller.register_notification_handler(client_callback_function, notification_node);
+        storage_caller.add_p2p_connection(notification_node);
+        storage_caller.register_notification_handler(client_callback_function);
         //Send some updates to the storage nodes and request callbacks when they have globally persisted
         derecho::Bytes test_update(update_size);
         for(unsigned counter = 0; counter < num_updates; ++counter) {

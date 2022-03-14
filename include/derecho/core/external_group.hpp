@@ -46,9 +46,9 @@ private:
     /** The actual implementation of ExternalCaller, which has lots of ugly template parameters */
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
 
-    std::unordered_map<node_id_t, std::unique_ptr<T>> support_map;
-    mutable std::unique_ptr<std::mutex> support_map_mutex;
-    std::unordered_map<node_id_t, std::unique_ptr<rpc::RemoteInvocableOf<T>>> remote_invocable_ptr_map;
+    std::unique_ptr<T> client_stub;
+    mutable std::unique_ptr<std::mutex> client_stub_mutex;
+    std::unique_ptr<rpc::RemoteInvocableOf<T>> remote_invocable_ptr;
 
 public:
     /**
@@ -69,23 +69,20 @@ public:
     ExternalClientCaller(const ExternalClientCaller&) = delete;
 
     /**
-     * Registers a new notification function that will be called when the specified
-     * node sends a notification to this external client. The node must be within
-     * this ExternalClientCaller's subgroup. Otherwise, it throws an exception. If 
-     * such a lambda function has been registered, it will be replaced by the new one.
-     * @param func The notification function
-     * @param nid The Derecho node to receive notifications from.
+     * Registers a new notification function that will be called when a server
+     * sends a notification to this subgroup. 
+     * If such a lambda function has been registered, it will be replaced by the new one.
+     * @param func      The notification function
      */
     template<typename CopyOfT = T>
     std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
-    register_notification_handler(const notification_handler_t& func, node_id_t nid);
+    register_notification_handler(const notification_handler_t& func);
     /**
-     * Unregister the notification function corresponding to a node.
-     * @param nid The Derecho node to receive notifications from.
+     * Unregister the notification function
      */
     template<typename CopyOfT = T>
     std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
-    unregister_notification(node_id_t nid);
+    unregister_notification();
     /** Sets up a P2P connection to the specified node, if one does not yet exist. */
     void add_p2p_connection(node_id_t dest_node);
     /**

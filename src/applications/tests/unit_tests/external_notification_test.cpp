@@ -130,18 +130,14 @@ void run_nonpersistent_test(uint32_t external_node_id, bool is_sender, int num_n
         ExternalClientCaller<TestObject, decltype(group)>& handle2 = group.get_subgroup_caller<TestObject>(1);
 
         // register notification handler
+        handle1.add_p2p_connection(members[0]);
         handle1.register_notification_handler([](const derecho::NotificationMessage& message) {
-            std::cout << "Notification Successful from 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
-        },
-                                      members[0]);
+            std::cout << "Notification Successful from subgroup 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        });
+        handle2.add_p2p_connection(members[1]);
         handle2.register_notification_handler([](const derecho::NotificationMessage& message) {
-            std::cout << "Notification Successful from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
-        },
-                                      members[1]);
-        handle2.register_notification_handler([](const derecho::NotificationMessage& message) {
-            std::cout << "Another Victory from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
-        },
-                                      members[1]);
+            std::cout << "Notification Successful from subgroup 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        });
 
         std::cout << "Awaiting notifications." << std::endl;
         std::cout << "Press enter when finished with test." << std::endl;
@@ -197,18 +193,14 @@ void run_persistent_test(uint32_t external_node_id, bool is_sender, int num_node
         ExternalClientCaller<TestPersistentObject, decltype(group)>& handle2 = group.get_subgroup_caller<TestPersistentObject>(1);
 
         // register notification handler
+        handle1.add_p2p_connection(members[0]);
         handle1.register_notification_handler([](const derecho::NotificationMessage& message) {
-            std::cout << "Notification Successful from 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
-        },
-                                      members[0]);
+            std::cout << "Notification Successful from subgroup 0! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        });
+        handle2.add_p2p_connection(members[1]);
         handle2.register_notification_handler([](const derecho::NotificationMessage& message) {
-            std::cout << "Notification Successful from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
-        },
-                                      members[1]);
-        handle2.register_notification_handler([](const derecho::NotificationMessage& message) {
-            std::cout << "Another Victory from 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
-        },
-                                      members[1]);
+            std::cout << "Notification Successful from subgroup 1! Message type = " << message.message_type << " Size: " << message.size << ", Data: " << message.body << std::endl;
+        });
         std::cout << "Awaiting notifications." << std::endl;
         std::cout << "Press enter when finished with test." << std::endl;
         std::cin.get();

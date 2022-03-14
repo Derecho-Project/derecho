@@ -10,39 +10,41 @@ ExternalClientCaller<T, ExternalGroupType>::ExternalClientCaller(subgroup_type_i
           group_client(group_client),
           wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
                                                    T::register_functions(), *group_client.receivers)) {
-    this->support_map_mutex = std::make_unique<std::mutex>();
+    this->client_stub_mutex = std::make_unique<std::mutex>();
 }
 
 template <typename T, typename ExternalGroupType>
 template <typename CopyOfT>
 std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
-ExternalClientCaller<T, ExternalGroupType>::register_notification_handler(const notification_handler_t& func, node_id_t nid) {
-    // Dirty fix for adding a p2p connection
-    add_p2p_connection(nid);
-    std::lock_guard<std::mutex> lck(*support_map_mutex);
-    if(support_map.find(nid) == support_map.end()) {
+ExternalClientCaller<T, ExternalGroupType>::register_notification_handler(const notification_handler_t& func) {
+    std::lock_guard<std::mutex> lck(*client_stub_mutex);
+    if (client_stub == nullptr) {
         // Create the support pointer
-        support_map[nid] = group_client.factories.template get<T>()();
+        client_stub = group_client.factories.template get<T>()();
 
         // We have to store this pointer in ExternalClientCaller, although it is of no use to us in the future. This is to
         // keep it as well as the lambda inside alive throughout the entire program
-        remote_invocable_ptr_map[nid] = mutils::callFunc([&](const auto&... unpacked_functions) {
-            return build_remote_invocable_class<T>(node_id, group_client.template get_index_of_type<T>(), subgroup_id, *group_client.receivers,
-                                                   bind_to_instance(&support_map[nid], unpacked_functions)...);
-        },
-                                                         T::register_functions());
+        remote_invocable_ptr = mutils::callFunc([&](const auto&... unpacked_functions) {
+                return build_remote_invocable_class<T>(
+                        node_id, 
+                        group_client.template get_index_of_type<T>(), 
+                        subgroup_id, 
+                        *group_client.receivers,
+                        bind_to_instance(&client_stub, unpacked_functions)...);
+            },
+            T::register_functions());
     }
-    // Register client handle
-    support_map[nid]->set_notification_handler(func);
+    // set handler
+    client_stub->set_notification_handler(func);
 }
 
 template <typename T, typename ExternalGroupType>
 template <typename CopyOfT>
 std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
-ExternalClientCaller<T, ExternalGroupType>::unregister_notification(node_id_t nid) {
-    std::lock_guard<std::mutex> lck(*support_map_mutex);
-    if (support_map.find(nid) != support_map.end()) {
-        support_map[nid]->remove_notification_handler();
+ExternalClientCaller<T, ExternalGroupType>::unregister_notification() {
+    std::lock_guard<std::mutex> lck(*client_stub_mutex);
+    if (client_stub != nullptr) {
+        client_stub->remove_notification_handler();
     }
 }
 
