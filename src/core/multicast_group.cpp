@@ -129,6 +129,8 @@ MulticastGroup::MulticastGroup(
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
           minimum_persisted_version(total_num_subgroups),
+          minimum_persisted_cv(total_num_subgroups),
+          minimum_persisted_mtx(total_num_subgroups),
           minimum_verified_version(total_num_subgroups),
           delivered_version(total_num_subgroups),
           sender_timeout(old_group.sender_timeout),
