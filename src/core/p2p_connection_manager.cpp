@@ -33,7 +33,7 @@ P2PConnectionManager::P2PConnectionManager(const P2PParams params)
     }
 
     p2p_buf_size = 0;
-    for(uint8_t i = 0; i < num_request_types; ++i) {
+    for(uint8_t i = 0; i < num_p2p_message_types; ++i) {
         request_params.offsets[i] = p2p_buf_size;
         p2p_buf_size += request_params.window_sizes[i] * request_params.max_msg_sizes[i];
     }
@@ -92,17 +92,17 @@ std::size_t P2PConnectionManager::get_max_rpc_reply_size() {
     return request_params.max_msg_sizes[RPC_REPLY] - sizeof(uint64_t);
 }
 
-void P2PConnectionManager::update_incoming_seq_num(node_id_t node_id) {
+void P2PConnectionManager::increment_incoming_seq_num(node_id_t node_id, MESSAGE_TYPE type) {
     if(node_id != INVALID_NODE_ID) {
         std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
         if(p2p_connections[node_id].second) {
-            p2p_connections[node_id].second->update_incoming_seq_num();
+            p2p_connections[node_id].second->increment_incoming_seq_num(type);
         }
     }
 }
 
 // check if there's a new request from any node
-std::optional<std::pair<node_id_t, uint8_t*>> P2PConnectionManager::probe_all() {
+std::optional<MessagePointer> P2PConnectionManager::probe_all() {
     for(node_id_t node_id = 0; node_id < p2p_connections.size(); ++node_id) {
         //Check the hint before locking the mutex. If it's false, don't bother.
         if(!active_p2p_connections[node_id]) continue;
@@ -111,24 +111,24 @@ std::optional<std::pair<node_id_t, uint8_t*>> P2PConnectionManager::probe_all() 
         //In case the hint was wrong, check for an empty connection
         if(!p2p_connections[node_id].second) continue;
 
-        auto buf = p2p_connections[node_id].second->probe();
+        auto buf_type_pair = p2p_connections[node_id].second->probe();
         // In include/derecho/core/detail/rpc_utils.hpp:
         // Please note that populate_header() put payload_size(size_t) at the beginning of buffer.
         // If we only test buf[0], it will fall in the wrong path if the least significant byte of the payload size is
         // zero.
-        if(buf && reinterpret_cast<size_t*>(buf)[0]) {
-            return std::pair<node_id_t, uint8_t*>(node_id, buf);
-        } else if(buf) {
+        if(buf_type_pair && reinterpret_cast<size_t*>(buf_type_pair->first)[0] != 0) {
+            return MessagePointer{node_id, buf_type_pair->first, buf_type_pair->second};
+        } else if(buf_type_pair) {
             // this means that we have a null reply
             // we don't need to process it, but we still want to increment the seq num
-            p2p_connections[node_id].second->update_incoming_seq_num();
-            return std::pair<node_id_t, uint8_t*>(INVALID_NODE_ID, nullptr);
+            p2p_connections[node_id].second->increment_incoming_seq_num(buf_type_pair->second);
+            return MessagePointer{INVALID_NODE_ID, nullptr, MESSAGE_TYPE::P2P_REPLY};
         }
     }
     return {};
 }
 
-uint8_t* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYPE type) {
+uint8_t* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, MESSAGE_TYPE type) {
     std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
     if(p2p_connections[node_id].second) {
         return p2p_connections[node_id].second->get_sendbuffer_ptr(type);
@@ -137,9 +137,9 @@ uint8_t* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYP
     }
 }
 
-void P2PConnectionManager::send(node_id_t node_id) {
+void P2PConnectionManager::send(node_id_t node_id, MESSAGE_TYPE type) {
     std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
-    p2p_connections[node_id].second->send();
+    p2p_connections[node_id].second->send(type);
     if(node_id != my_node_id && p2p_connections[node_id].second) {
         p2p_connections[node_id].second->num_rdma_writes++;
     }
@@ -289,7 +289,7 @@ void P2PConnectionManager::debug_print() {
     // }
     // std::cout << std::endl;
 
-    // for(const auto& type : p2p_request_types) {
+    // for(const auto& type : p2p_message_types) {
     //     std::cout << "P2PConnections: Request type " << type << std::endl;
     //     for(uint32_t node = 0; node < num_members; ++node) {
     //         std::cout << "Node " << node << std::endl;
