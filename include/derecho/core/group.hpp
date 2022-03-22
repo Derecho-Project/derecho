@@ -93,6 +93,8 @@ public:
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
 
     virtual node_id_t get_my_id() = 0;
+
+    virtual node_id_t get_rpc_caller_id() = 0;
 };
 
 template <typename ReplicatedType>
@@ -400,6 +402,9 @@ public:
 
     /** @returns the ID of local node */
     node_id_t get_my_id() override;
+
+    /** @returns the id of the lastest rpc caller, only valid when called from an RPC handler */
+    node_id_t get_rpc_caller_id() override;
 
     /**
      * @returns the shard number that this node is a member of in the specified

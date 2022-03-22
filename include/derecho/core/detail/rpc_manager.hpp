@@ -406,7 +406,7 @@ public:
     void finish_p2p_send(node_id_t dest_node, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
 
     /**
-     * Get the rpc caller id of the latest caller.
+     * Get the id of the latest rpc caller.
      */
     static node_id_t get_rpc_caller_id();
 };
