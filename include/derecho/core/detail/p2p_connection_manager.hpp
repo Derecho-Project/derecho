@@ -102,20 +102,25 @@ public:
      */
     std::optional<MessagePointer> probe_all();
     /**
-     * Returns a pointer to the beginning of the next available message buffer
+     * Returns a P2PBufferHandle for the next available message buffer
      * for the specified message type in the specified node's P2P connection
-     * channel, or a null pointer if no such message buffer is available.
+     * channel, or std::nullopt if no such message buffer is available.
      * @param node_id The ID of the remote node that will be sent to
      * @param type The type of P2P message to send
-     * @return A pointer to the beginning of a message buffer, or null
+     * @return A P2PBufferHandle containing a pointer to the beginning
+     * of a message buffer, or std::nullopt
      */
-    uint8_t* get_sendbuffer_ptr(node_id_t node_id, MESSAGE_TYPE type);
+    std::optional<P2PBufferHandle> get_sendbuffer_ptr(node_id_t node_id, MESSAGE_TYPE type);
     /**
-     * Sends the next outgoing message to the specified node, i.e. the one
-     * populated by the most recent call to get_sendbuffer_ptr.
+     * Sends a specific outgoing message to a node, assuming its buffer has been
+     * populated by a previous call to get_sendbuffer_ptr(). The message buffer
+     * identified by the message type and sequence number will be sent over the
+     * P2P connection to that node.
      * @param node_id The ID of the remote node to send to.
+     * @param type The type of message being sent
+     * @param sequence_num The sequence number of the buffer to send.
      */
-    void send(node_id_t node_id, MESSAGE_TYPE type);
+    void send(node_id_t node_id, MESSAGE_TYPE type, uint64_t sequence_num);
     /**
      * Compares the set of P2P connections to a list of known live nodes and
      * removes any connections to nodes not in that list. This is used to

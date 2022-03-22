@@ -68,11 +68,11 @@ private:
      */
     bool get_view(const node_id_t nid);
     void clean_up();
-    volatile uint8_t* get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type);
-    void send_p2p_message(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
     uint32_t get_index_of_type(const std::type_info& ti) const;
 
     /** ======================== copy/paste from rpc_manager ======================== **/
+    sst::P2PBufferHandle get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type);
+    void send_p2p_message(node_id_t dest_id, subgroup_id_t dest_subgroup_id, uint64_t sequence_num, std::weak_ptr<AbstractPendingResults> pending_results_handle);
     std::atomic<bool> thread_shutdown{false};
     std::thread rpc_listener_thread;
     /** p2p send and queries are queued in fifo worker */

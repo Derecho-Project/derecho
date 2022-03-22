@@ -101,20 +101,24 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) const {
             throw invalid_node_exception("Cannot send a p2p request to node "
                                          + std::to_string(dest_node) + ": it is not a member of the Group.");
         }
-        //Convert the user's desired tag into an "internal" function tag for a P2P function
+        uint64_t message_seq_num;
+        // Convert the user's desired tag into an "internal" function tag for a P2P function
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
                 // Invoke the sending function with a buffer-allocator that uses the P2P request buffers
-                [this, &dest_node](std::size_t size) -> uint8_t* {
+                [this, &dest_node, &message_seq_num](std::size_t size) -> uint8_t* {
                     const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_p2p_request_payload_size) {
-                        return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                              sst::MESSAGE_TYPE::P2P_REQUEST);
+                        auto buffer_handle = group_rpc_manager.get_sendbuffer_ptr(dest_node,
+                                                                                  sst::MESSAGE_TYPE::P2P_REQUEST);
+                        // Record the sequence number for this message buffer
+                        message_seq_num = buffer_handle.seq_num;
+                        return buffer_handle.buf_ptr;
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
+        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, message_seq_num, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -316,18 +320,22 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
             throw invalid_node_exception("Cannot send a p2p request to node "
                                          + std::to_string(dest_node) + ": it is not a member of the Group.");
         }
+        uint64_t message_seq_num;
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
-                [this, &dest_node](size_t size) -> uint8_t* {
+                [this, &dest_node, &message_seq_num](size_t size) -> uint8_t* {
                     const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
                     if(size <= max_payload_size) {
-                        return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                           sst::MESSAGE_TYPE::P2P_REQUEST);
+                        auto buffer_handle = group_rpc_manager.get_sendbuffer_ptr(dest_node,
+                                                                                  sst::MESSAGE_TYPE::P2P_REQUEST);
+                        // Record the sequence number for this message buffer
+                        message_seq_num = buffer_handle.seq_num;
+                        return buffer_handle.buf_ptr;
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
+        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, message_seq_num, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};

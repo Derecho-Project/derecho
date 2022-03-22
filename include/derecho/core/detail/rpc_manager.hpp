@@ -86,7 +86,7 @@ class RPCManager {
     mutils::RemoteDeserialization_v rdv;
 
     template <typename T>
-    friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
+    friend class ::derecho::Replicated;  // Give only Replicated access to view_manager
     template <typename T>
     friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
@@ -385,18 +385,20 @@ public:
      * @param dest_id The ID of the node that the P2P message will be sent to
      * @param type The type of P2P message that will be sent
      */
-    volatile uint8_t* get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type);
+    sst::P2PBufferHandle get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type);
 
     /**
-     * Sends the next P2P message buffer over an RDMA connection to the specified node,
-     * and registers the "promise object" pointed to by pending_results_handle in case
-     * RPCManager needs to deliver a node_removed_from_group_exception.
+     * Sends the P2P message buffer with the specified sequence number over an RDMA
+     * connection to the specified node, and registers the "promise object" pointed
+     * to by pending_results_handle in case RPCManager needs to deliver a node_removed_from_group_exception.
      * @param dest_node The node to send the message to
      * @param dest_subgroup_id The subgroup ID of the subgroup that node is in
+     * @param sequence_num The sequence number of the message buffer, as returned by get_sendbuffer_ptr
      * @param pending_results_handle A non-owning pointer to the "promise object"
      * created by RemoteInvoker for this send.
      */
-    void send_p2p_message(node_id_t dest_node, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
+    void send_p2p_message(node_id_t dest_node, subgroup_id_t dest_subgroup_id, uint64_t sequence_num,
+                          std::weak_ptr<AbstractPendingResults> pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types

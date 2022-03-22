@@ -128,18 +128,18 @@ std::optional<MessagePointer> P2PConnectionManager::probe_all() {
     return {};
 }
 
-uint8_t* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, MESSAGE_TYPE type) {
+std::optional<P2PBufferHandle> P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, MESSAGE_TYPE type) {
     std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
     if(p2p_connections[node_id].second) {
         return p2p_connections[node_id].second->get_sendbuffer_ptr(type);
     } else {
-        return nullptr;
+        return std::nullopt;
     }
 }
 
-void P2PConnectionManager::send(node_id_t node_id, MESSAGE_TYPE type) {
+void P2PConnectionManager::send(node_id_t node_id, MESSAGE_TYPE type, uint64_t sequence_num) {
     std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
-    p2p_connections[node_id].second->send(type);
+    p2p_connections[node_id].second->send(type, sequence_num);
     if(node_id != my_node_id && p2p_connections[node_id].second) {
         p2p_connections[node_id].second->num_rdma_writes++;
     }
