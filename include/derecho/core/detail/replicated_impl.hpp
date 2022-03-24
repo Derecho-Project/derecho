@@ -356,13 +356,13 @@ auto ExternalClientCallback<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                     const std::size_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_payload_size) {
                         return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                              sst::REQUEST_TYPE::P2P_REQUEST);
+                                                                              sst::MESSAGE_TYPE::P2P_REQUEST);
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
+        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
