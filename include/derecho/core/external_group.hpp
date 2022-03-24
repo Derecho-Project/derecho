@@ -146,8 +146,8 @@ private:
      */
     bool get_view(const node_id_t nid);
     void clean_up();
-    volatile uint8_t* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
-    void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
+    volatile uint8_t* get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type);
+    void send_p2p_message(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
     uint32_t get_index_of_type(const std::type_info& ti) const;
     /**
      * Setup method called by the constructors. Computes max_payload_sizes based

@@ -380,16 +380,16 @@ public:
      * @param pending_results_handle A non-owning pointer to the "promise object"
      * created by RemoteInvoker for this send.
      */
-    void finish_rpc_send(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
+    void register_rpc_results(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
 
     /**
      * Retrieves a buffer for sending P2P messages from the RPCManager's pool of
      * P2P RDMA connections. After filling it with data, the next call to
-     * finish_p2p_send will send it.
+     * send_p2p_message will send it.
      * @param dest_id The ID of the node that the P2P message will be sent to
      * @param type The type of P2P message that will be sent
      */
-    volatile uint8_t* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
+    volatile uint8_t* get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type);
 
     /**
      * Sends the next P2P message buffer over an RDMA connection to the specified node,
@@ -400,7 +400,7 @@ public:
      * @param pending_results_handle A non-owning pointer to the "promise object"
      * created by RemoteInvoker for this send.
      */
-    void finish_p2p_send(node_id_t dest_node, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
+    void send_p2p_message(node_id_t dest_node, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types
