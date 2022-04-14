@@ -192,6 +192,9 @@ class RPCManager {
     /** Notified when the request worker thread has work to do. */
     std::condition_variable request_queue_cv;
 
+    /** The caller id of the latest rpc */
+    static thread_local node_id_t rpc_caller_id;
+
     /** Listens for P2P RPC calls over the RDMA P2P connections and handles them. */
     void p2p_receive_loop();
 
@@ -401,6 +404,11 @@ public:
      * created by RemoteInvoker for this send.
      */
     void send_p2p_message(node_id_t dest_node, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
+
+    /**
+     * Get the id of the latest rpc caller.
+     */
+    static node_id_t get_rpc_caller_id();
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types

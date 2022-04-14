@@ -93,15 +93,16 @@ using notification_handler_t = std::function<void(const NotificationMessage&)>;
 
 struct NotificationSupport {
 public:
-    std::optional<std::function<void(const NotificationMessage&)>> handler;
+    std::optional<notification_handler_t> handler;
 
     virtual void notify(const NotificationMessage& msg) const {
+        dbg_default_trace("notification message of type {} received.", msg.message_type);
         if (handler) {
             (*handler)(msg);
         }
     }
 
-    void set_notification_handler(std::function<void(const NotificationMessage&)> func) {
+    void set_notification_handler(const notification_handler_t& func) {
         handler = func;
     }
 

@@ -122,9 +122,8 @@ int main(int argc, char** argv) {
 
 
         // register notification handler
-        handle1.register_notification_handler([](const derecho::NotificationMessage& data){std::cout << "Notification Successful from 0! Data: " << data.body << " Size: " << data.size << std::endl;}, 0);
-        handle2.register_notification_handler([](const derecho::NotificationMessage& data){std::cout << "Notification Successful from 1! Data: " << data.body << " Size: " << data.size << std::endl;}, 1);
-        handle2.register_notification_handler([](const derecho::NotificationMessage& data){std::cout << "Another Victory from 1! Data: " << data.body << " Size: " << data.size << std::endl;}, 1);
+        handle1.register_notification_handler([](const derecho::NotificationMessage& data){std::cout << "Notification Successful from subgroup 0! Data: " << data.body << " Size: " << data.size << std::endl;});
+        handle2.register_notification_handler([](const derecho::NotificationMessage& data){std::cout << "Notification Successful from subgroup 1! Data: " << data.body << " Size: " << data.size << std::endl;});
 
         cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
         while(true) {

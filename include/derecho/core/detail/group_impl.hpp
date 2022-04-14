@@ -533,6 +533,11 @@ node_id_t Group<ReplicatedTypes...>::get_my_id() {
 }
 
 template <typename... ReplicatedTypes>
+node_id_t Group<ReplicatedTypes...>::get_rpc_caller_id() {
+    return rpc::RPCManager::get_rpc_caller_id();
+}
+
+template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::barrier_sync() {
     view_manager.barrier_sync();
 }
