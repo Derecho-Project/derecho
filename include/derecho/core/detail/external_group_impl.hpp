@@ -99,13 +99,13 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
                 const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                 if(size <= max_p2p_request_payload_size) {
                     return (uint8_t*)group_client.get_sendbuffer_ptr(dest_node,
-                                                                     sst::REQUEST_TYPE::P2P_REQUEST);
+                                                                     sst::MESSAGE_TYPE::P2P_REQUEST);
                 } else {
                     throw derecho_exception("The size of serialized args exceeds the maximum message size (CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE).");
                 }
             },
             std::forward<Args>(args)...);
-    group_client.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
+    group_client.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
     return std::move(*return_pair.results);
 }
 
@@ -256,8 +256,8 @@ void ExternalGroupClient<ReplicatedTypes...>::clean_up() {
 
     for(auto& fulfilled_pending_results_pair : fulfilled_pending_results) {
         const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
-        //For each PendingResults in this subgroup, check the departed list of each shard in
-        //the subgroup, and call set_exception_for_removed_node for the departed nodes
+        // For each PendingResults in this subgroup, check the departed list of each shard in
+        // the subgroup, and call set_exception_for_removed_node for the departed nodes
         for(auto pending_results_iter = fulfilled_pending_results_pair.second.begin();
             pending_results_iter != fulfilled_pending_results_pair.second.end();) {
             std::shared_ptr<AbstractPendingResults> live_pending_results = pending_results_iter->lock();
@@ -266,15 +266,15 @@ void ExternalGroupClient<ReplicatedTypes...>::clean_up() {
                     shard_num < curr_view->subgroup_shard_views[subgroup_id].size();
                     ++shard_num) {
                     for(auto removed_id : curr_view->subgroup_shard_views[subgroup_id][shard_num].departed) {
-                        //This will do nothing if removed_id was never in the
-                        //shard this PendingResult corresponds to
+                        // This will do nothing if removed_id was never in the
+                        // shard this PendingResult corresponds to
                         dbg_default_debug("Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
                         live_pending_results->set_exception_for_removed_node(removed_id);
                     }
                 }
                 pending_results_iter++;
             } else {
-                //Garbage-collect PendingResults pointers that are obsolete
+                // Garbage-collect PendingResults pointers that are obsolete
                 pending_results_iter = fulfilled_pending_results_pair.second.erase(pending_results_iter);
             }
         }
@@ -324,7 +324,7 @@ ExternalClientCaller<SubgroupType, ExternalGroupClient<ReplicatedTypes...>>& Ext
 }
 
 template <typename... ReplicatedTypes>
-volatile uint8_t* ExternalGroupClient<ReplicatedTypes...>::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {
+volatile uint8_t* ExternalGroupClient<ReplicatedTypes...>::get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type) {
     volatile uint8_t* buf;
     do {
         try {
@@ -338,9 +338,9 @@ volatile uint8_t* ExternalGroupClient<ReplicatedTypes...>::get_sendbuffer_ptr(ui
 }
 
 template <typename... ReplicatedTypes>
-void ExternalGroupClient<ReplicatedTypes...>::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<rpc::AbstractPendingResults> pending_results_handle) {
+void ExternalGroupClient<ReplicatedTypes...>::send_p2p_message(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<rpc::AbstractPendingResults> pending_results_handle) {
     try {
-        p2p_connections->send(dest_id);
+        p2p_connections->send(dest_id, sst::MESSAGE_TYPE::P2P_REQUEST);
     } catch(std::out_of_range& map_error) {
         throw node_removed_from_group_exception(dest_id);
     }
@@ -361,7 +361,7 @@ std::exception_ptr ExternalGroupClient<ReplicatedTypes...>::receive_message(
     if(receiver_function_entry == receivers->end()) {
         dbg_default_error("In External Group, Received an RPC message with an invalid RPC opcode! Opcode was ({}, {}, {}, {}).",
                           indx.class_id, indx.subgroup_id, indx.function_id, indx.is_reply);
-        //TODO: We should reply with some kind of "no such method" error in this case
+        // TODO: We should reply with some kind of "no such method" error in this case
         return std::exception_ptr{};
     }
     std::size_t reply_header_size = header_space();
@@ -389,22 +389,12 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_message_handler(node_id_t send
     node_id_t received_from;
     uint32_t flags;
     retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
-    size_t reply_size = 0;
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
-                        [this, &reply_size, &sender_id](size_t _size) {
-                            reply_size = _size;
-                            if(reply_size <= p2p_connections->get_max_p2p_reply_size()) {
-                                return p2p_connections->get_sendbuffer_ptr(
-                                        sender_id, sst::REQUEST_TYPE::P2P_REPLY);
-                            } else {
-                                throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply message size");
-                            }
+                        [](size_t _size) -> uint8_t* {
+                            throw derecho::derecho_exception("A P2P reply message attempted to generate another reply");
                         });
-        if(reply_size > 0) {
-            p2p_connections->send(sender_id);
-        }
     } else if(RPC_HEADER_FLAG_TST(flags, CASCADE)) {
         // TODO: what is the lifetime of msg_buf? discuss with Sagar to make
         // sure the buffers are safely managed.
@@ -454,20 +444,20 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
                             reply_size = _size;
                             if(reply_size <= p2p_connections->get_max_p2p_reply_size()) {
                                 return p2p_connections->get_sendbuffer_ptr(
-                                        request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
+                                        request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
                             } else {
                                 throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply size.");
                             }
                         });
         if(reply_size > 0) {
-            p2p_connections->send(request.sender_id);
+            p2p_connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
-            uint8_t* buf = p2p_connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
+            uint8_t* buf = p2p_connections->get_sendbuffer_ptr(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
             assert(buf != nullptr);
             dbg_default_trace("Sending a null reply to node {} for a void P2P call", request.sender_id);
             reinterpret_cast<size_t*>(buf)[0] = 0;
-            p2p_connections->send(request.sender_id);
+            p2p_connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
         }
     }
 }
@@ -483,13 +473,14 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop() {
 
     // loop event
     while(!thread_shutdown) {
-        //No need to get a View lock here, since ExternalGroupClient doesn't have a ViewManager or view-change events
-        auto optional_reply_pair = p2p_connections->probe_all();
-        if(optional_reply_pair) {
-            auto reply_pair = optional_reply_pair.value();
-            if(reply_pair.first != INVALID_NODE_ID) {
-                p2p_message_handler(reply_pair.first, (uint8_t*)reply_pair.second);
-                p2p_connections->update_incoming_seq_num(reply_pair.first);
+        // No need to get a View lock here, since ExternalGroupClient doesn't have a ViewManager or view-change events
+        auto optional_message = p2p_connections->probe_all();
+        if(optional_message) {
+            auto message_handle = optional_message.value();
+            // Invalid ID means the message was empty (a null reply)
+            if(message_handle.sender_id != INVALID_NODE_ID) {
+                p2p_message_handler(message_handle.sender_id, message_handle.buf);
+                p2p_connections->increment_incoming_seq_num(message_handle.sender_id, message_handle.type);
             }
 
             // update last time

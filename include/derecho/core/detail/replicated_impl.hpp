@@ -103,18 +103,18 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) const {
         }
         //Convert the user's desired tag into an "internal" function tag for a P2P function
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
-                //Invoke the sending function with a buffer-allocator that uses the P2P request buffers
+                // Invoke the sending function with a buffer-allocator that uses the P2P request buffers
                 [this, &dest_node](std::size_t size) -> uint8_t* {
                     const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_p2p_request_payload_size) {
                         return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                           sst::REQUEST_TYPE::P2P_REQUEST);
+                                                                              sst::MESSAGE_TYPE::P2P_REQUEST);
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
+        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -154,7 +154,7 @@ auto Replicated<T>::ordered_send(Args&&... args) {
             return group_rpc_manager.view_manager.curr_view
                     ->multicast_group->send(subgroup_id, payload_size_for_multicast_send, serializer, true);
         });
-        group_rpc_manager.finish_rpc_send(subgroup_id, pending_ptr);
+        group_rpc_manager.register_rpc_results(subgroup_id, pending_ptr);
         return std::move(*results_ptr);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -321,13 +321,13 @@ auto PeerCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                     const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
                     if(size <= max_payload_size) {
                         return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                           sst::REQUEST_TYPE::P2P_REQUEST);
+                                                                           sst::MESSAGE_TYPE::P2P_REQUEST);
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
+        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -356,13 +356,13 @@ auto ExternalClientCallback<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                     const std::size_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_payload_size) {
                         return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                              sst::REQUEST_TYPE::P2P_REQUEST);
+                                                                              sst::MESSAGE_TYPE::P2P_REQUEST);
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
+        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
