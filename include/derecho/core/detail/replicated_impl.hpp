@@ -35,8 +35,8 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
         (**user_object_ptr).set_group_pointers(group, subgroup_index);
     }
     if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
-        //Attempt to load the private key and create a Signer
-        //This will crash with a file_error if the private key doesn't actually exist
+        // Attempt to load the private key and create a Signer
+        // This will crash with a file_error if the private key doesn't actually exist
         signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
                                                    openssl::DigestAlgorithm::SHA256);
         signature_size = signer->get_max_signature_size();
@@ -62,8 +62,8 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
                                                                      T::register_functions())),
           group(group) {
     if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
-        //Attempt to load the private key and create a Signer
-        //This will crash with a file_error if the private key doesn't actually exist
+        // Attempt to load the private key and create a Signer
+        // This will crash with a file_error if the private key doesn't actually exist
         signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
                                                    openssl::DigestAlgorithm::SHA256);
         signature_size = signer->get_max_signature_size();
@@ -101,20 +101,24 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) const {
             throw invalid_node_exception("Cannot send a p2p request to node "
                                          + std::to_string(dest_node) + ": it is not a member of the Group.");
         }
-        //Convert the user's desired tag into an "internal" function tag for a P2P function
+        uint64_t message_seq_num;
+        // Convert the user's desired tag into an "internal" function tag for a P2P function
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
                 // Invoke the sending function with a buffer-allocator that uses the P2P request buffers
-                [this, &dest_node](std::size_t size) -> uint8_t* {
+                [this, &dest_node, &message_seq_num](std::size_t size) -> uint8_t* {
                     const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_p2p_request_payload_size) {
-                        return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                              sst::MESSAGE_TYPE::P2P_REQUEST);
+                        auto buffer_handle = group_rpc_manager.get_sendbuffer_ptr(dest_node,
+                                                                                  sst::MESSAGE_TYPE::P2P_REQUEST);
+                        // Record the sequence number for this message buffer
+                        message_seq_num = buffer_handle.seq_num;
+                        return buffer_handle.buf_ptr;
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
+        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, message_seq_num, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -129,14 +133,14 @@ auto Replicated<T>::ordered_send(Args&&... args) {
 
         using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<rpc::to_internal_tag<false>(tag)>(
                 std::forward<Args>(args)...))>::type;
-        //These pointers help "return" the PendingResults/QueryResults out of the lambda
+        // These pointers help "return" the PendingResults/QueryResults out of the lambda
         std::unique_ptr<rpc::QueryResults<Ret>> results_ptr;
         std::weak_ptr<rpc::PendingResults<Ret>> pending_ptr;
         auto serializer = [&](uint8_t* buffer) {
-            //By the time this lambda runs, the current thread will be holding a read lock on view_mutex
+            // By the time this lambda runs, the current thread will be holding a read lock on view_mutex
             const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
             auto send_return_struct = wrapped_this->template send<rpc::to_internal_tag<false>(tag)>(
-                    //Invoke the sending function with a buffer-allocator that uses the buffer supplied as an argument to the serializer
+                    // Invoke the sending function with a buffer-allocator that uses the buffer supplied as an argument to the serializer
                     [&buffer, &max_payload_size](size_t size) -> uint8_t* {
                         if(size <= max_payload_size) {
                             return buffer;
@@ -231,7 +235,7 @@ persistent::version_t Replicated<T>::persist(persistent::version_t version, uint
 template <typename T>
 bool Replicated<T>::verify_log(persistent::version_t version, openssl::Verifier& verifier,
                                const uint8_t* other_signature) {
-    //If there are no signatures in this object's log, it can't be verified
+    // If there are no signatures in this object's log, it can't be verified
     if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
         return persistent_registry->verify(version, verifier, other_signature);
     } else {
@@ -281,32 +285,31 @@ const uint64_t Replicated<T>::compute_global_stability_frontier() {
 }
 
 template <typename T>
-persistent::version_t Replicated<T>::get_global_persistence_frontier () {
+persistent::version_t Replicated<T>::get_global_persistence_frontier() {
     return group_rpc_manager.view_manager.get_global_persistence_frontier(subgroup_id);
 }
 
 template <typename T>
 bool Replicated<T>::wait_for_global_persistence_frontier(persistent::version_t version) {
-    return group_rpc_manager.view_manager.wait_for_global_persistence_frontier(subgroup_id,version);
+    return group_rpc_manager.view_manager.wait_for_global_persistence_frontier(subgroup_id, version);
 }
 
 template <typename T>
-persistent::version_t Replicated<T>::get_global_verified_frontier () {
+persistent::version_t Replicated<T>::get_global_verified_frontier() {
     return group_rpc_manager.view_manager.get_global_verified_frontier(subgroup_id);
 }
 
-
 template <typename T>
 PeerCaller<T>::PeerCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id,
-                                  rpc::RPCManager& group_rpc_manager)
+                          rpc::RPCManager& group_rpc_manager)
         : node_id(nid),
           subgroup_id(subgroup_id),
           group_rpc_manager(group_rpc_manager),
           wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
                                                    T::register_functions(), *group_rpc_manager.receivers)) {}
 
-//This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
-//but I'm afraid that will introduce unnecessary overheads.
+// This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
+// but I'm afraid that will introduce unnecessary overheads.
 template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto PeerCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
@@ -316,18 +319,22 @@ auto PeerCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
             throw invalid_node_exception("Cannot send a p2p request to node "
                                          + std::to_string(dest_node) + ": it is not a member of the Group.");
         }
+        uint64_t message_seq_num;
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
-                [this, &dest_node](size_t size) -> uint8_t* {
+                [this, &dest_node, &message_seq_num](size_t size) -> uint8_t* {
                     const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
                     if(size <= max_payload_size) {
-                        return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                           sst::MESSAGE_TYPE::P2P_REQUEST);
+                        auto buffer_handle = group_rpc_manager.get_sendbuffer_ptr(dest_node,
+                                                                                  sst::MESSAGE_TYPE::P2P_REQUEST);
+                        // Record the sequence number for this message buffer
+                        message_seq_num = buffer_handle.seq_num;
+                        return buffer_handle.buf_ptr;
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
+        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, message_seq_num, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -343,26 +350,30 @@ ExternalClientCallback<T>::ExternalClientCallback(uint32_t type_id, node_id_t ni
           wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
                                                    T::register_functions(), *group_rpc_manager.receivers)) {}
 
-//This is literally copied and pasted from PeerCaller<T>, except that this does not check if the receiver
-// is in the subgroup.
+// This is literally copied and pasted from PeerCaller<T>, except that this does not check if the receiver
+//  is in the subgroup.
 
 template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto ExternalClientCallback<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
         assert(dest_node != node_id);
+        uint64_t message_seq_num;
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
-                [this, &dest_node](size_t size) -> uint8_t* {
+                [this, &dest_node, &message_seq_num](size_t size) -> uint8_t* {
                     const std::size_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_payload_size) {
-                        return (uint8_t*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                              sst::MESSAGE_TYPE::P2P_REQUEST);
+                        auto buffer_handle = group_rpc_manager.get_sendbuffer_ptr(dest_node,
+                                                                                  sst::MESSAGE_TYPE::P2P_REQUEST);
+                        // Record the sequence number for this message buffer
+                        message_seq_num = buffer_handle.seq_num;
+                        return buffer_handle.buf_ptr;
                     } else {
                         throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
+        group_rpc_manager.send_p2p_message(dest_node, subgroup_id, message_seq_num, return_pair.pending);
         return std::move(*return_pair.results);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};

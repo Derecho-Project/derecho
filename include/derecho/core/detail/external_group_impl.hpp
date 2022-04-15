@@ -18,21 +18,21 @@ template <typename CopyOfT>
 std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
 ExternalClientCaller<T, ExternalGroupType>::register_notification_handler(const notification_handler_t& func) {
     std::lock_guard<std::mutex> lck(*client_stub_mutex);
-    if (client_stub == nullptr) {
+    if(client_stub == nullptr) {
         // Create the support pointer
         client_stub = group_client.factories.template get<T>()();
 
         // We have to store this pointer in ExternalClientCaller, although it is of no use to us in the future. This is to
         // keep it as well as the lambda inside alive throughout the entire program
         remote_invocable_ptr = mutils::callFunc([&](const auto&... unpacked_functions) {
-                return build_remote_invocable_class<T>(
-                        node_id, 
-                        group_client.template get_index_of_type<T>(), 
-                        subgroup_id, 
-                        *group_client.receivers,
-                        bind_to_instance(&client_stub, unpacked_functions)...);
-            },
-            T::register_functions());
+            return build_remote_invocable_class<T>(
+                    node_id,
+                    group_client.template get_index_of_type<T>(),
+                    subgroup_id,
+                    *group_client.receivers,
+                    bind_to_instance(&client_stub, unpacked_functions)...);
+        },
+                                                T::register_functions());
     }
     // set handler
     client_stub->set_notification_handler(func);
@@ -43,7 +43,7 @@ template <typename CopyOfT>
 std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
 ExternalClientCaller<T, ExternalGroupType>::unregister_notification() {
     std::lock_guard<std::mutex> lck(*client_stub_mutex);
-    if (client_stub != nullptr) {
+    if(client_stub != nullptr) {
         client_stub->remove_notification_handler();
     }
 }
@@ -94,18 +94,21 @@ template <rpc::FunctionTag tag, typename... Args>
 auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, Args&&... args) {
     add_p2p_connection(dest_node);
 
+    uint64_t message_seq_num;
     auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
-            [this, &dest_node](size_t size) -> uint8_t* {
+            [this, &dest_node, &message_seq_num](size_t size) -> uint8_t* {
                 const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                 if(size <= max_p2p_request_payload_size) {
-                    return (uint8_t*)group_client.get_sendbuffer_ptr(dest_node,
-                                                                     sst::MESSAGE_TYPE::P2P_REQUEST);
+                    auto buffer_handle = group_client.get_sendbuffer_ptr(dest_node,
+                                                                         sst::MESSAGE_TYPE::P2P_REQUEST);
+                    message_seq_num = buffer_handle.seq_num;
+                    return buffer_handle.buf_ptr;
                 } else {
                     throw derecho_exception("The size of serialized args exceeds the maximum message size (CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE).");
                 }
             },
             std::forward<Args>(args)...);
-    group_client.send_p2p_message(dest_node, subgroup_id, return_pair.pending);
+    group_client.send_p2p_message(dest_node, subgroup_id, message_seq_num, return_pair.pending);
     return std::move(*return_pair.results);
 }
 
@@ -312,7 +315,7 @@ std::vector<node_id_t> ExternalGroupClient<ReplicatedTypes...>::get_shard_member
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 ExternalClientCaller<SubgroupType, ExternalGroupClient<ReplicatedTypes...>>& ExternalGroupClient<ReplicatedTypes...>::get_subgroup_caller(uint32_t subgroup_index) {
-    //If there is not yet an ExternalClientCaller for this subgroup type, create one now
+    // If there is not yet an ExternalClientCaller for this subgroup type, create one now
     if(external_callers.template get<SubgroupType>().find(subgroup_index) == external_callers.template get<SubgroupType>().end()) {
         const subgroup_type_id_t subgroup_type_id = get_index_of_type(typeid(SubgroupType));
         const auto& subgroup_ids = curr_view->subgroup_ids_by_type_id.at(subgroup_type_id);
@@ -324,23 +327,23 @@ ExternalClientCaller<SubgroupType, ExternalGroupClient<ReplicatedTypes...>>& Ext
 }
 
 template <typename... ReplicatedTypes>
-volatile uint8_t* ExternalGroupClient<ReplicatedTypes...>::get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type) {
-    volatile uint8_t* buf;
+sst::P2PBufferHandle ExternalGroupClient<ReplicatedTypes...>::get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type) {
+    std::optional<sst::P2PBufferHandle> buffer;
     do {
         try {
-            buf = p2p_connections->get_sendbuffer_ptr(dest_id, type);
+            buffer = p2p_connections->get_sendbuffer_ptr(dest_id, type);
         } catch(std::out_of_range& map_error) {
             throw node_removed_from_group_exception(dest_id);
         }
 
-    } while(!buf);
-    return buf;
+    } while(!buffer);
+    return *buffer;
 }
 
 template <typename... ReplicatedTypes>
-void ExternalGroupClient<ReplicatedTypes...>::send_p2p_message(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<rpc::AbstractPendingResults> pending_results_handle) {
+void ExternalGroupClient<ReplicatedTypes...>::send_p2p_message(node_id_t dest_id, subgroup_id_t dest_subgroup_id, uint64_t sequence_num, std::weak_ptr<rpc::AbstractPendingResults> pending_results_handle) {
     try {
-        p2p_connections->send(dest_id, sst::MESSAGE_TYPE::P2P_REQUEST);
+        p2p_connections->send(dest_id, sst::MESSAGE_TYPE::P2P_REQUEST, sequence_num);
     } catch(std::out_of_range& map_error) {
         throw node_removed_from_group_exception(dest_id);
     }
@@ -436,28 +439,33 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
                               indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
             throw derecho::derecho_exception("invalid rpc message in fifo queue...crash.");
         }
-        //Note: In practice, ExternalGroupClient should never receive a P2P message that produces
-        //a reply, since it should never need to send a reply back to a group member.
+        // Note: In practice, ExternalGroupClient should never receive a P2P message that produces
+        // a reply, since it should never need to send a reply back to a group member.
         reply_size = 0;
+        uint64_t reply_seq_num = 0;
         receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
-                        [this, &reply_size, &request](size_t _size) {
+                        [this, &reply_size, &reply_seq_num, &request](size_t _size) {
                             reply_size = _size;
                             if(reply_size <= p2p_connections->get_max_p2p_reply_size()) {
-                                return p2p_connections->get_sendbuffer_ptr(
+                                auto buffer_handle = p2p_connections->get_sendbuffer_ptr(
                                         request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
+                                if(!buffer_handle)
+                                    throw derecho_exception("Failed to allocate a buffer for a P2P reply because the send window was full!");
+                                reply_seq_num = buffer_handle->seq_num;
+                                return buffer_handle->buf_ptr;
                             } else {
                                 throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply size.");
                             }
                         });
         if(reply_size > 0) {
-            p2p_connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
+            p2p_connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY, reply_seq_num);
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
-            uint8_t* buf = p2p_connections->get_sendbuffer_ptr(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
-            assert(buf != nullptr);
+            auto buffer_handle = p2p_connections->get_sendbuffer_ptr(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
+            assert(buffer_handle);
             dbg_default_trace("Sending a null reply to node {} for a void P2P call", request.sender_id);
-            reinterpret_cast<size_t*>(buf)[0] = 0;
-            p2p_connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
+            reinterpret_cast<size_t*>(buffer_handle->buf_ptr)[0] = 0;
+            p2p_connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY, buffer_handle->seq_num);
         }
     }
 }
@@ -508,7 +516,7 @@ uint32_t ExternalGroupClient<ReplicatedTypes...>::get_index_of_type(const std::t
                      (index_of_type<ReplicatedTypes, ReplicatedTypes...>)
                                                                                : 0)
             + ... + 0);
-    //return index_of_type<SubgroupType, ReplicatedTypes...>;
+    // return index_of_type<SubgroupType, ReplicatedTypes...>;
 }
 
 template <typename... ReplicatedTypes>

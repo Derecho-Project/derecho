@@ -63,8 +63,8 @@ namespace rpc {
 template <typename UserProvidedClass, typename FunctionTuple>
 auto make_remote_invoker(const node_id_t nid, uint32_t type_id, uint32_t instance_id, FunctionTuple funs, std::map<Opcode, receive_fun_t>& receivers) {
     return mutils::callFunc([&](const auto&... unpacked_functions) {
-        //Supply the template parameters for build_remote_invoker_for_class by
-        //asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
+        // Supply the template parameters for build_remote_invoker_for_class by
+        // asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
         return build_remote_invoker_for_class<UserProvidedClass,
                                               decltype(bind_to_instance(std::declval<std::unique_ptr<UserProvidedClass>*>(),
                                                                         unpacked_functions))...>(nid, type_id,
@@ -88,7 +88,7 @@ class RPCManager {
     mutils::RemoteDeserialization_v rdv;
 
     template <typename T>
-    friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
+    friend class ::derecho::Replicated;  // Give only Replicated access to view_manager
     template <typename T>
     friend class ::derecho::PeerCaller;
     template <typename T>
@@ -299,9 +299,9 @@ public:
      */
     template <typename UserProvidedClass, typename FunctionTuple>
     auto make_remote_invocable_class(std::unique_ptr<UserProvidedClass>* cls, uint32_t type_id, uint32_t instance_id, FunctionTuple funs) {
-        //FunctionTuple is a std::tuple of partial_wrapped<Tag, Ret, UserProvidedClass, Args>,
-        //which is the result of the user calling tag<Tag>(&UserProvidedClass::method) on each RPC method
-        //Use callFunc to unpack the tuple into a variadic parameter pack for build_remoteinvocableclass
+        // FunctionTuple is a std::tuple of partial_wrapped<Tag, Ret, UserProvidedClass, Args>,
+        // which is the result of the user calling tag<Tag>(&UserProvidedClass::method) on each RPC method
+        // Use callFunc to unpack the tuple into a variadic parameter pack for build_remoteinvocableclass
         return mutils::callFunc([&](const auto&... unpacked_functions) {
             return build_remote_invocable_class<UserProvidedClass>(nid, type_id, instance_id, *receivers,
                                                                    bind_to_instance(cls, unpacked_functions)...);
@@ -392,26 +392,27 @@ public:
      * @param dest_id The ID of the node that the P2P message will be sent to
      * @param type The type of P2P message that will be sent
      */
-    volatile uint8_t* get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type);
+    sst::P2PBufferHandle get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type);
 
     /**
-     * Sends the next P2P message buffer over an RDMA connection to the specified node,
-     * and registers the "promise object" pointed to by pending_results_handle in case
-     * RPCManager needs to deliver a node_removed_from_group_exception.
+     * Sends the P2P message buffer with the specified sequence number over an RDMA
+     * connection to the specified node, and registers the "promise object" pointed
+     * to by pending_results_handle in case RPCManager needs to deliver a node_removed_from_group_exception.
      * @param dest_node The node to send the message to
      * @param dest_subgroup_id The subgroup ID of the subgroup that node is in
+     * @param sequence_num The sequence number of the message buffer, as returned by get_sendbuffer_ptr
      * @param pending_results_handle A non-owning pointer to the "promise object"
      * created by RemoteInvoker for this send.
      */
-    void send_p2p_message(node_id_t dest_node, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle);
-
+    void send_p2p_message(node_id_t dest_node, subgroup_id_t dest_subgroup_id, uint64_t sequence_num,
+                          std::weak_ptr<AbstractPendingResults> pending_results_handle);
     /**
      * Get the id of the latest rpc caller.
      */
     static node_id_t get_rpc_caller_id();
 };
 
-//Now that RPCManager is finished being declared, we can declare these convenience types
+// Now that RPCManager is finished being declared, we can declare these convenience types
 //(the declarations should really live in remote_invocable.h, but they depend on RPCManager existing)
 template <typename T>
 using RemoteInvocableOf = std::decay_t<decltype(*std::declval<RPCManager>()

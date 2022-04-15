@@ -144,16 +144,18 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
     // set the thread local rpc_handler context
     _in_rpc_handler = true;
 
-    //Use the reply-buffer allocation lambda to detect whether parse_and_receive generated a reply
+    // Use the reply-buffer allocation lambda to detect whether parse_and_receive generated a reply
     size_t reply_size = 0;
-    uint8_t* reply_buf;
+    std::optional<sst::P2PBufferHandle> reply_buffer;
     parse_and_receive(msg_buf, buffer_size,
-                      [this, &reply_buf, &reply_size, &sender_id](size_t size) -> uint8_t* {
+                      [this, &reply_buffer, &reply_size, &sender_id](size_t size) -> uint8_t* {
                           reply_size = size;
                           if(reply_size <= connections->get_max_rpc_reply_size()) {
-                              reply_buf = (uint8_t*)connections->get_sendbuffer_ptr(
+                              reply_buffer = connections->get_sendbuffer_ptr(
                                       sender_id, sst::MESSAGE_TYPE::RPC_REPLY);
-                              return reply_buf;
+                              if(!reply_buffer)
+                                  throw derecho_exception("Failed to allocate a buffer for a P2P reply because the send window was full!");
+                              return reply_buffer->buf_ptr;
                           } else {
                               // the reply size is too large - not part of the design to handle it
                               throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply message size");
@@ -192,14 +194,18 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             pending_results_to_fulfill[subgroup_id].pop();
         }  //release pending_results_mutex
         if(reply_size > 0) {
-            //Since this was a self-receive, the reply also goes to myself
+            // Since this was a self-receive, the reply also goes to myself.
+            // Note that we pass the outgoing buffer obtained from connections->get_sendbuffer_ptr()
+            // directly to parse_and_receive, rather than calling connections->send() to copy it to
+            // an incoming buffer, because there is no need to use more than one RPC_REPLY buffer at
+            // a time in the self-connection.
             parse_and_receive(
-                    reply_buf, reply_size,
+                    reply_buffer->buf_ptr, reply_size,
                     [](size_t size) -> uint8_t* { assert_always(false); });
         }
     } else if(reply_size > 0) {
-        //Otherwise, the only thing to do is send the reply (if there was one)
-        connections->send(sender_id, sst::MESSAGE_TYPE::RPC_REPLY);
+        // Otherwise, the only thing to do is send the reply (if there was one)
+        connections->send(sender_id, sst::MESSAGE_TYPE::RPC_REPLY, reply_buffer->seq_num);
     }
 
     // clear the thread local rpc_handler context
@@ -403,8 +409,8 @@ void RPCManager::register_rpc_results(subgroup_id_t subgroup_id, std::weak_ptr<A
     pending_results_cv.notify_all();
 }
 
-volatile uint8_t* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type) {
-    volatile uint8_t* buf;
+sst::P2PBufferHandle RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_TYPE type) {
+    std::optional<sst::P2PBufferHandle> buffer;
     int curr_vid = -1;
     do {
         //ViewManager's view_mutex also prevents connections from being removed (because
@@ -416,22 +422,23 @@ volatile uint8_t* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::MESSAGE_
             curr_vid = view_and_lock.get().vid;
         }
         try {
-            buf = connections->get_sendbuffer_ptr(dest_id, type);
+            buffer = connections->get_sendbuffer_ptr(dest_id, type);
         } catch(std::out_of_range& map_error) {
             throw node_removed_from_group_exception(dest_id);
         }
 
-    } while(!buf);
-    return buf;
+    } while(!buffer);
+    return *buffer;
 }
 
-void RPCManager::send_p2p_message(node_id_t dest_id, subgroup_id_t dest_subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle) {
+void RPCManager::send_p2p_message(node_id_t dest_id, subgroup_id_t dest_subgroup_id, uint64_t sequence_num,
+                                  std::weak_ptr<AbstractPendingResults> pending_results_handle) {
     try {
         // ViewManager's view_mutex also prevents connections from being removed (because
         // that happens in new_view_callback)
         SharedLockedReference<View> view_and_lock = view_manager.get_current_view();
         // The type of message being sent here is always a P2P request, not a reply
-        connections->send(dest_id, sst::MESSAGE_TYPE::P2P_REQUEST);
+        connections->send(dest_id, sst::MESSAGE_TYPE::P2P_REQUEST, sequence_num);
     } catch(std::out_of_range& map_error) {
         throw node_removed_from_group_exception(dest_id);
     }
@@ -473,13 +480,18 @@ void RPCManager::p2p_request_worker() {
             throw derecho::derecho_exception("invalid rpc message in fifo queue...crash.");
         }
         reply_size = 0;
+        uint64_t reply_seq_num = 0;
         RPCManager::rpc_caller_id = received_from;
         receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
-                        [this, &reply_size, &request](size_t _size) -> uint8_t* {
+                        [this, &reply_size, &reply_seq_num, &request](size_t _size) -> uint8_t* {
                             reply_size = _size;
                             if(reply_size <= connections->get_max_p2p_reply_size()) {
-                                return (uint8_t*)connections->get_sendbuffer_ptr(
+                                auto buffer_handle = connections->get_sendbuffer_ptr(
                                         request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
+                                if(!buffer_handle)
+                                    throw derecho_exception("Failed to allocate a buffer for a P2P reply because the send window was full!");
+                                reply_seq_num = buffer_handle->seq_num;
+                                return buffer_handle->buf_ptr;
                             } else {
                                 throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply size.");
                             }
@@ -487,14 +499,14 @@ void RPCManager::p2p_request_worker() {
         if(reply_size > 0) {
             dbg_default_trace("Sending a P2P reply to node {} for invocation ID {} of function {}",
                               request.sender_id, ((long*)(request.msg_buf + header_size))[0], indx.function_id);
-            connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
+            connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY, reply_seq_num);
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
-            uint8_t* buf = connections->get_sendbuffer_ptr(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
-            if(buf != nullptr) {
+            auto buffer_handle = connections->get_sendbuffer_ptr(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
+            if(buffer_handle) {
                 dbg_default_trace("Sending a null reply to node {} for a void P2P call", request.sender_id);
-                reinterpret_cast<size_t*>(buf)[0] = 0;
-                connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
+                reinterpret_cast<size_t*>(buffer_handle->buf_ptr)[0] = 0;
+                connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY, buffer_handle->seq_num);
             }
         }
     }

@@ -129,21 +129,19 @@ std::optional<MessagePointer> P2PConnectionManager::probe_all() {
     return {};
 }
 
-uint8_t* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, MESSAGE_TYPE type) {
+std::optional<P2PBufferHandle> P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, MESSAGE_TYPE type) {
     std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
     if(p2p_connections[node_id].second) {
         return p2p_connections[node_id].second->get_sendbuffer_ptr(type);
     }
 
-    // return nullptr;
-    // Weijia: we should report an exception instead of just return a nullptr because a connection to node_id does not
-    // exists.
+    // Weijia: we should report an exception instead of just return a nullptr because a connection to node_id does not exists.
     throw std::out_of_range(std::string(__PRETTY_FUNCTION__) + " cannot find a connection to node:" + std::to_string(node_id));
 }
 
-void P2PConnectionManager::send(node_id_t node_id, MESSAGE_TYPE type) {
+void P2PConnectionManager::send(node_id_t node_id, MESSAGE_TYPE type, uint64_t sequence_num) {
     std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
-    p2p_connections[node_id].second->send(type);
+    p2p_connections[node_id].second->send(type, sequence_num);
     if(node_id != my_node_id && p2p_connections[node_id].second) {
         p2p_connections[node_id].second->num_rdma_writes++;
     }
