@@ -63,6 +63,9 @@ void P2PConnection::increment_incoming_seq_num(MESSAGE_TYPE type) {
 }
 
 std::optional<P2PBufferHandle> P2PConnection::get_sendbuffer_ptr(MESSAGE_TYPE type) {
+    // For P2P_REQUEST buffers, check to ensure a buffer is available in the sending window by
+    // comparing request and reply sequence numbers. P2P_REPLY and RPC_REPLY buffers are always
+    // available, since they are only used in response to a message in the current sending window.
     if(type != MESSAGE_TYPE::P2P_REQUEST
        || outgoing_seq_nums_map[MESSAGE_TYPE::P2P_REQUEST] - incoming_seq_nums_map[MESSAGE_TYPE::P2P_REPLY]
                   < connection_params.window_sizes[P2P_REQUEST]) {

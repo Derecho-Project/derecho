@@ -191,10 +191,11 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             pending_results_to_fulfill[subgroup_id].pop();
         }  //release pending_results_mutex
         if(reply_size > 0) {
-            // Since this was a self-receive, the reply also goes to myself
-            // WARNING: This gets a buffer from connections->get_sendbuffer_ptr() but never
-            // sends that buffer with connections->send(); it just passes the outgoing buffer
-            // directly to the receive_message handler.
+            // Since this was a self-receive, the reply also goes to myself.
+            // Note that we pass the outgoing buffer obtained from connections->get_sendbuffer_ptr()
+            // directly to parse_and_receive, rather than calling connections->send() to copy it to
+            // an incoming buffer, because there is no need to use more than one RPC_REPLY buffer at
+            // a time in the self-connection.
             parse_and_receive(
                     reply_buffer->buf_ptr, reply_size,
                     [](size_t size) -> uint8_t* { assert_always(false); });
