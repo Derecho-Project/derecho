@@ -40,7 +40,7 @@ public:
     DEFAULT_SERIALIZATION_SUPPORT(PFoo, pint);
 };
 
-using derecho::ExternalCaller;
+using derecho::PeerCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;

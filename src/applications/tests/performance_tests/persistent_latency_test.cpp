@@ -11,6 +11,8 @@
 
 #include "bytes_object.hpp"
 #include "partial_senders_allocator.hpp"
+#include "aggregate_latency.hpp"
+#include "log_results.hpp"
 
 /**
  * This latency test will timestamp the following events to measure the breakdown latencies
@@ -56,6 +58,23 @@ public:
 };
 
 #define DEFAULT_PROC_NAME "pers_lat_test"
+
+struct exp_result {
+    int num_nodes;
+    uint num_senders_selector;
+    long long unsigned int max_msg_size;
+    unsigned int window_size;
+    uint num_messages;
+    double latency;
+    double stddev;
+
+    void print(std::ofstream& fout) {
+        fout << num_nodes << " " << num_senders_selector << " "
+             << max_msg_size << " " << window_size << " "
+             << num_messages << " " << latency << " " << stddev << endl;
+    }
+};
+
 
 int main(int argc, char* argv[]) {
     int dashdash_pos = argc - 1;
@@ -202,6 +221,7 @@ int main(int argc, char* argv[]) {
             callback_set, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
+    auto group_members = group.get_members();
     node_rank = group.get_my_rank();
 
     if((sender_selector == PartialSendMode::HALF_SENDERS) && (node_rank <= (uint32_t)(num_of_nodes - 1) / 2)) {
@@ -252,6 +272,9 @@ int main(int argc, char* argv[]) {
                   << (t3_us[i] - t2_us[i]) << "\t"
                   << (t4_us[i] - t3_us[i]) << std::endl;
     }
+
+    std::cout << "Done!" << std::endl;
+
     group.barrier_sync();
     group.leave();
 }

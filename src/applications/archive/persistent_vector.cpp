@@ -8,7 +8,7 @@
 
 #include <derecho/core/derecho.hpp>
 
-using derecho::ExternalCaller;
+using derecho::PeerCaller;
 using derecho::Replicated;
 using std::cout;
 using std::cerr;

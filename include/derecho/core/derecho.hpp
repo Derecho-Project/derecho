@@ -8,4 +8,6 @@
 #include "register_rpc_functions.hpp"
 #include "subgroup_functions.hpp"
 #include "subgroup_info.hpp"
+#include "notification.hpp"
+#include "bytes_object.hpp"
 #include "derecho/mutils-serialization/SerializationSupport.hpp"

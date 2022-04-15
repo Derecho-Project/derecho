@@ -33,6 +33,14 @@ auto& _Group::get_nonmember_subgroup(uint32_t subgroup_num) {
 }
 
 template <typename SubgroupType>
+ExternalClientCallback<SubgroupType>& _Group::get_client_callback(uint32_t subgroup_index) {
+    if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_client_callback(subgroup_index);
+    } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
+template <typename SubgroupType>
 std::vector<std::vector<node_id_t>> _Group::get_subgroup_members(uint32_t subgroup_index) {
     if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
         return gptr->get_subgroup_members(subgroup_index);
@@ -59,19 +67,28 @@ uint32_t _Group::get_num_subgroups() {
 template <typename ReplicatedType>
 Replicated<ReplicatedType>&
 GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
-    void* ret{nullptr};
+    void* pointer_to_replicated{nullptr};
     set_replicated_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
-                           &ret);
-    return *((Replicated<ReplicatedType>*)ret);
+                           &pointer_to_replicated);
+    return *static_cast<Replicated<ReplicatedType>*>(pointer_to_replicated);
 }
 
 template <typename ReplicatedType>
-ExternalCaller<ReplicatedType>&
+PeerCaller<ReplicatedType>&
 GroupProjection<ReplicatedType>::get_nonmember_subgroup(uint32_t subgroup_num) {
-    void* ret{nullptr};
-    set_external_caller_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
-                                &ret);
-    return *((ExternalCaller<ReplicatedType>*)ret);
+    void* pointer_to_peercaller{nullptr};
+    set_peer_caller_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
+                            &pointer_to_peercaller);
+    return *static_cast<PeerCaller<ReplicatedType>*>(pointer_to_peercaller);
+}
+
+template <typename ReplicatedType>
+ExternalClientCallback<ReplicatedType>&
+GroupProjection<ReplicatedType>::get_client_callback(uint32_t subgroup_index) {
+    void* pointer_to_client_callback{nullptr};
+    set_external_client_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_index,
+                                &pointer_to_client_callback);
+    return *static_cast<ExternalClientCallback<ReplicatedType>*>(pointer_to_client_callback);
 }
 
 template <typename ReplicatedType>
@@ -93,11 +110,11 @@ uint32_t GroupProjection<ReplicatedType>::get_num_subgroups() {
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
-                                                       uint32_t subgroup_num,
-                                                       void** ret) {
-    ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
-                      ? &get_subgroup<ReplicatedTypes>(subgroup_num)
-                      : *ret)),
+                                                       uint32_t subgroup_index,
+                                                       void** returned_replicated_ptr) {
+    ((*returned_replicated_ptr = (type == std::type_index{typeid(ReplicatedTypes)}
+                                          ? &get_subgroup<ReplicatedTypes>(subgroup_index)
+                                          : *returned_replicated_ptr)),
      ...);
 }
 
@@ -117,12 +134,22 @@ ViewManager& Group<ReplicatedTypes...>::get_view_manager() {
 }
 
 template <typename... ReplicatedTypes>
-void Group<ReplicatedTypes...>::set_external_caller_pointer(std::type_index type,
-                                                            uint32_t subgroup_num,
-                                                            void** ret) {
-    ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
-                      ? &get_nonmember_subgroup<ReplicatedTypes>(subgroup_num)
-                      : *ret)),
+void Group<ReplicatedTypes...>::set_peer_caller_pointer(std::type_index type,
+                                                        uint32_t subgroup_index,
+                                                        void** returned_peercaller_ptr) {
+    ((*returned_peercaller_ptr = (type == std::type_index{typeid(ReplicatedTypes)}
+                                          ? &get_nonmember_subgroup<ReplicatedTypes>(subgroup_index)
+                                          : *returned_peercaller_ptr)),
+     ...);
+}
+
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::set_external_client_pointer(std::type_index type,
+                                                            uint32_t subgroup_index,
+                                                            void** returned_external_client_ptr) {
+    ((*returned_external_client_ptr = (type == std::type_index{typeid(ReplicatedTypes)}
+                                               ? &get_client_callback<ReplicatedTypes>(subgroup_index)
+                                               : *returned_external_client_ptr)),
      ...);
 }
 
@@ -144,7 +171,11 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
                        persistence_manager,
                        _view_upcalls),
           rpc_manager(view_manager, deserialization_context),
+#if __GNUC__ < 9
           factories(make_kind_map(factories...)) {
+#else
+          factories(make_kind_map<Factory>(factories...)) {
+#endif
     bool in_total_restart = view_manager.first_init();
     //State transfer must complete before an initial view can commit, and must retry if the view is aborted
     bool initial_view_confirmed = false;
@@ -316,12 +347,18 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 objects_by_subgroup_id.erase(subgroup_id);
                 replicated_objects.template get<FirstType>().erase(old_object);
             }
-            // Create an ExternalCaller for the subgroup if we don't already have one
-            external_callers.template get<FirstType>().emplace(
-                    subgroup_index, ExternalCaller<FirstType>(subgroup_type_id,
-                                                              my_id, subgroup_id, rpc_manager));
+            // Create a PeerCaller for the subgroup if we don't already have one
+            peer_callers.template get<FirstType>().emplace(
+                    subgroup_index, PeerCaller<FirstType>(subgroup_type_id,
+                                                          my_id, subgroup_id, rpc_manager));
         }
+        // create the external client callback object if we don't have one
+        external_client_callbacks.template get<FirstType>().emplace(
+                subgroup_index, ExternalClientCallback<FirstType>(subgroup_type_id,
+                                                                  my_id, subgroup_id, rpc_manager));
     }
+    // add the client callback object
+    // client_callback = std::make_unique<ExternalClientCallback<NotificationSupport>>(subgroup_type_id, my_id, rpc_manager);
     return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders, in_restart));
 }
 
@@ -367,12 +404,22 @@ Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgr
 
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-ExternalCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(uint32_t subgroup_index) {
+PeerCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(uint32_t subgroup_index) {
     static_assert(contains<SubgroupType, ReplicatedTypes...>::value, "get_nonmember_subgroup was called with a template parameter that does not match any subgroup type");
     try {
-        return external_callers.template get<SubgroupType>().at(subgroup_index);
+        return peer_callers.template get<SubgroupType>().at(subgroup_index);
     } catch(std::out_of_range& ex) {
-        throw invalid_subgroup_exception("No ExternalCaller exists for the requested subgroup; this node may be a member of the subgroup");
+        throw invalid_subgroup_exception("No PeerCaller exists for the requested subgroup; this node may be a member of the subgroup");
+    }
+}
+
+template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+ExternalClientCallback<SubgroupType>& Group<ReplicatedTypes...>::get_client_callback(uint32_t subgroup_index) {
+    try {
+        return external_client_callbacks.template get<SubgroupType>().at(subgroup_index);
+    } catch(std::out_of_range& ex) {
+        throw invalid_subgroup_exception("No ExternalClientCallback exists for the requested subgroup; this node may be a member of the subgroup");
     }
 }
 
@@ -384,8 +431,8 @@ uint32_t Group<ReplicatedTypes...>::get_num_subgroups() {
     try {
         return replicated_objects.template get<SubgroupType>().size();
     } catch(std::out_of_range& ex) {
-        //The SubgroupType must either be in replicated_objects or external_callers
-        return external_callers.template get<SubgroupType>().size();
+        //The SubgroupType must either be in replicated_objects or peer_callers
+        return peer_callers.template get<SubgroupType>().size();
     }
 }
 
@@ -393,7 +440,7 @@ template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 ShardIterator<SubgroupType> Group<ReplicatedTypes...>::get_shard_iterator(uint32_t subgroup_index) {
     try {
-        auto& EC = external_callers.template get<SubgroupType>().at(subgroup_index);
+        auto& caller = peer_callers.template get<SubgroupType>().at(subgroup_index);
         SharedLockedReference<View> curr_view = view_manager.get_current_view();
         auto subgroup_id = curr_view.get().subgroup_ids_by_type_id.at(index_of_type<SubgroupType, ReplicatedTypes...>).at(subgroup_index);
         const auto& shard_subviews = curr_view.get().subgroup_shard_views.at(subgroup_id);
@@ -402,9 +449,9 @@ ShardIterator<SubgroupType> Group<ReplicatedTypes...>::get_shard_iterator(uint32
             // for shard iteration to be possible, each shard must contain at least one member
             shard_reps[i] = shard_subviews[i].members.at(0);
         }
-        return ShardIterator<SubgroupType>(EC, shard_reps);
+        return ShardIterator<SubgroupType>(caller, shard_reps);
     } catch(std::out_of_range& ex) {
-        throw invalid_subgroup_exception("No ExternalCaller exists for the requested subgroup; this node may be a member of the subgroup");
+        throw invalid_subgroup_exception("No PeerCaller exists for the requested subgroup; this node may be a member of the subgroup");
     }
 }
 
@@ -483,6 +530,11 @@ int32_t Group<ReplicatedTypes...>::get_my_rank() {
 template <typename... ReplicatedTypes>
 node_id_t Group<ReplicatedTypes...>::get_my_id() {
     return my_id;
+}
+
+template <typename... ReplicatedTypes>
+node_id_t Group<ReplicatedTypes...>::get_rpc_caller_id() {
+    return rpc::RPCManager::get_rpc_caller_id();
 }
 
 template <typename... ReplicatedTypes>

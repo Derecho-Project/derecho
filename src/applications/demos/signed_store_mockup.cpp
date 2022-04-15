@@ -108,8 +108,8 @@ mutils::context_ptr<const Blob> Blob::from_bytes_noalloc_const(mutils::Deseriali
 ClientTier::ClientTier(){};
 
 std::tuple<persistent::version_t, uint64_t, std::vector<uint8_t>> ClientTier::submit_update(const Blob& data) const {
-    derecho::ExternalCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
-    derecho::ExternalCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
+    derecho::PeerCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
+    derecho::PeerCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
     std::vector<std::vector<node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
     std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size() - 1);

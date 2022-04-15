@@ -5,7 +5,6 @@
 #include <time.h>
 #include <vector>
 
-#include "bytes_object.hpp"
 #include <derecho/core/derecho.hpp>
 
 using std::cout;

@@ -6,7 +6,6 @@
 #include <time.h>
 #include <vector>
 
-#include "bytes_object.hpp"
 #include <derecho/core/derecho.hpp>
 
 using mutils::context_ptr;
@@ -211,10 +210,10 @@ int main(int argc, char *argv[]) {
                     clock_gettime(CLOCK_REALTIME, &cur);
                 } while(DELTA_T_US(start, cur) < i * (double)si_us);
                 {
-                    ((PayLoad *)bs.bytes)->node_rank = (uint32_t)node_rank;
-                    ((PayLoad *)bs.bytes)->msg_seqno = (uint32_t)i;
-                    ((PayLoad *)bs.bytes)->tv_sec = (uint64_t)cur.tv_sec;
-                    ((PayLoad *)bs.bytes)->tv_nsec = (uint64_t)cur.tv_nsec;
+                    ((PayLoad *)bs.get())->node_rank = (uint32_t)node_rank;
+                    ((PayLoad *)bs.get())->msg_seqno = (uint32_t)i;
+                    ((PayLoad *)bs.get())->tv_sec = (uint64_t)cur.tv_sec;
+                    ((PayLoad *)bs.get())->tv_nsec = (uint64_t)cur.tv_nsec;
 
                     handle.ordered_send<RPC_NAME(change_vola_bytes)>(bs);
                 }

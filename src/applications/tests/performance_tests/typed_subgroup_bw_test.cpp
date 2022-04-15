@@ -109,18 +109,17 @@ int main(int argc, char* argv[]) {
             total_num_messages = count;
             break;
     }
-
     // variable 'done' tracks the end of the test
     volatile bool done = false;
     // callback into the application code at each message delivery
     auto stability_callback = [&done,
+                               &send_complete_time,
                                total_num_messages,
-                               num_delivered = 0u,
-                               &send_complete_time](uint32_t subgroup,
-                                                    uint32_t sender_id,
-                                                    long long int index,
-                                                    std::optional<std::pair<uint8_t*, long long int>> data,
-                                                    persistent::version_t ver) mutable {
+                               num_delivered = 0u](uint32_t subgroup,
+                                                   uint32_t sender_id,
+                                                   long long int index,
+                                                   std::optional<std::pair<uint8_t*, long long int>> data,
+                                                   persistent::version_t ver) mutable {
         // Count the total number of messages delivered
         ++num_delivered;
         // Check for completion
@@ -196,7 +195,6 @@ int main(int argc, char* argv[]) {
             send_all();
         }
     }
-
     /*
     if(node_rank == 0) {
         derecho::rpc::QueryResults<bool> results = handle.ordered_send<RPC_NAME(finishing_call)>(0);
@@ -215,8 +213,9 @@ int main(int argc, char* argv[]) {
     int64_t nsec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
 
     double thp_gbps = (static_cast<double>(total_num_messages) * max_msg_size) / nsec;
-    double msec = (double)nsec / 1000000;
-    double thp_ops = ((double)count * 1000000000) / nsec;
+    double thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / nsec;
+
+    double msec = static_cast<double>(nsec) / 1000000;
     std::cout << "timespan:" << msec << " millisecond." << std::endl;
     std::cout << "throughput:" << thp_gbps << "GB/s." << std::endl;
     std::cout << "throughput:" << thp_ops << "ops." << std::endl;

@@ -378,6 +378,11 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         receivers.emplace(invoke_opcode, [this](auto... a) {
             return this->receive_call(a...);
         });
+        dbg_default_trace("Emplace invoke_opcode:({},{},{},{})",
+                invoke_opcode.class_id,
+                invoke_opcode.subgroup_id,
+                invoke_opcode.function_id,
+                invoke_opcode.is_reply);
     }
 };
 

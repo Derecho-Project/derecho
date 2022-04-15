@@ -22,6 +22,9 @@ enum MESSAGE_TYPE {
     P2P_REQUEST,
     RPC_REPLY
 };
+
+std::ostream& operator<<(std::ostream& os, MESSAGE_TYPE mt);
+
 static const MESSAGE_TYPE p2p_message_types[] = {P2P_REPLY,
                                                  P2P_REQUEST,
                                                  RPC_REPLY};

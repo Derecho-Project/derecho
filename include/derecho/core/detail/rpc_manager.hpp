@@ -29,7 +29,9 @@ namespace derecho {
 template <typename T>
 class Replicated;
 template <typename T>
-class ExternalCaller;
+class PeerCaller;
+template <typename T>
+class ExternalClientCallback;
 
 class ViewManager;
 
@@ -61,8 +63,8 @@ namespace rpc {
 template <typename UserProvidedClass, typename FunctionTuple>
 auto make_remote_invoker(const node_id_t nid, uint32_t type_id, uint32_t instance_id, FunctionTuple funs, std::map<Opcode, receive_fun_t>& receivers) {
     return mutils::callFunc([&](const auto&... unpacked_functions) {
-        //Supply the template parameters for build_remote_invoker_for_class by
-        //asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
+        // Supply the template parameters for build_remote_invoker_for_class by
+        // asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
         return build_remote_invoker_for_class<UserProvidedClass,
                                               decltype(bind_to_instance(std::declval<std::unique_ptr<UserProvidedClass>*>(),
                                                                         unpacked_functions))...>(nid, type_id,
@@ -88,7 +90,9 @@ class RPCManager {
     template <typename T>
     friend class ::derecho::Replicated;  // Give only Replicated access to view_manager
     template <typename T>
-    friend class ::derecho::ExternalCaller;
+    friend class ::derecho::PeerCaller;
+    template <typename T>
+    friend class ::derecho::ExternalClientCallback;
     ViewManager& view_manager;
 
     /**
@@ -187,6 +191,9 @@ class RPCManager {
     std::mutex request_queue_mutex;
     /** Notified when the request worker thread has work to do. */
     std::condition_variable request_queue_cv;
+
+    /** The caller id of the latest rpc */
+    static thread_local node_id_t rpc_caller_id;
 
     /** Listens for P2P RPC calls over the RDMA P2P connections and handles them. */
     void p2p_receive_loop();
@@ -292,9 +299,9 @@ public:
      */
     template <typename UserProvidedClass, typename FunctionTuple>
     auto make_remote_invocable_class(std::unique_ptr<UserProvidedClass>* cls, uint32_t type_id, uint32_t instance_id, FunctionTuple funs) {
-        //FunctionTuple is a std::tuple of partial_wrapped<Tag, Ret, UserProvidedClass, Args>,
-        //which is the result of the user calling tag<Tag>(&UserProvidedClass::method) on each RPC method
-        //Use callFunc to unpack the tuple into a variadic parameter pack for build_remoteinvocableclass
+        // FunctionTuple is a std::tuple of partial_wrapped<Tag, Ret, UserProvidedClass, Args>,
+        // which is the result of the user calling tag<Tag>(&UserProvidedClass::method) on each RPC method
+        // Use callFunc to unpack the tuple into a variadic parameter pack for build_remoteinvocableclass
         return mutils::callFunc([&](const auto&... unpacked_functions) {
             return build_remote_invocable_class<UserProvidedClass>(nid, type_id, instance_id, *receivers,
                                                                    bind_to_instance(cls, unpacked_functions)...);
@@ -399,9 +406,13 @@ public:
      */
     void send_p2p_message(node_id_t dest_node, subgroup_id_t dest_subgroup_id, uint64_t sequence_num,
                           std::weak_ptr<AbstractPendingResults> pending_results_handle);
+    /**
+     * Get the id of the latest rpc caller.
+     */
+    static node_id_t get_rpc_caller_id();
 };
 
-//Now that RPCManager is finished being declared, we can declare these convenience types
+// Now that RPCManager is finished being declared, we can declare these convenience types
 //(the declarations should really live in remote_invocable.h, but they depend on RPCManager existing)
 template <typename T>
 using RemoteInvocableOf = std::decay_t<decltype(*std::declval<RPCManager>()

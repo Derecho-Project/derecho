@@ -121,6 +121,7 @@ std::optional<MessagePointer> P2PConnectionManager::probe_all() {
         } else if(buf_type_pair) {
             // this means that we have a null reply
             // we don't need to process it, but we still want to increment the seq num
+            dbg_default_trace("Got a null reply from node {} for a void P2P call", node_id);
             p2p_connections[node_id].second->increment_incoming_seq_num(buf_type_pair->second);
             return MessagePointer{INVALID_NODE_ID, nullptr, MESSAGE_TYPE::P2P_REPLY};
         }
@@ -132,9 +133,10 @@ std::optional<P2PBufferHandle> P2PConnectionManager::get_sendbuffer_ptr(node_id_
     std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
     if(p2p_connections[node_id].second) {
         return p2p_connections[node_id].second->get_sendbuffer_ptr(type);
-    } else {
-        return std::nullopt;
     }
+
+    // Weijia: we should report an exception instead of just return a nullptr because a connection to node_id does not exists.
+    throw std::out_of_range(std::string(__PRETTY_FUNCTION__) + " cannot find a connection to node:" + std::to_string(node_id));
 }
 
 void P2PConnectionManager::send(node_id_t node_id, MESSAGE_TYPE type, uint64_t sequence_num) {
