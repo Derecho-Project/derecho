@@ -7,7 +7,6 @@
 #include <derecho/persistent/Persistent.hpp>
 
 using derecho::ExternalClientCaller;
-using derecho::Replicated;
 using std::cout;
 using std::endl;
 
@@ -16,16 +15,16 @@ class TestObject: public derecho::NotificationSupport, public mutils::ByteRepres
 public:
     REGISTER_RPC_FUNCTIONS_WITH_NOTIFICATION(TestObject);
 
-    std::size_t to_bytes(uint8_t* v) const {
+    std::size_t to_bytes(uint8_t* v) const override {
         return 0;
 
     }
 
-    std::size_t bytes_size() const {
+    std::size_t bytes_size() const override {
         return 0;
     }
 
-    void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f) const {
+    void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f) const override {
         // f((char*)&size, sizeof(size));
         // f(bytes, size);
     }
