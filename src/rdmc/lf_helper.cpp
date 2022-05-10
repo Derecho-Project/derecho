@@ -24,7 +24,8 @@
 #include <thread>
 #include <vector>
 
-/** From sst/verbs.cpp */
+/* From sst/verbs.cpp */
+/*** we don't use this now.
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(uint64_t x) { return bswap_64(x); }
 static inline uint64_t ntohll(uint64_t x) { return bswap_64(x); }
@@ -35,7 +36,7 @@ static inline uint64_t ntohll(uint64_t x) { return x; }
 #error __BYTE_ORDER is neither
 __LITTLE_ENDIAN nor __BIG_ENDIAN
 #endif
-
+***/
 namespace rdma {
 
 /**

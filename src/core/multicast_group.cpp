@@ -76,7 +76,7 @@ MulticastGroup::MulticastGroup(
         node_id_to_sst_index[members[i]] = i;
     }
 
-    for(const auto p : subgroup_settings_by_id) {
+    for(const auto& p : subgroup_settings_by_id) {
         subgroup_id_t id = p.first;
         const SubgroupSettings& settings = p.second;
         auto num_shard_members = settings.members.size();
@@ -171,7 +171,7 @@ MulticastGroup::MulticastGroup(
         return std::move(msg);
     };
 
-    for(const auto p : subgroup_settings_by_id) {
+    for(const auto& p : subgroup_settings_by_id) {
         subgroup_id_t id = p.first;
         const SubgroupSettings& settings = p.second;
         auto num_shard_members = settings.members.size();
@@ -183,7 +183,7 @@ MulticastGroup::MulticastGroup(
     // Reclaim RDMCMessageBuffers from the old group, and supplement them with
     // additional if the group has grown.
     std::lock_guard<std::recursive_mutex> lock(old_group.msg_state_mtx);
-    for(const auto p : subgroup_settings_by_id) {
+    for(const auto& p : subgroup_settings_by_id) {
         const subgroup_id_t subgroup_num = p.first;
         const SubgroupSettings& settings = p.second;
         auto num_shard_members = settings.members.size();
@@ -217,7 +217,7 @@ MulticastGroup::MulticastGroup(
     }
     old_group.locally_stable_rdmc_messages.clear();
 
-    for(const auto p : subgroup_settings_by_id) {
+    for(const auto& p : subgroup_settings_by_id) {
         subgroup_id_t id = p.first;
         const SubgroupSettings& settings = p.second;
         auto num_shard_members = settings.members.size();
