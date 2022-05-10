@@ -119,6 +119,7 @@ int main(int argc, char** argv) {
             handle.p2p_send<RPC_NAME(bytes_fun)>(0, bytes);
         }
         auto results = handle.p2p_send<RPC_NAME(finishing_call)>(0, 0);
+#pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
         auto response = results.get().get(0);
 #pragma GCC diagnostic pop
