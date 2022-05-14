@@ -172,6 +172,8 @@ class RPCManager {
     std::atomic<bool> thread_shutdown{false};
     /** The thread that listens for incoming P2P RPC calls; implemented by p2p_receive_loop() */
     std::thread rpc_listener_thread;
+    /** The maximum busy wait time in millisecond before sleep */
+    const uint64_t busy_wait_before_sleep_ms;
     /** The thread that processes P2P requests in FIFO order; implemented by p2p_request_worker() */
     std::thread request_worker_thread;
     /** A simple struct representing a P2P request message.
@@ -251,7 +253,8 @@ public:
                const std::vector<DeserializationContext*>& deserialization_context)
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
-              view_manager(group_view_manager) {
+              view_manager(group_view_manager),
+              busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
         for(const auto& deserialization_context_ptr : deserialization_context) {
             rdv.push_back(deserialization_context_ptr);
         }

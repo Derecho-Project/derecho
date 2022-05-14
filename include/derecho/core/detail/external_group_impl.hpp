@@ -147,7 +147,8 @@ void ExternalGroupClient<ReplicatedTypes...>::initialize_p2p_connections() {
 template <typename... ReplicatedTypes>
 ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient()
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
-          receivers(new std::decay_t<decltype(*receivers)>()) {
+          receivers(new std::decay_t<decltype(*receivers)>()),
+          busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)){
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
                           std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
@@ -176,10 +177,11 @@ ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           receivers(new std::decay_t<decltype(*receivers)>()),
 #if __GNUC__ < 9
-          factories(make_kind_map(factories...)) {
+          factories(make_kind_map(factories...)),
 #else
-          factories(make_kind_map<NoArgFactory>(factories...)) {
+          factories(make_kind_map<NoArgFactory>(factories...)),
 #endif
+          busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
     for(auto dc : deserialization_contexts) {
         rdv.push_back(dc);
     }
@@ -498,7 +500,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop() {
             // check if the system has been inactive for enough time to induce sleep
             double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
                                         + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
-            if(time_elapsed_in_ms > 1) {
+            if(time_elapsed_in_ms > busy_wait_before_sleep_ms) {
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
             }

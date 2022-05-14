@@ -36,6 +36,7 @@ private:
 #define CONF_DERECHO_RDMC_PORT "DERECHO/rdmc_port"
 #define CONF_DERECHO_EXTERNAL_PORT "DERECHO/external_port"
 #define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
+#define CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS "DERECHO/p2p_loop_busy_wait_before_sleep_ms"
 #define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
 #define CONF_DERECHO_RESTART_TIMEOUT_MS "DERECHO/restart_timeout_ms"
 #define CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS "DERECHO/enable_backup_restart_leaders"
@@ -87,6 +88,7 @@ private:
             {CONF_DERECHO_RDMC_PORT, "31675"},
             {CONF_DERECHO_EXTERNAL_PORT, "32645"},
             {CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM, "binomial_send"},
+            {CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS, "250"},
             {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_RESTART_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
