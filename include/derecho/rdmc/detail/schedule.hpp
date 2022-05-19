@@ -2,6 +2,7 @@
 #define SCHEDULE_HPP
 
 #include <cmath>
+#include <cstdint>
 #include <optional>
 #include <vector>
 

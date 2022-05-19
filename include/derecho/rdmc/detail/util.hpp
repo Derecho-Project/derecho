@@ -3,6 +3,7 @@
 
 #include <derecho/utils/time.h>
 
+#include <cstdint>
 #include <cstdlib>
 #include <map>
 #include <mutex>

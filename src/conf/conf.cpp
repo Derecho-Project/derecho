@@ -1,9 +1,6 @@
 #include "derecho/conf/conf.hpp"
 
 #include <nlohmann/json.hpp>
-#ifndef NDEBUG
-#include <spdlog/sinks/stdout_color_sinks.h>
-#endif  //NDEBUG
 
 #include <cstdlib>
 #include <stdexcept>

@@ -2,6 +2,8 @@
 
 #include "derecho/core/git_version.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 
 /** A simple hash-combine function to "mix" two hashcodes */

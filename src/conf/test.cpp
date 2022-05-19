@@ -1,6 +1,6 @@
 #include <derecho/conf/conf.hpp>
 #include <iostream>
-#include <spdlog/spdlog.h>
+// #include <spdlog/spdlog.h>
 
 int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);

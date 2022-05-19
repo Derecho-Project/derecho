@@ -9,6 +9,7 @@
 #endif
 
 #include <array>
+#include <cstdint>
 #include <optional>
 #include <functional>
 #include <map>

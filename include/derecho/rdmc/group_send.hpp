@@ -10,6 +10,7 @@
     #include "detail/lf_helper.hpp"
 #endif
 
+#include <cstdint>
 #include <optional>
 #include <map>
 #include <memory>

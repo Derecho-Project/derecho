@@ -38,12 +38,10 @@ std::string get_error_string(unsigned long error_code, const std::string& extra_
  */
 struct openssl_error : public std::runtime_error {
     const int library_code;
-    const int function_code;
     const int reason_code;
     openssl_error(unsigned long error_code_packed, const std::string& operation)
             : runtime_error(get_error_string(error_code_packed, operation)),
               library_code(ERR_GET_LIB(error_code_packed)),
-              function_code(ERR_GET_FUNC(error_code_packed)),
               reason_code(ERR_GET_REASON(error_code_packed)) {}
 };
 
