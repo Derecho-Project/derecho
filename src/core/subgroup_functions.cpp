@@ -684,9 +684,11 @@ DefaultSubgroupAllocator::DefaultSubgroupAllocator(std::vector<std::type_index> 
     } else if(hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT_FILE)) {
         json layout_array;
 
-        std::ifstream json_file_stream(getConfString(CONF_LAYOUT_JSON_LAYOUT_FILE));
+        std::string json_layout_file_path = getAbsoluteFilePath(getConfString(CONF_LAYOUT_JSON_LAYOUT_FILE));
+
+        std::ifstream json_file_stream(json_layout_file_path);
         if(!json_file_stream) {
-            throw derecho_exception("Failed to initialize subgroup allocator! JSON layout file " + getConfString(CONF_LAYOUT_JSON_LAYOUT_FILE) + " not found");
+            throw derecho_exception("Failed to initialize subgroup allocator! JSON layout file " + json_layout_file_path + " not found");
         }
 
         json_file_stream >> layout_array;

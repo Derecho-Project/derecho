@@ -204,6 +204,21 @@ const bool hasCustomizedConfKey(const std::string& key) {
     return Conf::get()->hasCustomizedKey(key);
 }
 
+const std::string getAbsoluteFilePath(const std::string& filename) {
+    // TODO: path separator should come from detecting operating sytem. We hardcode it for linux/unix temporarily.
+    if ((filename.length() > 0) && (filename.at(0) != '/')) {
+        if (std::getenv("DERECHO_CONF_FILE")) {
+            std::string conf_file = std::getenv("DERECHO_CONF_FILE");
+            if (conf_file.find_last_of('/') == std::string::npos) {
+                return filename;
+            }
+            std::string path_prefix = filename.substr(0,conf_file.find_last_of('/'));
+            return path_prefix + '/' + filename;
+        }
+    }
+    return filename;
+}
+
 std::vector<std::string> split_string(const std::string& str, const std::string& delimiter) {
     std::vector<std::string> result;
     std::size_t lastpos = 0;

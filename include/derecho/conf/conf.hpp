@@ -233,6 +233,8 @@ const float getConfFloat(const std::string& key);
 const double getConfDouble(const std::string& key);
 const bool getConfBoolean(const std::string& key);
 const bool hasCustomizedConfKey(const std::string& key);
+// advanced helpers
+const std::string getAbsoluteFilePath(const std::string& filename);
 
 /**
  * Splits a string into a vector of strings using a delimiting string. This is
