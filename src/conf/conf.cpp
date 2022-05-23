@@ -212,7 +212,7 @@ const std::string getAbsoluteFilePath(const std::string& filename) {
             if (conf_file.find_last_of('/') == std::string::npos) {
                 return filename;
             }
-            std::string path_prefix = filename.substr(0,conf_file.find_last_of('/'));
+            std::string path_prefix = conf_file.substr(0,conf_file.find_last_of('/'));
             return path_prefix + '/' + filename;
         }
     }
