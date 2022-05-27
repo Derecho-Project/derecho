@@ -357,7 +357,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                                 uint8_t* buf = const_cast<uint8_t*>(msg.buf);
                                 header* h = (header*)(buf);
                                 // no delivery callback for a NULL message
-                                if(msg.size > h->header_size && callbacks.global_stability_callback) {
+                                if(msg.size > h->header_size && !(h->cooked_send) && callbacks.global_stability_callback) {
                                     callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                                         msg.index,
                                                                         {{buf + h->header_size, msg.size - h->header_size}},
@@ -375,7 +375,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                                 uint8_t* buf = msg.message_buffer.buffer.get();
                                 header* h = (header*)(buf);
                                 // no delivery for a NULL message
-                                if(msg.size > h->header_size && callbacks.global_stability_callback) {
+                                if(msg.size > h->header_size && !(h->cooked_send) && callbacks.global_stability_callback) {
                                     callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                                         msg.index,
                                                                         {{buf + h->header_size, msg.size - h->header_size}},
@@ -508,10 +508,12 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subg
         auto payload_size = msg.size - h->header_size;
         internal_callbacks.post_next_version_callback(subgroup_num, version, msg_ts_us);
         internal_callbacks.rpc_callback(subgroup_num, msg.sender_id, version, msg_ts_us, buf, payload_size);
-        if(callbacks.global_stability_callback) {
-            callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
-                                                version);
-        }
+
+        // if(callbacks.global_stability_callback) {
+        //     callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
+        //                                         version);
+        // }
+
     } else if(callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                             {{buf + h->header_size, msg.size - h->header_size}},
@@ -534,11 +536,13 @@ void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgr
         auto payload_size = msg.size - h->header_size;
         internal_callbacks.post_next_version_callback(subgroup_num, version, msg_ts_us);
         internal_callbacks.rpc_callback(subgroup_num, msg.sender_id, version, msg_ts_us, buf, payload_size);
-        if(callbacks.global_stability_callback) {
-            callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
-                                                {{buf + h->header_size, msg.size - h->header_size}},
-                                                version);
-        }
+
+        // if(callbacks.global_stability_callback) {
+        //     callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
+        //                                         {{buf + h->header_size, msg.size - h->header_size}},
+        //                                         version);
+        // }
+
     } else if(callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                             {{buf + h->header_size, msg.size - h->header_size}},
@@ -735,7 +739,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                     auto& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                     uint8_t* buf = const_cast<uint8_t*>(msg.buf);
                     header* h = (header*)(buf);
-                    if(msg.size > h->header_size && callbacks.global_stability_callback) {
+                    if(msg.size > h->header_size && !(h->cooked_send) && callbacks.global_stability_callback) {
                         callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                             msg.index,
                                                             {{buf + h->header_size, msg.size - h->header_size}},
@@ -752,7 +756,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                     auto& msg = it2->second;
                     uint8_t* buf = msg.message_buffer.buffer.get();
                     header* h = (header*)(buf);
-                    if(msg.size > h->header_size && callbacks.global_stability_callback) {
+                    if(msg.size > h->header_size && !(h->cooked_send) && callbacks.global_stability_callback) {
                         callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                             msg.index,
                                                             {{buf + h->header_size, msg.size - h->header_size}},
