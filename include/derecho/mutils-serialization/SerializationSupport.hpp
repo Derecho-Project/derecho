@@ -768,60 +768,135 @@ std::size_t to_bytes(const T& t, uint8_t* v) {
     return sizeof(T);
 }
 
-std::size_t to_bytes(const std::vector<bool>& vec, uint8_t* v);
-
 template <typename T>
-std::size_t to_bytes(const std::vector<T>& vec, uint8_t* v) {
+std::size_t to_bytes(const std::vector<T>& vec, uint8_t* buffer) {
+    /*
+     * we avoid using post_object for serialization to allow the "delayed instantiated object" mechanism
+     *
     auto size = bytes_size(vec);
     std::size_t index = 0;
     post_object(post_to_buffer(index, v), vec);
     return size;
+    */
+    int vector_size = vec.size();
+    std::size_t bsize = to_bytes(vector_size, buffer);
+    for (const auto& e: vec) {
+        bsize += to_bytes(e,buffer+bsize);
+    }
+    return bsize;
 }
 
 template <typename T>
 std::size_t to_bytes(const std::list<T>& list, uint8_t* buffer) {
+    /*
+     * we avoid using post_object for serialization to allow the "delayed instantiated object" mechanism
+     *
     auto size = bytes_size(list);
     std::size_t offset = 0;
     post_object(post_to_buffer(offset, buffer), list);
     return size;
+    */
+    int list_size = list.size();
+    std::size_t bsize = to_bytes(list_size, buffer);
+    for (const auto& e: list) {
+        bsize += to_bytes(e,buffer+bsize);
+    }
+    return bsize;
 }
 
 template <typename T, typename V>
 std::size_t to_bytes(const std::pair<T, V>& pair, uint8_t* buffer) {
+    /*
+     * we avoid using post_object for serialization to allow the "delayed instantiated object" mechanism
+     *
     std::size_t index = 0;
     post_object(post_to_buffer(index, buffer), pair);
     return bytes_size(pair);
+    */
+    std::size_t bsize = 0;
+    bsize += to_bytes(pair.first,buffer+bsize);
+    bsize += to_bytes(pair.second,buffer+bsize);
+    return bsize;
+}
+
+template <typename T>
+void to_bytes_helper1(uint8_t* buffer,std::size_t& offset,const T& t) {
+    offset = to_bytes(t,buffer+offset);
+}
+
+template <typename... T>
+std::size_t to_bytes_helper(uint8_t* buffer,const T&... t) {
+    std::size_t bsize = 0;
+    (to_bytes_helper1(buffer,bsize,t), ...);
+    return bsize;
 }
 
 template <typename... T>
 std::size_t to_bytes(const std::tuple<T...>& tuple, uint8_t* buffer) {
+    /*
+     * we avoid using post_object for serialization to allow the "delayed instantiated object" mechanism
+     *
     std::size_t index = 0;
     post_object(post_to_buffer(index, buffer), tuple);
     return bytes_size(tuple);
+    */
+    return std::apply([buffer](T... args){return to_bytes_helper(buffer,args...);}, tuple);
 }
 
 template <typename T>
-std::size_t to_bytes(const std::set<T>& s, uint8_t* _v) {
+std::size_t to_bytes(const std::set<T>& s, uint8_t* buffer) {
+    /*
+     * we avoid using post_object for serialization to allow the "delayed instantiated object" mechanism
+     *
     std::size_t index = 0;
     auto size = bytes_size(s);
     post_object(post_to_buffer(index, _v), s);
     return size;
+    */
+    int set_size = s.size();
+    std::size_t bsize = to_bytes(set_size,buffer);
+    for (const auto& e: s) {
+        bsize += to_bytes(e, buffer+bsize);
+    }
+    return bsize;
 }
 
 template <typename K, typename V>
 std::size_t to_bytes(const std::map<K, V>& m, uint8_t* buffer) {
+    /*
+     * we avoid using post_object for serialization to allow the "delayed instantiated object" mechanism
+     *
     std::size_t index = 0;
     std::size_t size = bytes_size(m);
     post_object(post_to_buffer(index, buffer), m);
     return size;
+    */
+    int map_size = m.size();
+    std::size_t bsize = to_bytes(map_size,buffer);
+    for (const auto& e: m) {
+        bsize += to_bytes(e.first,buffer+bsize);
+        bsize += to_bytes(e.second,buffer+bsize);
+    }
+    return bsize;
 }
 
 template <typename K, typename V>
 std::size_t to_bytes(const std::unordered_map<K, V>& m, uint8_t* buffer) {
+    /*
+     * we avoid using post_object for serialization to allow the "delayed instantiated object" mechanism
+     *
     std::size_t index = 0;
     std::size_t size = bytes_size(m);
     post_object(post_to_buffer(index, buffer), m);
     return size;
+    */
+    int map_size = m.size();
+    std::size_t bsize = to_bytes(map_size,buffer);
+    for (const auto& e: m) {
+        bsize += to_bytes(e.first,buffer+bsize);
+        bsize += to_bytes(e.second,buffer+bsize);
+    }
+    return bsize;
 }
 
 // end to_bytes section

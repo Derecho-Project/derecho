@@ -1,4 +1,5 @@
-#include "SerializationSupport.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <functional>
 
 using namespace mutils;
 
@@ -8,19 +9,23 @@ int main() {
 	uint8_t c[size];
 	bzero(c,size);
 	to_bytes(v,c);
-	deserialize_and_run<std::vector<int> >(nullptr,c,[&](std::vector<int>& v2){
+/*
+    std::function<void (const std::vector<int>&)> fun1 = [&](const std::vector<int>& v2){
 			assert(v2 == v);
-		});
-
-	deserialize_and_run<int >(nullptr,c,[&](int& v2){
+		};
+	deserialize_and_run(nullptr,c,fun1);
+*/
+	deserialize_and_run(nullptr,c,[&](const int& v2) {
 			assert(v2 == v.size());
+            return;
 		});
 
-	deserialize_and_run(nullptr,c,[&](int& size, int& v0, int& v1, int &v2, int &v3){
+	deserialize_and_run(nullptr,c,[&](const int& size, const int& v0, const int& v1, const int &v2, const int &v3){
 			assert(size == v.size());
 			assert(v0 == v.at(0));
 			assert(v1 == v.at(1));
 			assert(v2 == v.at(2));
 			assert(v3 == v.at(3));
+            return;
 		});
 }

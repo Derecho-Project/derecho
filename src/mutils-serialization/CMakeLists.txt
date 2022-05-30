@@ -9,3 +9,8 @@ target_include_directories(mutils-serialization PRIVATE
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 
 add_custom_target(format_mutils-serialization clang-format-3.8 -i *.cpp *.hpp)
+
+add_executable(test test_new_deserialization.cpp SerializationSupport.cpp)
+target_include_directories(test PRIVATE 
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
