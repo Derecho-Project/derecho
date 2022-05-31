@@ -16,7 +16,7 @@ int main() {
 	deserialize_and_run(nullptr,c,fun1);
 */
 	deserialize_and_run(nullptr,c,[&](const int& v2) {
-			assert(v2 == v.size());
+			assert(v2 == (int)v.size());
             return;
 		});
 
