@@ -21,7 +21,7 @@ int main() {
 		});
 
 	deserialize_and_run(nullptr,c,[&](const int& size, const int& v0, const int& v1, const int &v2, const int &v3){
-			assert(size == v.size());
+			assert(size == (int)v.size());
 			assert(v0 == v.at(0));
 			assert(v1 == v.at(1));
 			assert(v2 == v.at(2));
