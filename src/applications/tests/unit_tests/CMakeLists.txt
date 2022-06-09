@@ -41,3 +41,6 @@ target_link_libraries(external_notification_test derecho)
 
 add_executable(persistence_notification_test persistence_notification_test.cpp)
 target_link_libraries(persistence_notification_test derecho)
+
+add_executable(deserialize_and_run_test deserialize_and_run_test.cpp)
+target_link_libraries(deserialize_and_run_test derecho)
