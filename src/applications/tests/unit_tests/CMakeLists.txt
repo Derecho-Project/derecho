@@ -1,7 +1,3 @@
-cmake_minimum_required(VERSION 3.15.4)
-set(CMAKE_DISABLE_SOURCE_CHANGES ON)
-set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -45,3 +41,6 @@ target_link_libraries(external_notification_test derecho)
 
 add_executable(persistence_notification_test persistence_notification_test.cpp)
 target_link_libraries(persistence_notification_test derecho)
+
+add_executable(deserialize_and_run_test deserialize_and_run_test.cpp)
+target_link_libraries(deserialize_and_run_test derecho)

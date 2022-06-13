@@ -1,7 +1,3 @@
-cmake_minimum_required(VERSION 3.15.4)
-set(CMAKE_DISABLE_SOURCE_CHANGES ON)
-set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CMAKE_CIRRENT_SOURCE_DIR})
 

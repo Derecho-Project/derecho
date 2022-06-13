@@ -20,13 +20,7 @@ set(ignoreMe "${CMAKE_WARN_DEPRECATED}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
-if ( NOT DEFINED CMAKE_INSTALL_LIBDIR )
-    set( CMAKE_INSTALL_LIBDIR lib )
-endif ( )
-
-if ( NOT DEFINED CMAKE_INSTALL_INCLUDEDIR )
-    set( CMAKE_INSTALL_INCLUDEDIR include )
-endif ( )
+include(GNUInstallDirs)
 
 # Prevent "make install" from automatically calling "make all", since the "all" target includes
 # all the applications and they are not part of the library we want to install with "make install"
@@ -127,22 +121,17 @@ add_dependencies(derecho
     mutils-serialization conf utils core
     rdmc sst tcp persistent openssl_wrapper)
 
-# make install
+# Setup for make install
+# Declare that we will install the targets built by "derecho"
 install(TARGETS derecho EXPORT derechoTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+# Declare that we will install the "include/" directory as a standard include directory
 install(DIRECTORY
-        include/derecho/conf
-        include/derecho/core
-        include/derecho/mutils-serialization
-        include/derecho/openssl
-        include/derecho/persistent
-        include/derecho/rdmc
-        include/derecho/sst
-        include/derecho/tcp
-        include/derecho/utils
-        DESTINATION include/derecho)
+        include/
+        TYPE INCLUDE)
 
+# Use CMakePackageConfigHelpers to create a package version file and config file
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
@@ -158,17 +147,19 @@ configure_package_config_file(derechoConfig.cmake
     PATH_VARS CMAKE_INSTALL_LIBDIR CMAKE_INSTALL_INCLUDEDIR ConfigPackageLocation
 )
 
+# Create a CMake targets file for Derecho so it can be imported as a CMake package
 install(EXPORT derechoTargets
     FILE derechoTargets.cmake
     NAMESPACE derecho::
     DESTINATION ${ConfigPackageLocation}
 )
 
+# Declare that we will install the cmake files that CmakePackageConfigHelpers just created
 install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
     DESTINATION ${ConfigPackageLocation}
 )
 
-# applications
+# Build applications
 add_subdirectory(src/applications)
