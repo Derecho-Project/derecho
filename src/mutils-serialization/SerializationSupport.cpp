@@ -4,21 +4,21 @@ using namespace std;
 
 namespace mutils {
 
-std::size_t to_bytes(const ByteRepresentable& b, uint8_t* v) {
-    return b.to_bytes(v);
+std::size_t to_bytes(const ByteRepresentable& b, uint8_t* buffer) {
+    return b.to_bytes(buffer);
 }
 
 std::size_t bytes_size(const ByteRepresentable& b) {
     return b.bytes_size();
 }
 
-std::size_t to_bytes(const std::string& b, uint8_t* v) {
-    memcpy(v, b.c_str(), b.length() + 1);
-    return b.length() + 1;
+std::size_t to_bytes(const std::string& str, uint8_t* buffer) {
+    memcpy(buffer, str.c_str(), str.length() + 1);
+    return str.length() + 1;
 }
 
-std::size_t bytes_size(const std::string& b) {
-    return b.length() + 1;
+std::size_t bytes_size(const std::string& str) {
+    return str.length() + 1;
 }
 
 #ifdef MUTILS_DEBUG
@@ -28,8 +28,8 @@ void ensure_registered(ByteRepresentable& b, DeserializationManager& dm) {
 #endif
 
 context_ptr<marshalled>
-marshalled::from_bytes_noalloc(DeserializationManager const* const, uint8_t* v) {
-    return context_ptr<marshalled>((marshalled*)v);
+marshalled::from_bytes_noalloc(DeserializationManager const* const, uint8_t* buffer) {
+    return context_ptr<marshalled>((marshalled*)buffer);
 }
 
 std::function<void(uint8_t const* const, std::size_t)> post_to_buffer(std::size_t& index, uint8_t* dest_buf) {
@@ -39,12 +39,12 @@ std::function<void(uint8_t const* const, std::size_t)> post_to_buffer(std::size_
     };
 }
 
-void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f, const ByteRepresentable& br) {
-    br.post_object(f);
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer, const ByteRepresentable& br) {
+    br.post_object(consumer);
 }
 
-void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f, const std::string& str) {
-    f((const uint8_t*)(str.data()), str.length() + 1);
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer, const std::string& str) {
+    consumer((const uint8_t*)(str.data()), str.length() + 1);
 }
 
 std::size_t to_bytes_v(uint8_t*) {
