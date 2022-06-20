@@ -49,7 +49,13 @@ Derecho does not have any specific O/S dependency.  We've tested most extensivel
 This project is organized as a standard CMake-built C++ library: all headers are within the include/derecho/ directory, all CPP files are within the src/ directory, and each subdirectory within src/ contains its own CMakeLists.txt that is included by the root directory's CMakeLists.txt. Within the src/ and include/derecho/ directories, there is a subdirectory for each separate module of Derecho, such as RDMC, SST, and Persistence. Some sample applications and test cases that are built on the Derecho library are included in the src/applications/ directory, which is not included when building the Derecho library itself.
 
 ## Installation
-Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.
+Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.  
+* You will start by verifying that you have a compatible operating system (we do our development on Ubuntu but CentOS should be fine) and network (we recommend RDMA or TCP).
+* Next, decide if you prefer to use a pre-compiled container, which is easier, or would like to build from source.
+* If building from source, you will clone the code base in the place you plan to create the release binaries, then follow the instructions for creating a folder in which the binaries will reside.  Then from "prerequisites" run the .sh shell scripts one by one, for example "sudo ./install-foo.sh".  These should complete without error messages -- if you get warnings or errors, stop and post a question about it on the discussions page.
+* Next, if building from source, follow the remainder of the "installing Derecho" instructions.
+* Last, clone and build the Cascade code base.  
+* You should now be able to set up a configuration file and run our demos.
 
 ### Network requirements (important!)
 Derecho was designed to run correctly on:
