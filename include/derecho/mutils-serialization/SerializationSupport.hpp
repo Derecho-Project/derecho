@@ -828,7 +828,7 @@ std::size_t to_bytes(const std::pair<T, V>& pair, uint8_t* buffer) {
 
 template <typename T>
 void to_bytes_helper1(uint8_t* buffer,std::size_t& offset,const T& t) {
-    offset = to_bytes(t,buffer+offset);
+    offset += to_bytes(t,buffer+offset);
 }
 
 template <typename... T>
