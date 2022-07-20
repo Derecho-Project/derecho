@@ -117,6 +117,7 @@ void ViewManager::startup_to_first_view() {
         setup_initial_tcp_connections(*curr_view, my_id);
     } else {
         active_leader = false;
+        dbg_default_info("Non-leader node {} initiating a join request at the leader", my_id);
         leader_connection = std::make_unique<tcp::socket>(getConfString(CONF_DERECHO_LEADER_IP),
                                                           getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT));
         bool success = receive_initial_view();
@@ -457,6 +458,14 @@ void ViewManager::finish_setup() {
         curr_view->gmsSST->push_row_except_slots();
         dbg_default_debug("Joining node initialized its SST row from the leader");
     }
+
+    // Handle any external-client requests that were waiting for the group to start
+    for(auto& external_socket : startup_pending_external_sockets) {
+        dbg_default_info("Processing join request from external client {} at address {}", external_socket.first, external_socket.second.get_remote_ip());
+        external_join_handler(external_socket.second, external_socket.first);
+    }
+    startup_pending_external_sockets.clear();
+
     create_threads();
     register_predicates();
 
@@ -530,6 +539,7 @@ void ViewManager::start() {
 }
 
 void ViewManager::await_first_view() {
+    dbg_default_info("Group leader waiting for an initial adequate view");
     const node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
     std::set<node_id_t> members_sent_view;
@@ -538,30 +548,42 @@ void ViewManager::await_first_view() {
     do {
         while(!curr_view->is_adequately_provisioned) {
             tcp::socket client_socket = server_socket.accept();
-            uint64_t joiner_version_code;
-            client_socket.exchange(my_version_hashcode, joiner_version_code);
-            if(joiner_version_code != my_version_hashcode) {
-                rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket.get_remote_ip());
-                continue;
-            }
-            JoinRequest join_request;
-            client_socket.read(join_request);
-            node_id_t joiner_id = join_request.joiner_id;
-            if(curr_view->rank_of(joiner_id) != -1) {
-                client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
-                continue;
-            }
-            client_socket.write(JoinResponse{JoinResponseCode::OK, my_id});
             uint16_t joiner_gms_port = 0;
-            client_socket.read(joiner_gms_port);
             uint16_t joiner_state_transfer_port = 0;
-            client_socket.read(joiner_state_transfer_port);
             uint16_t joiner_sst_port = 0;
-            client_socket.read(joiner_sst_port);
             uint16_t joiner_rdmc_port = 0;
-            client_socket.read(joiner_rdmc_port);
             uint16_t joiner_external_port = 0;
-            client_socket.read(joiner_external_port);
+            node_id_t joiner_id = 0;
+            try {
+                uint64_t joiner_version_code;
+                client_socket.exchange(my_version_hashcode, joiner_version_code);
+                if(joiner_version_code != my_version_hashcode) {
+                    rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket.get_remote_ip());
+                    continue;
+                }
+                JoinRequest join_request;
+                client_socket.read(join_request);
+                if(join_request.is_external) {
+                    dbg_default_debug("Delaying an external-client request from {} until the initial view is formed", client_socket.get_remote_ip());
+                    startup_pending_external_sockets.emplace_back(join_request.joiner_id, std::move(client_socket));
+                    continue;
+                }
+                joiner_id = join_request.joiner_id;
+                if(curr_view->rank_of(joiner_id) != -1) {
+                    client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
+                    continue;
+                }
+                client_socket.write(JoinResponse{JoinResponseCode::OK, my_id});
+                client_socket.read(joiner_gms_port);
+                client_socket.read(joiner_state_transfer_port);
+                client_socket.read(joiner_sst_port);
+                client_socket.read(joiner_rdmc_port);
+                client_socket.read(joiner_external_port);
+            } catch(tcp::socket_error& ex) {
+                dbg_default_info("TCP connection to {} failed during join-request handshake. Ignoring request.", client_socket.get_remote_ip());
+                dbg_default_debug("Error description: {}", ex.what());
+                continue;
+            }
             const ip_addr_t& joiner_ip = client_socket.get_remote_ip();
             ip_addr_t my_ip = client_socket.get_self_ip();
             //Construct a new view by appending this joiner to the previous view
@@ -959,18 +981,23 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
 }
 
 void ViewManager::redirect_join_attempt(tcp::socket& client_socket) {
-    client_socket.write(JoinResponse{JoinResponseCode::LEADER_REDIRECT,
-                                     curr_view->members[curr_view->my_rank]});
-    //Send the client the IP address of the current leader
-    const int rank_of_leader = curr_view->find_rank_of_leader();
-    client_socket.write(mutils::bytes_size(
-            curr_view->member_ips_and_ports[rank_of_leader].ip_address));
-    auto bind_socket_write = [&client_socket](const uint8_t* bytes, std::size_t size) {
-        client_socket.write(bytes, size);
-    };
-    mutils::post_object(bind_socket_write,
-                        curr_view->member_ips_and_ports[rank_of_leader].ip_address);
-    client_socket.write(curr_view->member_ips_and_ports[rank_of_leader].gms_port);
+    try {
+        client_socket.write(JoinResponse{JoinResponseCode::LEADER_REDIRECT,
+                                         curr_view->members[curr_view->my_rank]});
+        // Send the client the IP address of the current leader
+        const int rank_of_leader = curr_view->find_rank_of_leader();
+        client_socket.write(mutils::bytes_size(
+                curr_view->member_ips_and_ports[rank_of_leader].ip_address));
+        auto bind_socket_write = [&client_socket](const uint8_t* bytes, std::size_t size) {
+            client_socket.write(bytes, size);
+        };
+        mutils::post_object(bind_socket_write,
+                            curr_view->member_ips_and_ports[rank_of_leader].ip_address);
+        client_socket.write(curr_view->member_ips_and_ports[rank_of_leader].gms_port);
+    } catch(tcp::socket_error& ex) {
+        // Log the error, but otherwise ignore it, since we no longer care about this client anyway
+        dbg_default_debug("TCP connection to client at {} failed while attempting to send it a leader-redirect message. Description: {}", client_socket.get_remote_ip(), ex.what());
+    }
 }
 
 void ViewManager::process_new_sockets() {
@@ -980,18 +1007,24 @@ void ViewManager::process_new_sockets() {
         client_socket = std::move(pending_new_sockets_locked.access.front());
         pending_new_sockets_locked.access.pop_front();
     }
-    //Exchange version codes; close the socket if the client has an incompatible version
-    uint64_t joiner_version_code;
-    client_socket.exchange(my_version_hashcode, joiner_version_code);
-    if(joiner_version_code != my_version_hashcode) {
-        rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.",
-                         client_socket.get_remote_ip());
+    JoinRequest join_request;
+    try {
+        // Exchange version codes; close the socket if the client has an incompatible version
+        uint64_t joiner_version_code;
+        client_socket.exchange(my_version_hashcode, joiner_version_code);
+        if(joiner_version_code != my_version_hashcode) {
+            rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.",
+                             client_socket.get_remote_ip());
+            return;
+        }
+        client_socket.read(join_request);
+    } catch(tcp::socket_error& ex) {
+        dbg_default_warn("TCP connection to {} failed before it could send a join request. Ignoring request.", client_socket.get_remote_ip());
+        dbg_default_debug("Error description: {}", ex.what());
         return;
     }
-    JoinRequest join_request;
-    client_socket.read(join_request);
     if(join_request.is_external) {
-        dbg_default_info("The join request is an external request from {}.", join_request.joiner_id);
+        dbg_default_info("Received an external join request from client {} at address {}.", join_request.joiner_id, client_socket.get_remote_ip());
         external_join_handler(client_socket, join_request.joiner_id);
     } else {
         if(active_leader) {
@@ -1003,18 +1036,35 @@ void ViewManager::process_new_sockets() {
     return;
 }
 void ViewManager::external_join_handler(tcp::socket& client_socket, const node_id_t& joiner_id) {
-    if(curr_view->rank_of(joiner_id) != -1) {
-        // external can't have same id as any member
-        client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
-    }
-    client_socket.write(JoinResponse{JoinResponseCode::OK, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
     ExternalClientRequest request;
-    client_socket.read(request);
+    try {
+        if(curr_view->rank_of(joiner_id) != -1) {
+            // external can't have same id as any member
+            client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
+        }
+        client_socket.write(JoinResponse{JoinResponseCode::OK, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
+        client_socket.read(request);
+    } catch(tcp::socket_error& ex) {
+        dbg_default_warn("TCP connection to external client {} failed before it could send a request. Ignoring request.", joiner_id);
+        dbg_default_debug("Socket error description: {}", ex.what());
+        return;
+    }
     if(request == ExternalClientRequest::GET_VIEW) {
-        send_view(*curr_view, client_socket);
+        try {
+            send_view(*curr_view, client_socket);
+        } catch(tcp::socket_error& ex) {
+            dbg_default_warn("External client {} failed while attempting to send it the view.", joiner_id);
+            dbg_default_debug("Socket error description: {}", ex.what());
+        }
     } else if(request == ExternalClientRequest::ESTABLISH_P2P) {
         uint16_t external_client_external_port = 0;
-        client_socket.read(external_client_external_port);
+        try {
+            client_socket.read(external_client_external_port);
+        } catch(tcp::socket_error& ex) {
+            dbg_default_warn("TCP connection to external client {} failed while attempting to establish a P2P connection", joiner_id);
+            dbg_default_debug("Socket error description: {}", ex.what());
+            return;
+        }
         sst::add_external_node(joiner_id, {client_socket.get_remote_ip(),
                                            external_client_external_port});
         add_external_connection_upcall(joiner_id);
@@ -1604,24 +1654,29 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tc
     inet_aton(client_socket.get_remote_ip().c_str(), &joiner_ip_packed);
 
     const node_id_t my_id = curr_view->members[curr_view->my_rank];
+    uint16_t joiner_gms_port = 0;
+    uint16_t joiner_state_transfer_port = 0;
+    uint16_t joiner_sst_port = 0;
+    uint16_t joiner_rdmc_port = 0;
+    uint16_t joiner_external_port = 0;
+    try {
+        if(curr_view->rank_of(joiner_id) != -1) {
+            dbg_default_warn("Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joiner_id);
+            client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
+            return false;
+        }
+        client_socket.write(JoinResponse{JoinResponseCode::OK, my_id});
 
-    if(curr_view->rank_of(joiner_id) != -1) {
-        dbg_default_warn("Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joiner_id);
-        client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
+        client_socket.read(joiner_gms_port);
+        client_socket.read(joiner_state_transfer_port);
+        client_socket.read(joiner_sst_port);
+        client_socket.read(joiner_rdmc_port);
+        client_socket.read(joiner_external_port);
+    } catch(tcp::socket_error& ex) {
+        dbg_default_warn("TCP connection to node {} at IP {} failed during join-request handshake. Ignoring request.", joiner_id, client_socket.get_remote_ip());
+        dbg_default_debug("Socket error description: {}", ex.what());
         return false;
     }
-    client_socket.write(JoinResponse{JoinResponseCode::OK, my_id});
-
-    uint16_t joiner_gms_port = 0;
-    client_socket.read(joiner_gms_port);
-    uint16_t joiner_state_transfer_port = 0;
-    client_socket.read(joiner_state_transfer_port);
-    uint16_t joiner_sst_port = 0;
-    client_socket.read(joiner_sst_port);
-    uint16_t joiner_rdmc_port = 0;
-    client_socket.read(joiner_rdmc_port);
-    uint16_t joiner_external_port = 0;
-    client_socket.read(joiner_external_port);
 
     dbg_default_debug("Proposing change #{} to add node {}. Num_installed is currently {}", gmsSST.num_changes[curr_view->my_rank] + 1, joiner_id, gmsSST.num_installed[curr_view->my_rank]);
     size_t next_change_index = gmsSST.num_changes[curr_view->my_rank]
