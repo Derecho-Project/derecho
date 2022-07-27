@@ -606,6 +606,44 @@ version_t FilePersistLog::getHLCVersion(const HLC& rhlc) {
     return INVALID_VERSION;
 }
 
+version_t FilePersistLog::getPreviousVersionOf(version_t ver) {
+    int64_t idx = getVersionIndex(ver,false);
+    version_t prev_ver = INVALID_VERSION;
+    if (idx != INVALID_INDEX) {
+        if(LOG_ENTRY_AT(idx)->fields.ver < ver) {
+            prev_ver = LOG_ENTRY_AT(idx)->fields.ver;
+        } else {
+            FPL_RDLOCK;
+            if (idx > m_currMetaHeader.fields.head) {
+                prev_ver = LOG_ENTRY_AT(idx - 1)->fields.ver;
+            }
+            FPL_UNLOCK;
+        }
+    }
+
+    return prev_ver;
+}
+
+version_t FilePersistLog::getNextVersionOf(version_t ver) {
+    int64_t idx = getVersionIndex(ver,false);
+    version_t next_ver = INVALID_VERSION;
+    if (idx != INVALID_INDEX) {
+        FPL_RDLOCK;
+        if (idx < (m_currMetaHeader.fields.tail - 1)) {
+            next_ver = LOG_ENTRY_AT(idx+1)->fields.ver;
+        }
+        FPL_UNLOCK;
+    } else {
+        FPL_RDLOCK;
+        if (NUM_USED_SLOTS > 0) {
+            next_ver = LOG_ENTRY_AT(m_currMetaHeader.fields.head)->fields.ver;
+        }
+        FPL_UNLOCK;
+    }
+
+    return next_ver;
+}
+
 const void* FilePersistLog::getEntry(const HLC& rhlc) {
     LogEntry* ple = nullptr;
 

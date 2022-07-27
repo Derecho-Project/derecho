@@ -129,6 +129,8 @@ printhelp() {
     cout << "\tgetbyidx <index>" << endl;
     cout << "\tgetbyver <version>" << endl;
     cout << "\tgetbytime <timestamp>" << endl;
+    cout << "\tpreviousof <version>" << endl;
+    cout << "\tnextof <version>" << endl;
     cout << "\tset <value> <version>" << endl;
     cout << "\tverify <version>" << endl;
     cout << "\ttrimbyidx <index>" << endl;
@@ -320,6 +322,10 @@ int main(int argc, char** argv) {
                 });
             // by copy
             cout << "[(" << hlc.m_rtc_us << ",0)]\t" << npx.get(hlc)->to_string() << "\t//by copy" << endl;
+        } else if (strcmp(argv[1], "previousof") == 0) {
+            cout << "previousof " << argv[2] << " is " << npx.getPreviousVersionOf(atol(argv[2])) << endl;
+        } else if (strcmp(argv[1], "nextof") == 0) {
+            cout << "nextof " << argv[2] << " is " << npx.getNextVersionOf(atol(argv[2])) << endl;
         } else if(strcmp(argv[1], "trimbyidx") == 0) {
             int64_t nv = atol(argv[2]);
             npx.trim(nv);

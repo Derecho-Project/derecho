@@ -513,6 +513,18 @@ version_t Persistent<ObjectType, storageType>::getVersionAtTime(const HLC& hlc) 
 
 template <typename ObjectType,
           StorageType storageType>
+version_t Persistent<ObjectType, storageType>::getPreviousVersionOf(const persistent::version_t& version) const {
+    return this->m_pLog->getPreviousVersionOf(version);
+}
+
+template <typename ObjectType,
+          StorageType storageType>
+version_t Persistent<ObjectType, storageType>::getNextVersionOf(const persistent::version_t& version) const {
+    return this->m_pLog->getNextVersionOf(version);
+}
+
+template <typename ObjectType,
+          StorageType storageType>
 void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, const HLC& mhlc) {
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {

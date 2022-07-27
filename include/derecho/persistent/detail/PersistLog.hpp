@@ -126,6 +126,10 @@ public:
     // Get the version corresponding to an HLC timestamp
     virtual version_t getHLCVersion(const HLC& hlc) = 0;
 
+    // Get previous/next version
+    virtual version_t getPreviousVersionOf(version_t ver) = 0;
+    virtual version_t getNextVersionOf(version_t ver) = 0;
+
     // Get the Earlist version
     virtual version_t getEarliestVersion() = 0;
 
