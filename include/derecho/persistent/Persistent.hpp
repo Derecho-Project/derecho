@@ -111,6 +111,15 @@ public:
     version_t getMinimumLatestVersion();
 
     /**
+     * Returns the minimum value of getNextVersionOf(version) across all
+     * Persistent fields. This can be used to determine the next valid version
+     * of the object after some historical version, skipping past any "empty"
+     * versions. Returns INVALID_VERSION if there is no valid version later
+     * than the argument.
+     */
+    version_t getMinimumVersionAfter(version_t version);
+
+    /**
      * Adds signatures to the log up to the specified version, and returns the
      * signature for the latest version. The version specified should be the
      * result of calling getMinimumLatestVersion().
@@ -903,6 +912,26 @@ public:
      * Get the latest version invlusively before time.
      */
     virtual persistent::version_t getVersionAtTime(const HLC& hlc) const;
+
+    /**
+     * getPreviousVersionOf
+     *
+     * Get the previous version of a version.
+     * @param version   the current version. If it falls in a hole, the version immediate preceding the hole is returned.
+     *
+     * @return the previous version of the parameter version, or INVALID_VERSION if such a version does not exist.
+     */
+    virtual persistent::version_t getPreviousVersionOf(const persistent::version_t& version) const;
+
+    /**
+     * getNextVersionOf
+     *
+     * Get the next version of a version.
+     * @param version   the current version. If it falls in a hole, the version immediate following the hole is returned.
+     *
+     * @return the next version of the parameter version, or INVALID_VERSION if such a version does not exist.
+     */
+    virtual persistent::version_t getNextVersionOf(const persistent::version_t& version) const;
 
     /**
      * set(ObjectType&, version_t,const HLC&)
