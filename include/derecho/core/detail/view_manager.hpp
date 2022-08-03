@@ -144,6 +144,12 @@ private:
     std::list<std::pair<node_id_t, tcp::socket>> pending_join_sockets;
     /** The sockets connected to clients that will join in the next view, if any */
     std::list<std::pair<node_id_t, tcp::socket>> proposed_join_sockets;
+    /**
+     * Sockets for external clients that initiated join requests during system startup.
+     * These must wait until the first view has committed and the SST is created before
+     * being handled. After system startup, this list will be empty.
+     */
+    std::list<std::pair<node_id_t, tcp::socket>> startup_pending_external_sockets;
 
     /** Contains old Views that need to be cleaned up. */
     std::queue<std::unique_ptr<View>> old_views;

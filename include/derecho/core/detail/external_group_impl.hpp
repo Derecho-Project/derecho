@@ -148,7 +148,7 @@ template <typename... ReplicatedTypes>
 ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient()
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           receivers(new std::decay_t<decltype(*receivers)>()),
-          busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)){
+          busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
                           std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
@@ -195,6 +195,7 @@ ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(
                        my_id);
 #endif
 
+    dbg_default_debug("External Client startup: contacting Derecho group leader to request a view");
     if(!get_view(INVALID_NODE_ID)) throw derecho_exception("Failed to contact the leader to request very first view.");
 
     initialize_p2p_connections();
@@ -213,7 +214,10 @@ ExternalGroupClient<ReplicatedTypes...>::~ExternalGroupClient() {
 template <typename... ReplicatedTypes>
 bool ExternalGroupClient<ReplicatedTypes...>::get_view(const node_id_t nid) {
     try {
-        tcp::socket sock = (nid == INVALID_NODE_ID) ? tcp::socket(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT)) : tcp::socket(curr_view->member_ips_and_ports[curr_view->rank_of(nid)].ip_address, curr_view->member_ips_and_ports[curr_view->rank_of(nid)].gms_port, false);
+        tcp::socket sock = (nid == INVALID_NODE_ID)
+                                   ? tcp::socket(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT))
+                                   : tcp::socket(curr_view->member_ips_and_ports[curr_view->rank_of(nid)].ip_address,
+                                                 curr_view->member_ips_and_ports[curr_view->rank_of(nid)].gms_port, false);
 
         JoinResponse leader_response;
         uint64_t leader_version_hashcode;

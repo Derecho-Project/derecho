@@ -252,6 +252,7 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
     rpc_manager.start_listening();
     view_manager.start();
     persistence_manager.start();
+    dbg_default_info("Derecho Group successfully started");
 }
 
 /* A simpler constructor that uses "default" options for callbacks, upcalls, and deserialization context */
@@ -357,8 +358,6 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 subgroup_index, ExternalClientCallback<FirstType>(subgroup_type_id,
                                                                   my_id, subgroup_id, rpc_manager));
     }
-    // add the client callback object
-    // client_callback = std::make_unique<ExternalClientCallback<NotificationSupport>>(subgroup_type_id, my_id, rpc_manager);
     return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders, in_restart));
 }
 
@@ -419,7 +418,7 @@ ExternalClientCallback<SubgroupType>& Group<ReplicatedTypes...>::get_client_call
     try {
         return external_client_callbacks.template get<SubgroupType>().at(subgroup_index);
     } catch(std::out_of_range& ex) {
-        throw invalid_subgroup_exception("No ExternalClientCallback exists for the requested subgroup; this node may be a member of the subgroup");
+        throw invalid_subgroup_exception("No ExternalClientCallback exists for the requested subgroup");
     }
 }
 
