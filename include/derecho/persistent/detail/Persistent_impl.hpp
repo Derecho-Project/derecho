@@ -640,7 +640,8 @@ void Persistent<ObjectType, storageType>::persist(version_t ver) {
     cnt_in_persist++;
     ns_in_persist += ((t2.tv_sec - t1.tv_sec) * 1000000000ul + t2.tv_nsec - t1.tv_nsec);
 #else
-    this->m_pLog->persist(ver);
+    version_t persisted_ver = this->m_pLog->persist(ver);
+    dbg_default_debug("{} persist({}), actually persisted version {}", this->m_pLog->m_sName, ver, persisted_ver);
 #endif  //_PERFORMANCE_DEBUG
 }
 

@@ -44,12 +44,24 @@ version_t PersistentRegistry::getMinimumLatestVersion() {
     return min;
 }
 
+version_t PersistentRegistry::getMinimumVersionAfter(version_t version) {
+    version_t min = -1;
+    for(auto registry_itr = m_registry.begin(); registry_itr != m_registry.end(); ++registry_itr) {
+        version_t field_next_ver = registry_itr->second->getNextVersionOf(version);
+        if(registry_itr == m_registry.begin()
+           || (field_next_ver != INVALID_VERSION && field_next_ver < min)) {
+            min = field_next_ver;
+        }
+    }
+    return min;
+}
+
 void PersistentRegistry::initializeLastSignature(version_t version,
                                                  const uint8_t* signature, std::size_t signature_size) {
     if(signature_size != m_lastSignature.size()) {
         m_lastSignature.resize(signature_size);
-        //On the first call to initialize_signature with version == INVALID_VERSION,
-        //this will initialize last_signature to all zeroes, which is our "genesis signature"
+        // On the first call to initialize_signature with version == INVALID_VERSION,
+        // this will initialize last_signature to all zeroes, which is our "genesis signature"
     }
     if(signature_size > 0 && version != INVALID_VERSION
        && (m_lastSignedVersion == INVALID_VERSION || m_lastSignedVersion < version)) {
@@ -59,26 +71,33 @@ void PersistentRegistry::initializeLastSignature(version_t version,
 }
 
 void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer) {
-    for(version_t version = m_lastSignedVersion + 1; version <= latest_version; ++version) {
+    version_t cur_nonempty_version = getMinimumVersionAfter(m_lastSignedVersion);
+    dbg_default_debug("PersistentRegistry: sign() called with lastSignedVersion = {}, latest_version = {}. First version to sign = {}", m_lastSignedVersion, latest_version, cur_nonempty_version);
+    while(cur_nonempty_version != INVALID_VERSION && cur_nonempty_version <= latest_version) {
+        dbg_default_trace("PersistentRegistry: Attempting to sign version {} out of {}", cur_nonempty_version, latest_version);
         signer.init();
         std::size_t bytes_signed = 0;
         for(auto& field : m_registry) {
-            bytes_signed += field.second->updateSignature(version, signer);
+            bytes_signed += field.second->updateSignature(cur_nonempty_version, signer);
         }
         if(bytes_signed == 0) {
-            //If this version did not exist in any field, there's nothing to sign
+            // That version did not exist in any field, so there was nothing to sign. This should not happen with getMinimumVersionAfter().
+            dbg_default_warn("Logic error in PersistentRegistry: Version {} was returned by getMinimumVersionAfter(), but it did not exist in any field", cur_nonempty_version);
+            cur_nonempty_version = getMinimumVersionAfter(cur_nonempty_version);
             continue;
         }
         signer.add_bytes(m_lastSignature.data(), m_lastSignature.size());
         signer.finalize(signature_buffer);
-        //After computing a signature over all fields of the object, go back and
-        //tell each field to add that signature to its log.
-        dbg_default_debug("PersistentRegistry: Adding signature to log in version {}, setting its previous signed version to {}", version, m_lastSignedVersion);
+        // After computing a signature over all fields of the object, go back and
+        // tell each field to add that signature to its log.
+        dbg_default_debug("PersistentRegistry: Adding signature to log in version {}, setting its previous signed version to {}", cur_nonempty_version, m_lastSignedVersion);
         for(auto& field : m_registry) {
-            field.second->addSignature(version, signature_buffer, m_lastSignedVersion);
+            field.second->addSignature(cur_nonempty_version, signature_buffer, m_lastSignedVersion);
         }
         memcpy(m_lastSignature.data(), signature_buffer, m_lastSignature.size());
-        m_lastSignedVersion = version;
+        m_lastSignedVersion = cur_nonempty_version;
+        // Advance the current version to the next non-empty version, or INVALID_VERSION if it is already at the latest version
+        cur_nonempty_version = getMinimumVersionAfter(cur_nonempty_version);
     }
 }
 
@@ -93,7 +112,7 @@ bool PersistentRegistry::getSignature(version_t version, uint8_t* signature_buff
 }
 
 bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, const uint8_t* signature) {
-    //For objects with no persistent fields, verification should always "succeed"
+    // For objects with no persistent fields, verification should always "succeed"
     if(m_registry.empty()) {
         return true;
     }
@@ -104,15 +123,15 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     }
     const std::size_t signature_size = verifier.get_max_signature_size();
     version_t prev_signed_version;
-    //Find a field that has a signature for this version; not all entries will
-    //On that field, get the previous signed version, and retrieve that signature
+    // Find a field that has a signature for this version; not all entries will
+    // On that field, get the previous signed version, and retrieve that signature
     uint8_t current_sig[signature_size];
     uint8_t previous_sig[signature_size];
     for(auto& field : m_registry) {
         if(field.second->getSignature(version, current_sig, prev_signed_version)) {
             if(prev_signed_version == INVALID_VERSION) {
-                //Special case if version is the very first version,
-                //whose previous signature is the "genesis signature"
+                // Special case if version is the very first version,
+                // whose previous signature is the "genesis signature"
                 memset(previous_sig, 0, signature_size);
             } else {
                 version_t dummy;
@@ -174,7 +193,7 @@ void PersistentRegistry::registerPersistent(const std::string& obj_name,
     std::size_t key = std::hash<std::string>{}(obj_name);
     auto res = this->m_registry.insert(std::pair<std::size_t, PersistentObject*>(key, persistent_object));
     if(res.second == false) {
-        //override the previous value:
+        // override the previous value:
         this->m_registry.erase(res.first);
         this->m_registry.insert(std::pair<std::size_t, PersistentObject*>(key, persistent_object));
     }

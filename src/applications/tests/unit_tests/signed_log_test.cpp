@@ -91,11 +91,10 @@ public:
 
 /**
  * Command-line arguments: <one_field_size> <two_field_size> <unsigned_size> <num_updates>
- * one_field_size: Size of the subgroup that replicates the one-field signed object
- * two_field_size: Size of the subgroup that replicates the two-field signed object
- * unsigned_size: Size of the subgroup that replicates the persistent-but-not-signed object
+ * one_field_size: Maximum size of the subgroup that replicates the one-field signed object
+ * two_field_size: Maximum size of the subgroup that replicates the two-field signed object
+ * unsigned_size: Maximum size of the subgroup that replicates the persistent-but-not-signed object
  * num_updates: Number of randomly-generated 32-byte updates to send to each subgroup
- * Setting any of the subgroup sizes to 0 will result in that type of object not being created at all
  */
 int main(int argc, char** argv) {
     pthread_setname_np(pthread_self(), "test_main");
@@ -123,14 +122,14 @@ int main(int argc, char** argv) {
 
     derecho::SubgroupInfo subgroup_info(
             derecho::DefaultSubgroupAllocator({{std::type_index(typeid(OneFieldObject)),
-                                                derecho::one_subgroup_policy(derecho::fixed_even_shards(
-                                                        1, subgroup_1_size))},
+                                                derecho::one_subgroup_policy(derecho::flexible_even_shards(
+                                                        1, 1, subgroup_1_size))},
                                                {std::type_index(typeid(TwoFieldObject)),
-                                                derecho::one_subgroup_policy(derecho::fixed_even_shards(
-                                                        1, subgroup_2_size))},
+                                                derecho::one_subgroup_policy(derecho::flexible_even_shards(
+                                                        1, 1, subgroup_2_size))},
                                                {std::type_index(typeid(UnsignedObject)),
-                                                derecho::one_subgroup_policy(derecho::fixed_even_shards(
-                                                        1, subgroup_unsigned_size))}}));
+                                                derecho::one_subgroup_policy(derecho::flexible_even_shards(
+                                                        1, 1, subgroup_unsigned_size))}}));
 
     //Count the total number of messages delivered in each subgroup to figure out what version is assigned to the last one
     std::array<uint32_t, 3> subgroup_total_messages = {subgroup_1_size * num_updates,

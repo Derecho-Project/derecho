@@ -91,6 +91,25 @@ public:
      */
     virtual version_t getLastPersistedVersion() const = 0;
     /**
+     * getPreviousVersionOf
+     *
+     * Get the previous version of a version.
+     * @param version   the current version. If it falls in a hole, the version immediate preceding the hole is returned.
+     *
+     * @return the previous version of the parameter version, or INVALID_VERSION if such a version does not exist.
+     */
+    virtual persistent::version_t getPreviousVersionOf(const persistent::version_t& version) const = 0;
+
+    /**
+     * getNextVersionOf
+     *
+     * Get the next version of a version.
+     * @param version   the current version. If it falls in a hole, the version immediate following the hole is returned.
+     *
+     * @return the next version of the parameter version, or INVALID_VERSION if such a version does not exist.
+     */
+    virtual persistent::version_t getNextVersionOf(const persistent::version_t& version) const = 0;
+    /**
      * Truncates the log, deleting all versions newer than the provided argument.
      * Since this throws away recently-used data, it should only be used during
      * failure recovery when those versions must be rolled back.
