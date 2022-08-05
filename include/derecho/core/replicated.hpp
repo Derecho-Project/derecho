@@ -456,7 +456,19 @@ public:
     ExternalClientCallback(const ExternalClientCallback&) = delete;
 
     /**
-     * Sends a peer-to-peer message to a single member of the subgroup that
+     * Checks if this node currently has a P2P connection to an external client
+     * with the specified ID. An external client must establish a P2P connection
+     * before ExternalClientCallback can be used to send it messages, so if this
+     * returns false, p2p_send will fail.
+     *
+     * @param client_id The node ID of a possible external client
+     * @return true if this ExternalClientCallback<T> could send a P2P message to
+     * that client, false if there is no client with that ID connected.
+     */
+    bool has_external_client(node_id_t client_id) const;
+
+    /**
+     * Sends a peer-to-peer message to a single external client of the subgroup that
      * this ExternalClientCallback<T> connects to, invoking the RPC function identified
      * by the FunctionTag template parameter.
      * @param dest_node The ID of the node that the P2P message should be sent to

@@ -641,7 +641,9 @@ version_t Persistent<ObjectType, storageType>::persist(version_t ver) {
     ns_in_persist += ((t2.tv_sec - t1.tv_sec) * 1000000000ul + t2.tv_nsec - t1.tv_nsec);
     return ret;
 #else
-    return this->m_pLog->persist(ver);
+    version_t persisted_ver = this->m_pLog->persist(ver);
+    dbg_default_debug("{} persist({}), actually persisted version {}", this->m_pLog->m_sName, ver, persisted_ver);
+    return persisted_ver;
 #endif  //_PERFORMANCE_DEBUG
 }
 

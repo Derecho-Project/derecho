@@ -93,6 +93,7 @@ void PersistenceManager::start() {
 }
 
 void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persistent::version_t version) {
+    dbg_default_debug("PersistenceManager: handling persist request for subgroup {} version {}", subgroup_id, version);
     //If a previous request already persisted a later version (due to batching), don't do anything
     if(last_persisted_version[subgroup_id] >= version) {
         return;
@@ -121,6 +122,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
         }
         // read lock the view
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
+        dbg_default_debug("PersistenceManager: updating subgroup {} persisted_num to {}", subgroup_id, persisted_version);
         // update the signature and persisted_num in SST
         View& Vc = view_and_lock.get();
         if(object_has_signature) {
@@ -142,6 +144,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
 }
 
 void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persistent::version_t version) {
+    dbg_default_debug("PersistenceManager: handling verify request for subgroup {} version {}", subgroup_id, version);
     auto search = objects_by_subgroup_id.find(subgroup_id);
     if(search != objects_by_subgroup_id.end()) {
         ReplicatedObject* subgroup_object = search->second;
@@ -154,6 +157,10 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
         View& Vc = view_and_lock.get();
         std::vector<uint32_t> shard_member_ranks = Vc.multicast_group->get_shard_sst_indices(subgroup_id);
         persistent::version_t minimum_verified_version = std::numeric_limits<persistent::version_t>::max();
+        // Special case for a shard of size 1: There are no other members to verify, so just advance verified_num to match persisted_num
+        if(shard_member_ranks.size() == 1) {
+            minimum_verified_version = Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id];
+        }
         //For each other member of this node's shard, try to verify the signature in its SST row
         for(const uint32_t shard_member_rank : shard_member_ranks) {
             if(shard_member_rank == Vc.gmsSST->get_local_index()) {

@@ -349,6 +349,11 @@ ExternalClientCallback<T>::ExternalClientCallback(uint32_t type_id, node_id_t ni
           wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
                                                    T::register_functions(), *group_rpc_manager.receivers)) {}
 
+template <typename T>
+bool ExternalClientCallback<T>::has_external_client(node_id_t client_id) const {
+    return group_rpc_manager.connections->contains_node(client_id);
+}
+
 // This is literally copied and pasted from PeerCaller<T>, except that this does not check if the receiver
 //  is in the subgroup.
 
