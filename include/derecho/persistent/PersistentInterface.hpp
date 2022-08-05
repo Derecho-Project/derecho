@@ -73,8 +73,10 @@ public:
     /**
      * Persists versions to persistent storage, up to the provided version.
      * @param version The highest version number to persist
+     *
+     * @return the real persisted version which might be higher than the requested one.
      */
-    virtual void persist(version_t version) = 0;
+    virtual version_t persist(version_t version) = 0;
     /**
      * Trims the beginning (oldest part) of the log, discarding versions older
      * than the specified version

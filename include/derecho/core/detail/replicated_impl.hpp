@@ -220,14 +220,13 @@ persistent::version_t Replicated<T>::persist(persistent::version_t version, uint
         // tell the persistent thread that we are done.
         return version;
     }
-    persistent::version_t next_persisted_ver;
+    persistent::version_t next_persisted_ver = persistent::INVALID_VERSION;
     // Ask PersistentRegistry to persist all the Persistent fields
     do {
-        next_persisted_ver = persistent_registry->getMinimumLatestVersion();
         if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
             persistent_registry->sign(next_persisted_ver, *signer, signature);
         }
-        persistent_registry->persist(next_persisted_ver);
+        next_persisted_ver = persistent_registry->persist(next_persisted_ver);
     } while(next_persisted_ver < version);
     return next_persisted_ver;
 };

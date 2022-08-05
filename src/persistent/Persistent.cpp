@@ -125,10 +125,16 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     return verifier.finalize(signature, signature_size);
 }
 
-void PersistentRegistry::persist(version_t latest_version) {
+version_t PersistentRegistry::persist(version_t latest_version) {
+    version_t min = INVALID_VERSION;
     for(auto& entry : m_registry) {
-        entry.second->persist(latest_version);
+        version_t ver = entry.second->persist(latest_version);
+        if (min == INVALID_VERSION || 
+            min > ver) {
+            min = ver;
+        }
     }
+    return min;
 };
 
 void PersistentRegistry::trim(version_t earliest_version) {

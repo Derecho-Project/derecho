@@ -631,16 +631,17 @@ void Persistent<ObjectType, storageType>::updateVerifier(version_t ver, openssl:
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::persist(version_t ver) {
+version_t Persistent<ObjectType, storageType>::persist(version_t ver) {
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
-    this->m_pLog->persist(ver);
+    version_t ret = this->m_pLog->persist(ver);
     clock_gettime(CLOCK_REALTIME, &t2);
     cnt_in_persist++;
     ns_in_persist += ((t2.tv_sec - t1.tv_sec) * 1000000000ul + t2.tv_nsec - t1.tv_nsec);
+    return ret;
 #else
-    this->m_pLog->persist(ver);
+    return this->m_pLog->persist(ver);
 #endif  //_PERFORMANCE_DEBUG
 }
 
