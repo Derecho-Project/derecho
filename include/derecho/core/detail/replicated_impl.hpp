@@ -220,15 +220,19 @@ persistent::version_t Replicated<T>::persist(persistent::version_t version, uint
         // tell the persistent thread that we are done.
         return version;
     }
-    persistent::version_t next_persisted_ver = persistent::INVALID_VERSION;
-    // Ask PersistentRegistry to persist all the Persistent fields
+    persistent::version_t persisted_ver = persistent_registry->getMinimumLatestVersion();
+    persistent::version_t signed_ver;
+    // Ask PersistentRegistry to sign then persist all the Persistent fields;
+    // if persist() actually persists a later version than requested, repeat
+    // until the latest version has been both signed and persisted.
     do {
+        signed_ver = persisted_ver;
         if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
-            persistent_registry->sign(next_persisted_ver, *signer, signature);
+            persistent_registry->sign(signed_ver, *signer, signature);
         }
-        next_persisted_ver = persistent_registry->persist(next_persisted_ver);
-    } while(next_persisted_ver < version);
-    return next_persisted_ver;
+        persisted_ver = persistent_registry->persist(signed_ver);
+    } while(persisted_ver < version || signed_ver < persisted_ver);
+    return persisted_ver;
 };
 
 template <typename T>
