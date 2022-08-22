@@ -157,9 +157,12 @@ public:
     /**
      * Persist versions up to a specified version, which should be the result of
      * calling getMinimumLatestVersion().
+     *
      * @param latest_version The version to persist up to.
+     *
+     * @return a version equal to getMinimumLatestPersistedVersion()
      */
-    void persist(version_t latest_version);
+    version_t persist(version_t latest_version);
 
     /** Trims the log of all versions earlier than the argument. */
     void trim(version_t earliest_version);
@@ -985,7 +988,7 @@ public:
      *
      * @param latest_version The version to persist up to
      */
-    virtual void persist(version_t latest_version);
+    virtual version_t persist(version_t latest_version);
 
     /**
      * Update the provided Signer with the state of T at the specified version.
