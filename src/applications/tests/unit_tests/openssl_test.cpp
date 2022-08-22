@@ -36,8 +36,18 @@ int main(int argc, char** argv) {
     test_objects.push_back(StringObject("This is a longer object with more data in it. abcdefghijklmnopqrstuvwxyz1234567890"));
     test_objects.push_back(StringObject("This is a much larger object with a lot of data in it. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. In nisl nisi scelerisque eu ultrices vitae auctor eu. Ultricies lacus sed turpis tincidunt id. Ultricies mi quis hendrerit dolor magna eget est lorem ipsum. Pellentesque habitant morbi tristique senectus et netus et malesuada. Id interdum velit laoreet id donec. Sagittis id consectetur purus ut. Donec pretium vulputate sapien nec sagittis aliquam. Lacus sed viverra tellus in hac habitasse. Libero volutpat sed cras ornare arcu dui vivamus arcu felis. Eget nulla facilisi etiam dignissim diam quis. Dictum non consectetur a erat nam at lectus. In dictum non consectetur a erat nam at lectus. Cras tincidunt lobortis feugiat vivamus at. Vitae aliquet nec ullamcorper sit amet risus nullam eget felis. Sed risus ultricies tristique nulla aliquet enim tortor. Nulla posuere sollicitudin aliquam ultrices sagittis orci. Tempus imperdiet nulla malesuada pellentesque elit. Velit sed ullamcorper morbi tincidunt ornare massa eget."));
 
-    openssl::EnvelopeKey my_private_key = openssl::EnvelopeKey::from_pem_private("server_private_key.pem");
-    openssl::EnvelopeKey my_public_key = openssl::EnvelopeKey::from_pem_public("server_public_key.pem");
+    std::string private_key_file;
+    std::string public_key_file;
+    if(argc > 2) {
+        private_key_file = argv[1];
+        public_key_file = argv[2];
+    } else {
+        private_key_file = "server_private_key.pem";
+        public_key_file = "server_public_key.pem";
+    }
+
+    openssl::EnvelopeKey my_private_key = openssl::EnvelopeKey::from_pem_private(private_key_file);
+    openssl::EnvelopeKey my_public_key = openssl::EnvelopeKey::from_pem_public(public_key_file);
 
     openssl::Signer my_signer(my_private_key, openssl::DigestAlgorithm::SHA256);
     openssl::Verifier my_verifier(my_public_key, openssl::DigestAlgorithm::SHA256);
@@ -105,9 +115,11 @@ int main(int argc, char** argv) {
     }
 
     openssl::Hasher my_hasher(openssl::DigestAlgorithm::SHA256);
-    const char* subgroup_type_name = std::type_index(typeid(StringObject)).name();
-    unsigned char subgroup_type_name_digest[my_hasher.get_hash_size()];
     my_hasher.init();
+    const char* subgroup_type_name = std::type_index(typeid(StringObject)).name();
+    const int hash_size = my_hasher.get_hash_size();
+    std::cout << "Hash size: " << hash_size << std::endl;
+    unsigned char subgroup_type_name_digest[hash_size];
     my_hasher.add_bytes(subgroup_type_name, strlen(subgroup_type_name));
     my_hasher.finalize(subgroup_type_name_digest);
     char prefix[32 * 2 + 32];
@@ -116,7 +128,7 @@ int main(int argc, char** argv) {
     }
     std::cout << "Hashed type name: " << prefix << std::endl;
 
-    unsigned char subgroup_name_digest_2[my_hasher.get_hash_size()];
+    unsigned char subgroup_name_digest_2[hash_size];
     my_hasher.hash_bytes(subgroup_type_name, strlen(subgroup_type_name), subgroup_name_digest_2);
     char prefix2[32 * 2 + 32];
     for(uint32_t i = 0; i < 32; i++) {
