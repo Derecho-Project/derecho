@@ -238,7 +238,7 @@ where `[username]` is your linux username. A `*` in place of the username will s
 
 The persistence layer of Derecho stores durable logs of updates in memory-mapped files. Linux also limits the size of memory-mapped files to a small size that Derecho usually exceeds, so you will need to set the system parameter `vm.overcommit_memory` to `1` for persistence to work. To do this, run the command
 
-    sysctl -w vm.overcommit_memory = 1
+    sysctl -w vm.overcommit_memory=1
 
 A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance\_tests. To run it, go to two of your machines (nodes), `cd` to `Release/src/applications/tests/performance_tests` and run `./bandwidth_test 2 0 100000 0` on both. As a confirmation that the experiment finished successfully, the first node will write a log of the result in the file `data_derecho_bw`, which will be something along the lines of `2 0 10240 300 100000 0 5.07607`. Full experiment details including explanation of the arguments, results and methodology is explained in the source documentation for this program.
 
