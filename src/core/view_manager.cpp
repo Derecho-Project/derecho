@@ -16,6 +16,7 @@
 #include "derecho/utils/logger.hpp"
 
 #include <mutils/macro_utils.hpp>
+#include <chrono>
 
 #include <arpa/inet.h>
 #include <tuple>
@@ -865,6 +866,16 @@ void ViewManager::register_predicates() {
     curr_view->gmsSST->predicates.insert(new_view_has_changes,
                                          propose_changes_trig,
                                          sst::PredicateType::ONE_TIME);
+    /**
+    auto update_load_info_pred = [this](const DerechoSST& sst){
+      return require_update_load_info();
+    };
+    auto update_load_info_trig = [this](DerechoSST& sst) { update_load_info(sst); };
+    if(!load_info_update_handle.is_valid()){
+      load_info_update_handle = curr_view->gmsSST->predicates.insert(
+		update_load_info_pred, update_load_info_trig, sst::PredicateType::RECURRENT);
+    }
+    */
 }
 
 /* ------------- 2. Predicate-Triggers That Implement View Management Logic ---------- */
@@ -1514,6 +1525,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     gmsSST.predicates.remove(leader_committed_handle);
     gmsSST.predicates.remove(leader_suspicion_handle);
     gmsSST.predicates.remove(follower_suspicion_handle);
+    gmsSST.predicates.remove(load_info_update_handle);
 
     dbg_default_debug("Starting creation of new SST and DerechoGroup for view {}", next_view->vid);
     for(const node_id_t failed_node_id : next_view->departed) {
@@ -1595,6 +1607,23 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     dbg_default_debug("Done with view change to view {}", curr_view->vid);
 }
 
+bool ViewManager::require_update_load_info(){
+  // uint64_t cur_us = std::chrono::duration_cast<std::chrono::microseconds>(
+  //std::chrono::high_resolution_clock::now().time_since_epoch())
+  //.count();
+    // TODO: move this threshold to config
+    //if(cur_us - last_load_update_timeus < 10000){
+    //  return false;
+    //}
+    //last_load_update_timeus = cur_us;
+    dbg_default_debug("Multicast to update load changes to all nodes");
+    return true;
+}
+
+void ViewManager::update_load_info(DerechoSST& gmsSST){
+    dbg_default_debug("\n~~~ hello world! ~~~");
+}
+
 /* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
 
 void ViewManager::construct_multicast_group(const UserMessageCallbacks& callbacks,
@@ -1612,7 +1641,6 @@ void ViewManager::construct_multicast_group(const UserMessageCallbacks& callback
                     [this](const uint32_t node_id) { report_failure(node_id); },
                     curr_view->failed, false),
             num_subgroups, signature_size, num_received_size, slot_size, index_field_size);
-
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
             curr_view->gmsSST, callbacks, internal_callbacks, num_subgroups, subgroup_settings,

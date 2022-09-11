@@ -153,6 +153,8 @@ std::string DerechoSST::to_string() const {
         }
         s << "}"
           << ", rip = " << rip[row] << std::endl;
+	s << "}"
+          << ", load_info = " << load_info[row] << std::endl;
     }
     return s.str();
 }

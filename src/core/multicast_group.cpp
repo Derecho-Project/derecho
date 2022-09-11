@@ -499,7 +499,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subg
     if(msg.size <= sizeof(header)) {
         return;
     }
-
+    std::cout << "\n\n MulticastGroup::deliver_message \n\n" << std::endl;
     uint8_t* buf = msg.message_buffer.buffer.get();
     header* h = (header*)(buf);
     // cooked send
@@ -1453,6 +1453,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     if(!rdmc_sst_groups_created) {
         return false;
     }
+    std::cout << "\n\n MulticastGroup::send \n\n" << std::endl;
     std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
     uint8_t* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
     while(!buf) {

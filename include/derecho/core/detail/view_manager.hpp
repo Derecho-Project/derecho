@@ -183,6 +183,7 @@ private:
     pred_handle change_commit_ready_handle;
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
+    pred_handle load_info_update_handle;
 
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
@@ -352,6 +353,14 @@ private:
      * upcalls.
      */
     void finish_view_change(DerechoSST& gmsSST);
+    /** 
+     * Predicate function to determine if to run update_load_info_trigger.
+     */
+    bool require_update_load_info();
+    /**
+     * Runs periodically to multicast the load_info change in SST table to all members.
+     */
+    void update_load_info(DerechoSST& gmsSST);
 
     /* ---------------------------------------------------------------------------------- */
     /* ------------------- Helper methods for view-management triggers ------------------ */
@@ -968,6 +977,7 @@ public:
     // max of max_payload_sizes
     uint64_t view_max_rpc_reply_payload_size = 0;
     uint32_t view_max_rpc_window_size = 0;
+    uint64_t last_load_update_timeus = 0;
 };
 
 } /* namespace derecho */
