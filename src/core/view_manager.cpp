@@ -1608,14 +1608,14 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 }
 
 bool ViewManager::require_update_load_info(){
-  // uint64_t cur_us = std::chrono::duration_cast<std::chrono::microseconds>(
-  //std::chrono::high_resolution_clock::now().time_since_epoch())
-  //.count();
+  uint64_t cur_us = std::chrono::duration_cast<std::chrono::microseconds>(
+		    std::chrono::high_resolution_clock::now().time_since_epoch())
+                    .count();
     // TODO: move this threshold to config
-    //if(cur_us - last_load_update_timeus < 10000){
-    //  return false;
-    //}
-    //last_load_update_timeus = cur_us;
+    if(cur_us - last_load_update_timeus < 10000){
+      return false;
+    }
+    last_load_update_timeus = cur_us;
     dbg_default_debug("Multicast to update load changes to all nodes");
     return true;
 }
