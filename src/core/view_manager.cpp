@@ -866,8 +866,8 @@ void ViewManager::register_predicates() {
     curr_view->gmsSST->predicates.insert(new_view_has_changes,
                                          propose_changes_trig,
                                          sst::PredicateType::ONE_TIME);
-    /**
-    auto update_load_info_pred = [this](const DerechoSST& sst){
+    
+    auto update_load_info_pred = [this](const DerechoSST& gmsSST){
       return require_update_load_info();
     };
     auto update_load_info_trig = [this](DerechoSST& sst) { update_load_info(sst); };
@@ -875,7 +875,7 @@ void ViewManager::register_predicates() {
       load_info_update_handle = curr_view->gmsSST->predicates.insert(
 		update_load_info_pred, update_load_info_trig, sst::PredicateType::RECURRENT);
     }
-    */
+    
 }
 
 /* ------------- 2. Predicate-Triggers That Implement View Management Logic ---------- */
@@ -1608,7 +1608,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 }
 
 bool ViewManager::require_update_load_info(){
-  uint64_t cur_us = std::chrono::duration_cast<std::chrono::microseconds>(
+    uint64_t cur_us = std::chrono::duration_cast<std::chrono::microseconds>(
 		    std::chrono::high_resolution_clock::now().time_since_epoch())
                     .count();
     // TODO: move this threshold to config
