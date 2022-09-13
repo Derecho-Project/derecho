@@ -427,6 +427,12 @@ public:
     template<typename SubgroupType>
     std::vector<uint32_t> get_my_subgroup_indexes();
 
+    /**
+     * Handle for node member to update its load info in the SST load_info column.
+     * This is used by upper level application-TIDE
+     */
+    void update_my_load_info(uint32_t load);
+
     /** Reports to the GMS that the given node has failed. */
     void report_failure(const node_id_t who);
     /** Waits until all members of the group have called this function. */

@@ -949,6 +949,12 @@ public:
      * when the view changes to notify another component of the new view. */
     void add_view_upcall(const view_upcall_t& upcall);
 
+    /** Update the load in SST load_info column for my_id entry.
+     * this function is used by upper level application TIDE to update the local 
+     * load information of this member node
+     */
+    void update_load_info(uint32_t load);
+
     /** Reports to the GMS that the given node has failed. */
     void report_failure(const node_id_t who);
     /** Waits until all members of the group have called this function. */

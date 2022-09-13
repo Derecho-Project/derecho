@@ -1615,7 +1615,7 @@ bool ViewManager::require_send_load_info(){
 		    std::chrono::high_resolution_clock::now().time_since_epoch())
                     .count();
     // TODO: move this threshold to config
-    if(cur_us - last_load_send_timeus < 10000){
+    if(cur_us - last_load_send_timeus < 1000000){
       return false;
     }
     last_load_send_timeus = cur_us;
@@ -2472,6 +2472,12 @@ void ViewManager::report_failure(const node_id_t who) {
         }
     }
     curr_view->gmsSST->put(curr_view->gmsSST->suspected, failed_rank);
+}
+
+void ViewManager::update_load_info(uint32_t load){
+  std::cout << "\n\n -- ViewManager updating my load information -- \n" << std::endl;
+  gmssst::set(curr_view->gmsSST->load_info[curr_view->my_rank], load);
+  std::cout << curr_view->gmsSST->to_string() << std::endl;
 }
 
 void ViewManager::silence() {
