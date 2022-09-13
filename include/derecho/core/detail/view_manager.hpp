@@ -183,7 +183,7 @@ private:
     pred_handle change_commit_ready_handle;
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
-    pred_handle load_info_update_handle;
+    pred_handle load_info_send_handle;
 
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
@@ -356,7 +356,7 @@ private:
     /** 
      * Predicate function to determine if to run update_load_info_trigger.
      */
-    bool require_update_send_info();
+    bool require_send_load_info();
     /**
      * Runs periodically to multicast the load_info change in SST table to all members.
      */

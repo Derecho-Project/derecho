@@ -873,8 +873,8 @@ void ViewManager::register_predicates() {
        return require_send_load_info();
     };
     auto send_load_info_trig = [this](DerechoSST& sst) { send_load_info(sst); };
-    if(!load_info_update_handle.is_valid()){
-      load_info_update_handle = curr_view->gmsSST->predicates.insert(
+    if(!load_info_send_handle.is_valid()){
+      load_info_send_handle = curr_view->gmsSST->predicates.insert(
 		send_load_info_pred, send_load_info_trig, sst::PredicateType::RECURRENT);
     }
     std::cout << "\n --- Finished register_prdicates.\n" << std::endl;
@@ -1527,7 +1527,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     gmsSST.predicates.remove(leader_committed_handle);
     gmsSST.predicates.remove(leader_suspicion_handle);
     gmsSST.predicates.remove(follower_suspicion_handle);
-    gmsSST.predicates.remove(load_info_update_handle);
+    gmsSST.predicates.remove(load_info_send_handle);
 
     dbg_default_debug("Starting creation of new SST and DerechoGroup for view {}", next_view->vid);
     for(const node_id_t failed_node_id : next_view->departed) {
@@ -1623,7 +1623,7 @@ bool ViewManager::require_send_load_info(){
     return true;
 }
 
-void ViewManager::update_send_info(DerechoSST& gmsSST){
+void ViewManager::send_load_info(DerechoSST& gmsSST){
     dbg_default_debug("\n~~~ hello world! ~~~");
 }
  
