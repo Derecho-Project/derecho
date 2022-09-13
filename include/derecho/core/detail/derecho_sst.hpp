@@ -254,7 +254,7 @@ public:
             rip[row] = false;
 	    load_info[row] = 0;
         }
-	 std::cout << "\n----- FINISHED CONSTRUCT" << get_num_rows() << std::endl;
+	 std::cout << "\n----- FINISHED CONSTRUCT DerechoSST" << get_num_rows() << std::endl;
     }
 
     /**

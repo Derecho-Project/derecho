@@ -356,11 +356,11 @@ private:
     /** 
      * Predicate function to determine if to run update_load_info_trigger.
      */
-    bool require_update_load_info();
+    bool require_update_send_info();
     /**
      * Runs periodically to multicast the load_info change in SST table to all members.
      */
-    void update_load_info(DerechoSST& gmsSST);
+    void send_load_info(DerechoSST& gmsSST);
 
     /* ---------------------------------------------------------------------------------- */
     /* ------------------- Helper methods for view-management triggers ------------------ */
@@ -977,7 +977,8 @@ public:
     // max of max_payload_sizes
     uint64_t view_max_rpc_reply_payload_size = 0;
     uint32_t view_max_rpc_window_size = 0;
-    uint64_t last_load_update_timeus = 0;
+    // timestamp to track when the last time load column on SST was updated
+    uint64_t last_load_send_timeus = 0;
 };
 
 } /* namespace derecho */

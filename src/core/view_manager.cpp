@@ -866,16 +866,18 @@ void ViewManager::register_predicates() {
     curr_view->gmsSST->predicates.insert(new_view_has_changes,
                                          propose_changes_trig,
                                          sst::PredicateType::ONE_TIME);
-    
-    auto update_load_info_pred = [this](const DerechoSST& gmsSST){
-      return require_update_load_info();
+    /* This predicate is used for periodically callback to all the members to update their
+     * local load information. This information is used for TIDE application.
+     */
+    auto send_load_info_pred = [this](const DerechoSST& gmsSST){
+       return require_send_load_info();
     };
-    auto update_load_info_trig = [this](DerechoSST& sst) { update_load_info(sst); };
+    auto send_load_info_trig = [this](DerechoSST& sst) { send_load_info(sst); };
     if(!load_info_update_handle.is_valid()){
       load_info_update_handle = curr_view->gmsSST->predicates.insert(
-		update_load_info_pred, update_load_info_trig, sst::PredicateType::RECURRENT);
+		send_load_info_pred, send_load_info_trig, sst::PredicateType::RECURRENT);
     }
-    
+    std::cout << "\n --- Finished register_prdicates.\n" << std::endl;
 }
 
 /* ------------- 2. Predicate-Triggers That Implement View Management Logic ---------- */
@@ -1607,22 +1609,24 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     dbg_default_debug("Done with view change to view {}", curr_view->vid);
 }
 
-bool ViewManager::require_update_load_info(){
+ 
+bool ViewManager::require_send_load_info(){
     uint64_t cur_us = std::chrono::duration_cast<std::chrono::microseconds>(
 		    std::chrono::high_resolution_clock::now().time_since_epoch())
                     .count();
     // TODO: move this threshold to config
-    if(cur_us - last_load_update_timeus < 10000){
+    if(cur_us - last_load_send_timeus < 10000){
       return false;
     }
-    last_load_update_timeus = cur_us;
+    last_load_send_timeus = cur_us;
     dbg_default_debug("Multicast to update load changes to all nodes");
     return true;
 }
 
-void ViewManager::update_load_info(DerechoSST& gmsSST){
+void ViewManager::update_send_info(DerechoSST& gmsSST){
     dbg_default_debug("\n~~~ hello world! ~~~");
 }
+ 
 
 /* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
 
