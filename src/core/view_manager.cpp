@@ -2443,7 +2443,6 @@ void ViewManager::report_failure(const node_id_t who) {
 
 
 void ViewManager::update_load_info(uint32_t load){
-  std::cout << "\n\n -- ViewManager pass my load information to multicast group -- \n" << std::endl;
   curr_view->multicast_group->update_load_info_entry(load);
 }
 

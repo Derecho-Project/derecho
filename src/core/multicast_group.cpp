@@ -1123,8 +1123,14 @@ bool MulticastGroup::require_send_load_info(){
     return true;
 }
 
-void MulticastGroup::send_load_info(DerechoSST& gmsSST){
-    dbg_default_debug("\n~~~ sending load info! ~~~");
+void MulticastGroup::send_load_info(DerechoSST& sst){
+    dbg_default_debug("\n~~~ Begin send_load_info() ~~~");
+    uint32_t buf[sst.get_num_rows()];
+    for(size_t i = 0; i < sst.get_num_rows(); i++){
+      buf[i] = sst.load_info[i];
+    }
+    callbacks.global_load_update_callback(buf, sst.get_num_rows());
+    dbg_default_debug("\n~~~ Finished send_load_info()! ~~~");
 }
 
 MulticastGroup::~MulticastGroup() {

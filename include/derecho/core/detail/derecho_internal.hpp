@@ -64,6 +64,14 @@ using verified_callback_t = std::function<void(subgroup_id_t, persistent::versio
 using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, persistent::version_t, uint64_t, uint8_t*, uint32_t)>;
 
 /**
+ * The function type for update callback that copy load_info column to Cascade server's corresponding field,
+ * then used by scheduler at Cascade application level. Expected parameters:
+ * Parameter 1: load_info column data
+ * Parameter 3: number of rows
+ */
+  using load_update_callback_t = std::function<void(uint32_t*, size_t)>;
+
+/**
  * Bundles together a set of callback functions for message delivery events.
  * These will be invoked by MulticastGroup or ViewManager to hand control back
  * to the client if it wants to implement custom logic to respond to each
@@ -79,6 +87,8 @@ struct UserMessageCallbacks {
     persistence_callback_t global_persistence_callback = nullptr;
     /** A function to be called when a new version of a subgroup's state has been signed correctly by all replicas */
     verified_callback_t global_verified_callback = nullptr;
+    /** A function to be called periodically to update the load_info column in SST. */
+    load_update_callback_t global_load_update_callback = nullptr;
 };
 
 /** The type of factory function the user must provide to the Group constructor,
