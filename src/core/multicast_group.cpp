@@ -1527,6 +1527,7 @@ std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgro
 void MulticastGroup::update_load_info_entry(uint32_t load){
   std::cout << "\n\n -- MulticastGroup updating my load information -- \n" << std::endl;
   gmssst::set(sst->load_info[member_index], load);
+  sst->put(sst->load_info);
   std::cout << sst->to_string() << std::endl;
 }
   
