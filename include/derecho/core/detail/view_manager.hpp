@@ -183,7 +183,6 @@ private:
     pred_handle change_commit_ready_handle;
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
-    pred_handle load_info_send_handle;
 
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
@@ -353,14 +352,6 @@ private:
      * upcalls.
      */
     void finish_view_change(DerechoSST& gmsSST);
-    /** 
-     * Predicate function to determine if to run update_load_info_trigger.
-     */
-    bool require_send_load_info();
-    /**
-     * Runs periodically to multicast the load_info change in SST table to all members.
-     */
-    void send_load_info(DerechoSST& gmsSST);
 
     /* ---------------------------------------------------------------------------------- */
     /* ------------------- Helper methods for view-management triggers ------------------ */
@@ -949,7 +940,7 @@ public:
      * when the view changes to notify another component of the new view. */
     void add_view_upcall(const view_upcall_t& upcall);
 
-    /** Update the load in SST load_info column for my_id entry.
+    /** Update the load in multicastGroup SST
      * this function is used by upper level application TIDE to update the local 
      * load information of this member node
      */
@@ -983,8 +974,6 @@ public:
     // max of max_payload_sizes
     uint64_t view_max_rpc_reply_payload_size = 0;
     uint32_t view_max_rpc_window_size = 0;
-    // timestamp to track when the last time load column on SST was updated
-    uint64_t last_load_send_timeus = 0;
 };
 
 } /* namespace derecho */

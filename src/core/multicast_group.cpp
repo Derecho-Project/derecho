@@ -1095,6 +1095,36 @@ void MulticastGroup::register_predicates() {
             }
         }
     }
+    /* This predicate is used for periodically callback to all the members to update their
+     * local load information. This information is used for TIDE application.
+     */
+    auto send_load_info_pred = [this](const DerechoSST& sst){
+       return require_send_load_info();
+    };
+    auto send_load_info_trig = [this](DerechoSST& sst) { send_load_info(sst); };
+    if(!load_info_send_handle.is_valid()){
+      load_info_send_handle = sst->predicates.insert(
+		send_load_info_pred, send_load_info_trig, sst::PredicateType::RECURRENT);
+    }
+    std::cout << "\n --- Finished register_prdicates.\n" << std::endl;
+}
+
+ 
+bool MulticastGroup::require_send_load_info(){
+    uint64_t cur_us = std::chrono::duration_cast<std::chrono::microseconds>(
+		    std::chrono::high_resolution_clock::now().time_since_epoch())
+                    .count();
+    // TODO: move this threshold to config
+    if(cur_us - last_load_send_timeus < 1000000){
+      return false;
+    }
+    last_load_send_timeus = cur_us;
+    dbg_default_debug("Multicast to update load changes to all nodes");
+    return true;
+}
+
+void MulticastGroup::send_load_info(DerechoSST& gmsSST){
+    dbg_default_debug("\n~~~ sending load info! ~~~");
 }
 
 MulticastGroup::~MulticastGroup() {
@@ -1494,6 +1524,12 @@ std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgro
     return shard_sst_indices;
 }
 
+void MulticastGroup::update_load_info_entry(uint32_t load){
+  std::cout << "\n\n -- MulticastGroup updating my load information -- \n" << std::endl;
+  gmssst::set(sst->load_info[member_index], load);
+  std::cout << sst->to_string() << std::endl;
+}
+  
 void MulticastGroup::debug_print() {
     using std::cout;
     using std::endl;
