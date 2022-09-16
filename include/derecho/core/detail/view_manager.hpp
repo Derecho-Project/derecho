@@ -574,7 +574,9 @@ private:
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size,
                                    const uint32_t slot_size,
-                                   const uint32_t index_field_size);
+                                   const uint32_t index_field_size,
+				   std::vector<uint32_t>& _shadow_load_info_buf,
+				   std::vector<uint32_t>& _active_load_info_buf);
 
     /**
      * Sets up the SST and MulticastGroup for a new view, based on the settings in the current view,
@@ -587,7 +589,9 @@ private:
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
                                     const uint32_t new_num_received_size,
                                     const uint32_t new_slot_size,
-                                    const uint32_t index_field_size);
+                                    const uint32_t index_field_size,
+				    std::vector<uint32_t>& _shadow_load_info_buf,
+				    std::vector<uint32_t>& _active_load_info_buf);
 
     /**
      * Creates the subgroup-settings map that MulticastGroup's constructor needs
@@ -778,9 +782,15 @@ public:
      * @param internal_callbacks The set of additional callbacks for MulticastGroup
      * needed by internal components. Copied in so that ViewManager can add its own
      * callback to the struct.
+     * @param _shadow_load_info_buf The pointer to the shadow_load_info_buf vector
+     * in Group class. This is used and updated by MulticastGroup
+     * @param _active_load_info_buf The pointer to the shadow_load_info_buf vector
+     * in Group class. This is used and updated by MulticastGroup
      */
     void initialize_multicast_groups(const UserMessageCallbacks& callbacks,
-                                     MulticastGroupCallbacks internal_callbacks);
+                                     MulticastGroupCallbacks internal_callbacks,
+				     std::vector<uint32_t>& _shadow_load_info_buf,
+				     std::vector<uint32_t>& _active_load_info_buf);
 
     /**
      * Completes first-time setup of the ViewManager, including synchronizing
@@ -960,6 +970,12 @@ public:
     void register_initialize_objects_upcall(initialize_rpc_objects_t upcall) {
         initialize_subgroup_objects = std::move(upcall);
     }
+
+   /** Set the load of this member to the load_info column in SST on curr_view.*/
+    void set_load_info(uint32_t load);
+
+   /** Get the load_info_active status from multicastGroup in curr_view.*/
+    int get_load_info_active_status();
 
     /**
      * stop complaining about node failures.

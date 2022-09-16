@@ -243,7 +243,11 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
             [this](subgroup_id_t subgroup, persistent::version_t version) {
                 rpc_manager.notify_verification_finished(subgroup, version);
             }};
-    view_manager.initialize_multicast_groups(callbacks, internal_callbacks);
+    for(size_t i = 0; i < view_manager.get_members().size(); i++){
+      shadow_load_info_buf.push_back(0);
+      active_load_info_buf.push_back(0);
+    }
+    view_manager.initialize_multicast_groups(callbacks, internal_callbacks, shadow_load_info_buf, active_load_info_buf);
     rpc_manager.create_connections();
     //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
     set_up_components();
@@ -549,6 +553,20 @@ void Group<ReplicatedTypes...>::barrier_sync() {
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::debug_print_status() const {
     view_manager.debug_print_status();
+}
+
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::set_load_info(uint32_t load) {
+  view_manager.set_load_info(load);
+}
+
+template <typename... ReplicatedTypes>
+const std::vector<uint32_t>& Group<ReplicatedTypes...>::get_load_info() {
+  int buf_active_status = view_manager.get_load_info_active_status();
+  if(buf_active_status == 0)
+    return active_load_info_buf;
+  else
+    return shadow_load_info_buf;
 }
 
 } /* namespace derecho */

@@ -411,7 +411,9 @@ void ViewManager::truncate_logs() {
 }
 
 void ViewManager::initialize_multicast_groups(const UserMessageCallbacks& callbacks,
-                                              MulticastGroupCallbacks internal_callbacks) {
+                                              MulticastGroupCallbacks internal_callbacks,
+					      std::vector<uint32_t>& _shadow_load_info_buf,
+				              std::vector<uint32_t>& _active_load_info_buf) {
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     auto sizes = derive_subgroup_settings(*curr_view, subgroup_settings_map);
@@ -430,7 +432,7 @@ void ViewManager::initialize_multicast_groups(const UserMessageCallbacks& callba
                 subgroup_objects.at(subgroup_id)->post_next_version(ver, msg_ts);
             };
     dbg_default_debug("Initializing SST and RDMC for the first time.");
-    construct_multicast_group(callbacks, internal_callbacks, subgroup_settings_map, num_received_size, slot_size, index_field_size);
+    construct_multicast_group(callbacks, internal_callbacks, subgroup_settings_map, num_received_size, slot_size, index_field_size, _shadow_load_info_buf, _active_load_info_buf);
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
 }
 
@@ -1553,7 +1555,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     }
 
     // This will block until everyone responds to SST/RDMC initial handshakes
-    transition_multicast_group(next_subgroup_settings, new_num_received_size, new_slot_size, new_index_field_size);
+    transition_multicast_group(next_subgroup_settings, new_num_received_size, new_slot_size, new_index_field_size, curr_view->multicast_group->shadow_load_info_buf, curr_view->multicast_group->active_load_info_buf);
     dbg_default_debug("Done setting up SST and MulticastGroup for view {}; about to do a sync_with_members()", next_view->vid);
 
     // New members can now proceed to view_manager.finish_setup(), which will call put() and sync()
@@ -1602,7 +1604,9 @@ void ViewManager::construct_multicast_group(const UserMessageCallbacks& callback
                                             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                             const uint32_t num_received_size,
                                             const uint32_t slot_size,
-                                            const uint32_t index_field_size) {
+                                            const uint32_t index_field_size,
+					    std::vector<uint32_t>& _shadow_load_info_buf,
+					    std::vector<uint32_t>& _active_load_info_buf) {
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
     const std::size_t signature_size = persistence_manager.get_signature_size();
 
@@ -1616,12 +1620,13 @@ void ViewManager::construct_multicast_group(const UserMessageCallbacks& callback
             curr_view->members, curr_view->members[curr_view->my_rank],
             curr_view->gmsSST, callbacks, internal_callbacks, num_subgroups, subgroup_settings,
             getConfUInt32(CONF_DERECHO_HEARTBEAT_MS),
-            persistence_manager, curr_view->failed);
+            persistence_manager, _shadow_load_info_buf, _active_load_info_buf, curr_view->failed);
 }
 
 void ViewManager::transition_multicast_group(
         const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
-        const uint32_t new_num_received_size, const uint32_t new_slot_size, const uint32_t new_index_field_size) {
+        const uint32_t new_num_received_size, const uint32_t new_slot_size, const uint32_t new_index_field_size,
+	std::vector<uint32_t>& _shadow_load_info_buf, std::vector<uint32_t>& _active_load_info_buf) {
     const auto num_subgroups = next_view->subgroup_shard_views.size();
     const std::size_t signature_size = persistence_manager.get_signature_size();
 
@@ -1635,7 +1640,7 @@ void ViewManager::transition_multicast_group(
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank],
             next_view->gmsSST, std::move(*curr_view->multicast_group), num_subgroups,
-            new_subgroup_settings,
+            new_subgroup_settings, _shadow_load_info_buf, _active_load_info_buf,
             next_view->failed);
 
     curr_view->multicast_group.reset();
@@ -2579,6 +2584,14 @@ SharedLockedReference<const View> ViewManager::get_current_or_restart_view() {
     } else {
         return SharedLockedReference<const View>(*curr_view, view_mutex);
     }
+}
+
+void ViewManager::set_load_info(uint32_t load) {
+  curr_view->multicast_group->update_load_info_entry(load);
+}
+
+int ViewManager::get_load_info_active_status() {
+  return curr_view->multicast_group->get_load_info_active_status();
 }
 
 LockedReference<std::unique_lock<std::mutex>, tcp::socket> ViewManager::get_transfer_socket(node_id_t member_id) {

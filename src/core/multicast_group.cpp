@@ -39,6 +39,8 @@ MulticastGroup::MulticastGroup(
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         unsigned int sender_timeout,
         PersistenceManager& persistence_manager_ref,
+	std::vector<uint32_t>& _shadow_load_info_buf,
+	std::vector<uint32_t>& _active_load_info_buf,
         std::vector<char> already_failed)
         : members(_members),
           num_members(members.size()),
@@ -66,7 +68,9 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-          persistence_manager(persistence_manager_ref) {
+          persistence_manager(persistence_manager_ref),
+          shadow_load_info_buf(_shadow_load_info_buf),
+          active_load_info_buf(_active_load_info_buf){
     for(uint i = 0; i < total_num_subgroups; ++i) {
         minimum_persisted_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
         minimum_verified_version[i] = std::make_unique<std::atomic<persistent::version_t>>(persistent::INVALID_VERSION);
@@ -110,6 +114,8 @@ MulticastGroup::MulticastGroup(
         MulticastGroup&& old_group,
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
+	std::vector<uint32_t>& _shadow_load_info_buf,
+	std::vector<uint32_t>& _active_load_info_buf,
         std::vector<char> already_failed)
         : members(_members),
           num_members(members.size()),
@@ -137,7 +143,9 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-          persistence_manager(old_group.persistence_manager) {
+          persistence_manager(old_group.persistence_manager),
+          shadow_load_info_buf(_shadow_load_info_buf),
+          active_load_info_buf(_active_load_info_buf){
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
 
@@ -262,7 +270,7 @@ MulticastGroup::MulticastGroup(
     bool no_member_failed = true;
     if(already_failed.size()) {
         for(uint i = 0; i < num_members; ++i) {
-            if(already_failed[i]) {
+           if(already_failed[i]) {
                 no_member_failed = false;
                 break;
             }
@@ -1098,41 +1106,53 @@ void MulticastGroup::register_predicates() {
     /* This predicate is used for periodically callback to all the members to update their
      * local load information. This information is used for TIDE application.
      */
-    auto send_load_info_pred = [this](const DerechoSST& sst){
-       return require_send_load_info();
-    };
-    auto send_load_info_trig = [this](DerechoSST& sst) { send_load_info(sst); };
-    if(!load_info_send_handle.is_valid()){
-      load_info_send_handle = sst->predicates.insert(
-		send_load_info_pred, send_load_info_trig, sst::PredicateType::RECURRENT);
-    }
-    std::cout << "\n --- Finished register_prdicates.\n" << std::endl;
-}
-
- 
-bool MulticastGroup::require_send_load_info(){
-    uint64_t cur_us = std::chrono::duration_cast<std::chrono::microseconds>(
+    auto update_load_info_pred = [this](const DerechoSST& sst){
+       uint64_t cur_us = std::chrono::duration_cast<std::chrono::microseconds>(
 		    std::chrono::high_resolution_clock::now().time_since_epoch())
                     .count();
-    // TODO: move this threshold to config
-    if(cur_us - last_load_send_timeus < 1000000){
-      return false;
+       // TODO: move this threshold to config
+       if(cur_us - last_load_send_timeus < 1000000){
+	 return false;
+       }
+       last_load_send_timeus = cur_us;
+       dbg_default_trace("send_load_info_pred() trigger");
+       return true;
+    };
+    auto update_load_info_sst_trig = [this](DerechoSST& sst) { update_load_info_sst(sst); };
+    if(!load_info_send_handle.is_valid()){
+      load_info_send_handle = sst->predicates.insert(
+		update_load_info_pred, update_load_info_sst_trig, sst::PredicateType::RECURRENT);
     }
-    last_load_send_timeus = cur_us;
-    dbg_default_debug("Multicast to update load changes to all nodes");
-    return true;
+    dbg_default_trace("multicast group finished register_prdicates.");
 }
 
-void MulticastGroup::send_load_info(DerechoSST& sst){
-    dbg_default_debug("\n~~~ Begin send_load_info() ~~~");
-    uint32_t buf[sst.get_num_rows()];
+void MulticastGroup::update_load_info_sst(DerechoSST& sst){
+  dbg_default_trace("\n~~~ Begin send_load_info(), active_status : " + std::to_string(load_info_active));
+    // 0. get the active buffer to update
+    std::vector<uint32_t>& cur_active_buf = shadow_load_info_buf;
+    std::vector<uint32_t>& next_active_buf = active_load_info_buf;
+    if(load_info_active == 1){
+      cur_active_buf = active_load_info_buf;
+      next_active_buf = shadow_load_info_buf;
+    }
+    dbg_default_trace("\n~~~ load_buf number before : " + std::to_string(cur_active_buf[member_index]));
+    // 1. write most-recent local entry to SST, and multicast to all nodes
+    gmssst::set(sst.load_info[member_index], cur_active_buf[member_index]);
+    sst.put(sst.load_info);
+    // 2. update my row's entry with most recent value in the next round active buffer
+    //    this may cause slight inconsistency in buffer of 'my' own entry during concurrency
+    //    but since 'i' dont need to check 'my' own most recent value, we took this approach to avoid locking.
+    next_active_buf[member_index] = cur_active_buf[member_index];
+    // 3. update local buf with the SST load_info column
     for(size_t i = 0; i < sst.get_num_rows(); i++){
-      buf[i] = sst.load_info[i];
+      cur_active_buf[i] = sst.load_info[i];
     }
-    callbacks.global_load_update_callback(buf, sst.get_num_rows());
-    dbg_default_debug("\n~~~ Finished send_load_info()! ~~~");
+    dbg_default_trace("\n~~~ load_buf number after : " + std::to_string(cur_active_buf[member_index]));
+    // 4. flip the active flag
+    load_info_active = 1 - load_info_active;
+    dbg_default_trace("\n~~~ Finished send_load_info()! ~~~");
 }
-
+  
 MulticastGroup::~MulticastGroup() {
     wedge();
     if(timeout_thread.joinable()) {
@@ -1530,11 +1550,19 @@ std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgro
     return shard_sst_indices;
 }
 
+// TODO: do we need a lock here? in case of multithread updating?
 void MulticastGroup::update_load_info_entry(uint32_t load){
-  std::cout << "\n\n -- MulticastGroup updating my load information -- \n" << std::endl;
-  gmssst::set(sst->load_info[member_index], load);
-  sst->put(sst->load_info);
-  std::cout << sst->to_string() << std::endl;
+  dbg_default_trace("MulticastGroup::update_load_info_entry() in buf");
+  if(load_info_active == 0)
+    shadow_load_info_buf[member_index] = load;
+  else
+    active_load_info_buf[member_index] = load;
+  //dbg_default_debug(sst->to_string()); // debug code
+}
+
+int MulticastGroup::get_load_info_active_status(){
+  dbg_default_trace("~~~ get_load_info_active_status is :" + std::to_string(load_info_active));
+  return load_info_active;
 }
   
 void MulticastGroup::debug_print() {

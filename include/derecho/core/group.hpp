@@ -165,6 +165,18 @@ private:
     // std::shared_ptr<DeserializationContext> user_deserialization_context;
     std::vector<DeserializationContext*> user_deserialization_context;
 
+    /** The buffer that the load_info column in SST periodically copy to, 
+     *  for upper level application to access.
+     */
+    std::vector<uint32_t> shadow_load_info_buf;
+  
+   /** The buffer that the load_info column in SST periodically copy to, 
+     *  for upper level application
+     * shadow_load_info_buf and active_load_info_buf is swapped periodically 
+     * to preserve atomicity during update.
+     */
+    std::vector<uint32_t> active_load_info_buf;
+
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager persistence_manager;
@@ -426,7 +438,7 @@ public:
      */
     template<typename SubgroupType>
     std::vector<uint32_t> get_my_subgroup_indexes();
-
+    
     /**
      * Handle for node member to update its load info in the SST load_info column.
      * This is used by upper level application-TIDE
@@ -438,6 +450,10 @@ public:
     /** Waits until all members of the group have called this function. */
     void barrier_sync();
     void debug_print_status() const;
+    /** Set the load of this member to the load_info column in SST.*/
+    void set_load_info(uint32_t load);
+    /** Get the load_info column from the buffer for read. */
+    const std::vector<uint32_t>& get_load_info();
 };
 
 } /* namespace derecho */

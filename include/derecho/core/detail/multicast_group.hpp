@@ -412,14 +412,25 @@ private:
     PersistenceManager& persistence_manager;
 
     /** timestamp to track when the last time load_info column on SST
-     * was updated. **/
+     * was updated. Used by load_update_predicate **/
     uint64_t last_load_send_timeus = 0;
-    /** Predicate helper function to determine if to run 
-     * update_load_info_trigger. */
-    bool require_send_load_info();
-    /** Runs periodically to multicast the load_info change in SST table 
-     * to all members. */
-    void send_load_info(DerechoSST& sst);
+
+    /** Reference to the shadow load_info buffer defined in Group
+     */
+    std::vector<uint32_t>& shadow_load_info_buf;
+  
+    /** Reference to the active load_info buffer defined in Group
+     */
+    std::vector<uint32_t>& active_load_info_buf;
+
+    /** Flag used for atomic updating and accessing the load_info buffer 
+     *  if 0, then read from active_load_info_buf, write to shadow_load_info_buf
+     *  if 1, then read from shadow_load_info_buf, write to active_load_info_buf
+     */
+    std::atomic<int> load_info_active;
+  
+    /** Periodically update the load_info column in the SST. */
+    void update_load_info_sst(DerechoSST& sst);
 
     /** Continuously waits for a new pending send, then sends it. This function
      * implements the sender thread. */
@@ -548,6 +559,10 @@ public:
      * that will be used to persist received messages
      * @param already_failed (Optional) A Boolean vector indicating which
      * elements of _members are nodes that have already failed in this view
+     * @param _shadow_load_info_buf A pointer to the shadow_load_info_buf, a buffer 
+     * stored in Group class
+     * @param _active_load_info_buf A pointer to the active_load_info_buf, a buffer 
+     * stored in Group class
      */
     MulticastGroup(
             std::vector<node_id_t> members, node_id_t my_node_id,
@@ -558,6 +573,8 @@ public:
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             unsigned int sender_timeout,
             PersistenceManager& persistence_manager_ref,
+	    std::vector<uint32_t>& _shadow_load_info_buf,
+	    std::vector<uint32_t>& _active_load_info_buf,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
      * preserving the same settings but providing a new list of members. */
@@ -567,6 +584,8 @@ public:
             MulticastGroup&& old_group,
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
+	    std::vector<uint32_t>& _shadow_load_info_buf,
+	    std::vector<uint32_t>& _active_load_info_buf,
             std::vector<char> already_failed = {});
 
     ~MulticastGroup();
@@ -611,11 +630,17 @@ public:
         return subgroup_settings_map;
     }
     std::vector<uint32_t> get_shard_sst_indices(subgroup_id_t subgroup_num) const;
-  
+
     /** Update the load in SST load_info column for this node's member_index.
      * this function is used by upper level application TIDE to update the local 
      * load information
      */
     void update_load_info_entry(uint32_t load);
+
+    /** Getter for the load_info_active flag
+     * if 0, then read from active_load_info_buf
+     * if 1, then read from shadow_load_info_buf
+     */
+    int get_load_info_active_status();
 };
 }  // namespace derecho
