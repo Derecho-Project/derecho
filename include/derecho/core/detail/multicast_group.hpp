@@ -403,12 +403,23 @@ private:
     std::list<pred_handle> delivery_pred_handles;
     std::list<pred_handle> persistence_pred_handles;
     std::list<pred_handle> sender_pred_handles;
+    pred_handle load_info_send_handle;
 
     std::vector<bool> last_transfer_medium;
 
     /** A reference to the PersistenceManager that lives in Group, used to
      * alert it when a new version needs to be persisted. */
     PersistenceManager& persistence_manager;
+
+    /** timestamp to track when the last time load_info column on SST
+     * was updated. **/
+    uint64_t last_load_send_timeus = 0;
+    /** Predicate helper function to determine if to run 
+     * update_load_info_trigger. */
+    bool require_send_load_info();
+    /** Runs periodically to multicast the load_info change in SST table 
+     * to all members. */
+    void send_load_info(DerechoSST& sst);
 
     /** Continuously waits for a new pending send, then sends it. This function
      * implements the sender thread. */
@@ -600,5 +611,11 @@ public:
         return subgroup_settings_map;
     }
     std::vector<uint32_t> get_shard_sst_indices(subgroup_id_t subgroup_num) const;
+  
+    /** Update the load in SST load_info column for this node's member_index.
+     * this function is used by upper level application TIDE to update the local 
+     * load information
+     */
+    void update_load_info_entry(uint32_t load);
 };
 }  // namespace derecho

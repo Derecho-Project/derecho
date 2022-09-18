@@ -486,6 +486,11 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
 }
 
 template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::update_my_load_info(uint32_t load) {
+    view_manager.update_load_info(load);
+}
+
+template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::report_failure(const node_id_t who) {
     view_manager.report_failure(who);
 }

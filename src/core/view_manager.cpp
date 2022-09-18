@@ -1612,7 +1612,6 @@ void ViewManager::construct_multicast_group(const UserMessageCallbacks& callback
                     [this](const uint32_t node_id) { report_failure(node_id); },
                     curr_view->failed, false),
             num_subgroups, signature_size, num_received_size, slot_size, index_field_size);
-
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
             curr_view->gmsSST, callbacks, internal_callbacks, num_subgroups, subgroup_settings,
@@ -2440,6 +2439,11 @@ void ViewManager::report_failure(const node_id_t who) {
         }
     }
     curr_view->gmsSST->put(curr_view->gmsSST->suspected, failed_rank);
+}
+
+
+void ViewManager::update_load_info(uint32_t load){
+  curr_view->multicast_group->update_load_info_entry(load);
 }
 
 void ViewManager::silence() {
