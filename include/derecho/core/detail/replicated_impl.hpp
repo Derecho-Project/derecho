@@ -283,6 +283,17 @@ std::tuple<persistent::version_t, uint64_t> Replicated<T>::get_current_version()
 }
 
 template <typename T>
+void Replicate<T>::register_persistent_member(const char* object_name,
+                                persistent::PersistentObject* member_poinrter) {
+    this->persistent_registry->registerPersistent(object_name, member_pointer);
+}
+
+template <typename T>
+const T& Replicate<T>::get_ref() const {
+    return *user_object_ptr;
+}
+
+template <typename T>
 const uint64_t Replicated<T>::compute_global_stability_frontier() {
     return group_rpc_manager.view_manager.compute_global_stability_frontier(subgroup_id);
 }

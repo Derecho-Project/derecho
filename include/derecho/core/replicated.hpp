@@ -399,9 +399,17 @@ public:
      * Register a persistent member
      */
     virtual void register_persistent_member(const char* object_name,
-                                            persistent::PersistentObject* member_pointer) {
-        this->persistent_registry->registerPersistent(object_name, member_pointer);
-    }
+                                            persistent::PersistentObject* member_pointer);
+
+    /*
+     * expose reference to the wrapped user object.
+     * IMPORTANT NOTICE: predicate thread keeps changing the user object, you might read inconsistent data if the
+     * function you called is not thread-safe. This is a dilemma because we don't want any lock on the predicate thread
+     * to slow it down. Plesae always use light-weighted and lockless synchronization primitives.
+     *
+     * @return a reference to the wrapped user object.
+     */
+    virtual const T& get_ref() const;
 };
 
 template <typename T>
