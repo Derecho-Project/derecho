@@ -283,14 +283,14 @@ std::tuple<persistent::version_t, uint64_t> Replicated<T>::get_current_version()
 }
 
 template <typename T>
-void Replicate<T>::register_persistent_member(const char* object_name,
-                                persistent::PersistentObject* member_poinrter) {
+void Replicated<T>::register_persistent_member(const char* object_name,
+                                persistent::PersistentObject* member_pointer) {
     this->persistent_registry->registerPersistent(object_name, member_pointer);
 }
 
 template <typename T>
-const T& Replicate<T>::get_ref() const {
-    return *user_object_ptr;
+const T& Replicated<T>::get_ref() const {
+    return **user_object_ptr;
 }
 
 template <typename T>
