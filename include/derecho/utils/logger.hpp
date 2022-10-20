@@ -1,6 +1,8 @@
 #ifndef LOGGER_HPP
 #define LOGGER_HPP
 
+#include "container_ostreams.hpp"
+
 #include <string>
 #include <atomic>
 #include <spdlog/spdlog.h>
