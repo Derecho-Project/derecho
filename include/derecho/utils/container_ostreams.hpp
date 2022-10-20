@@ -22,13 +22,16 @@ namespace std {
 template <typename T>
 std::ostream& operator<<(std::ostream& out, const std::set<T>& s) {
     out << "{";
-    auto s_iter = s.begin();
-    auto last_item = s.empty() ? s.end() : std::prev(s.end());
-    while(s_iter != last_item) {
-        out << *s_iter << ", ";
-        s_iter++;
+    if(!s.empty()) {
+        auto s_iter = s.begin();
+        auto last_item = std::prev(s.end());
+        while(s_iter != last_item) {
+            out << *s_iter << ", ";
+            s_iter++;
+        }
+        out << *s_iter;
     }
-    out << *s_iter << "}";
+    out << "}";
     return out;
 }
 
@@ -39,13 +42,15 @@ std::ostream& operator<<(std::ostream& out, const std::set<T>& s) {
 template <typename T>
 std::ostream& operator<<(std::ostream& out, const std::unordered_set<T>& s) {
     out << "{";
-    auto s_iter = s.begin();
-    auto last_item = s.empty() ? s.end() : std::prev(s.end());
-    while(s_iter != last_item) {
-        out << *s_iter << ", ";
-        s_iter++;
+    if(!s.empty()) {
+        auto s_iter = s.begin();
+        while(std::next(s_iter) != s.end()) {
+            out << *s_iter << ", ";
+            s_iter++;
+        }
+        out << *s_iter;
     }
-    out << *s_iter << "}";
+    out << "}";
     return out;
 }
 
@@ -57,13 +62,16 @@ std::ostream& operator<<(std::ostream& out, const std::unordered_set<T>& s) {
 template <typename K, typename V>
 std::ostream& operator<<(std::ostream& out, const std::map<K, V>& m) {
     out << "{";
-    auto map_iter = m.begin();
-    auto last_item = m.empty() ? m.end() : std::prev(m.end());
-    while(map_iter != last_item) {
-        out << "(" << map_iter->first << " => " << map_iter->second << "), ";
-        map_iter++;
+    if(!m.empty()) {
+        auto map_iter = m.begin();
+        auto last_item = std::prev(m.end());
+        while(map_iter != last_item) {
+            out << "(" << map_iter->first << " => " << map_iter->second << "), ";
+            map_iter++;
+        }
+        out << "(" << map_iter->first << " => " << map_iter->second << ")";
     }
-    out << "(" << map_iter->first << " => " << map_iter->second << ")}";
+    out << "}";
     return out;
 }
 
@@ -75,13 +83,15 @@ std::ostream& operator<<(std::ostream& out, const std::map<K, V>& m) {
 template <typename K, typename V>
 std::ostream& operator<<(std::ostream& out, const std::unordered_map<K, V>& m) {
     out << "{";
-    auto map_iter = m.begin();
-    auto last_item = m.empty() ? m.end() : std::prev(m.end());
-    while(map_iter != last_item) {
-        out << "(" << map_iter->first << " => " << map_iter->second << "), ";
-        map_iter++;
+    if(!m.empty()) {
+        auto map_iter = m.begin();
+        while(std::next(map_iter) != m.end()) {
+            out << "(" << map_iter->first << " => " << map_iter->second << "), ";
+            map_iter++;
+        }
+        out << "(" << map_iter->first << " => " << map_iter->second << ")";
     }
-    out << "(" << map_iter->first << " => " << map_iter->second << ")}";
+    out << "}";
     return out;
 }
 
