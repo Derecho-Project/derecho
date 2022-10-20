@@ -1,4 +1,5 @@
 #include "derecho/core/view.hpp"
+#include "derecho/utils/container_ostreams.hpp"
 
 #include <algorithm>
 #include <iterator>
@@ -10,9 +11,6 @@
 #include <string>
 
 namespace derecho {
-
-using std::shared_ptr;
-using std::string;
 
 SubView::SubView(int32_t num_members)
         : mode(Mode::ORDERED),
@@ -216,34 +214,20 @@ std::string View::debug_string() const {
     // need to add member ips and ports and other fields
     std::stringstream s;
     s << "View " << vid << ": MyRank=" << my_rank << ". ";
-    s << "Members={ ";
+    s << "Members=" << members << ", ";
+    std::string fs = (" ");
     for(int m = 0; m < num_members; m++) {
-        s << members[m] << "  ";
-    }
-    s << "}, ";
-    string fs = (" ");
-    for(int m = 0; m < num_members; m++) {
-        fs += failed[m] ? string(" T ") : string(" F ");
+        fs += failed[m] ? std::string(" T ") : std::string(" F ");
     }
 
     s << "Failed={" << fs << " }, num_failed=" << num_failed;
-    s << ", Departed: { ";
-    for(const node_id_t& departed_node : departed) {
-        s << departed_node << " ";
-    }
-    s << "} , Joined: { ";
-    for(const node_id_t& joined_node : joined) {
-        s << joined_node << " ";
-    }
-    s << "}" << std::endl;
+    s << ", Departed: " << departed;
+    s << ", Joined: " << joined << std::endl;
     s << "SubViews: ";
     for(subgroup_id_t subgroup = 0; subgroup < subgroup_shard_views.size(); ++subgroup) {
         for(uint32_t shard = 0; shard < subgroup_shard_views[subgroup].size(); ++shard) {
-            s << "Shard (" << subgroup << ", " << shard << "): Members={";
-            for(const node_id_t& member : subgroup_shard_views[subgroup][shard].members) {
-                s << member << " ";
-            }
-            s << "}, is_sender={";
+            s << "Shard (" << subgroup << ", " << shard << "): Members="
+              << subgroup_shard_views[subgroup][shard].members << ", is_sender={";
             for(uint i = 0; i < subgroup_shard_views[subgroup][shard].members.size(); ++i) {
                 if(subgroup_shard_views[subgroup][shard].is_sender[i]) {
                     s << "T ";
