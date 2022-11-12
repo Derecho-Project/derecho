@@ -8,6 +8,12 @@ if [[ $# -gt 0 ]]; then
 fi
 
 echo "Using INSTALL_PREFIX=${INSTALL_PREFIX}"
+export CMAKE_PREFIX_PATH=${INSTALL_PREFIX}
+export C_INCLUDE_PATH=${INSTALL_PREFIX}/include
+export CPLUS_INCLUDE_PATH=${INSTALL_PREFIX}/include
+export LIBRARY_PATH=${INSTALL_PREFIX}/lib:${INSTALL_PREFIX}/lib64
+export LD_LIBRARY_PATH=${LIBRARY_PATH}
+
 cd ${WORKPATH}
 git clone https://github.com/mpmilano/mutils-tasks.git
 cd mutils-tasks
