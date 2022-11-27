@@ -272,6 +272,16 @@ public:
      */
     template <typename SubgroupType>
     uint32_t get_number_of_shards(uint32_t subgroup_index = 0) const;
+
+    /**
+     * Get subgroup members
+     * @tparam SubgroupType     The type of the subgroup
+     * @param subgroup_index    The index of the subgroup of type 'SubgroupType'
+     * @return      A vector of vectors, each element vector contains the node list in the corresponding shard.
+     *
+     */
+    template <typename SubgroupType>
+    std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0) const;
 };
 }  // namespace derecho
 

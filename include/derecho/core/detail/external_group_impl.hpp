@@ -557,4 +557,17 @@ uint32_t ExternalGroupClient<ReplicatedTypes...>::get_number_of_shards(uint32_t 
     }
     return 0;
 }
+
+template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+std::vector<std::vector<node_id_t>> ExternalGroupClient<ReplicatedTypes...>::get_subgroup_members(uint32_t subgroup_index) const {
+    std::vector<std::vector<node_id_t>> ret;
+    if(subgroup_index < this->template get_number_of_subgroups<SubgroupType>()) {
+        for (const auto& sv: curr_view->subgroup_shard_views[
+                curr_view->subgroup_ids_by_type_id.at(this->template get_index_of_type<SubgroupType>())[subgroup_index]]) {
+            ret.push_back(sv.members);
+        }
+    }
+    return ret;
+}
 }  // namespace derecho
