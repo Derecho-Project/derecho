@@ -206,7 +206,7 @@ int main(int argc, char *argv[]) {
 
             for(int i = 0; i < count; i++) {
                 do {
-                    pthread_yield();
+                    sched_yield();
                     clock_gettime(CLOCK_REALTIME, &cur);
                 } while(DELTA_T_US(start, cur) < i * (double)si_us);
                 {

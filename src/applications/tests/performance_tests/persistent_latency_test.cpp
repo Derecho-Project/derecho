@@ -246,7 +246,7 @@ int main(int argc, char* argv[]) {
 
             for(uint32_t i = 0; i < num_msgs; i++) {
                 do {
-                    pthread_yield();
+                    sched_yield();
                     clock_gettime(CLOCK_REALTIME, &cur);
                 } while(DELTA_T_US(start, cur) < i * (double)si_us);
                 {

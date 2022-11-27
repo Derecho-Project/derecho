@@ -232,7 +232,7 @@ int main(int argc, char *argv[]) {
             auto &handle = group.get_subgroup<ByteArrayObject>();
             while(DELTA_T_US(start, cur) / 1e6 < min_dur_sec) {
                 do {
-                    pthread_yield();
+                    sched_yield();
                     clock_gettime(CLOCK_REALTIME, &cur);
                 } while(DELTA_T_US(last, cur) < (double)si_us);
 
