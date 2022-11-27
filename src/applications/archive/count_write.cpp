@@ -137,7 +137,7 @@ int main() {
                         res = new resources(i, (uint8_t*)&my_time, (uint8_t*)&times[i], sizeof(double), sizeof(double), node_rank < i);
 #endif
                         res->post_remote_read(id, sizeof(double));
-                        free(res);
+                        delete res;
                     }
                 }
                 for(int i = 0; i < num_nodes; ++i) {
@@ -171,7 +171,7 @@ int main() {
                 res = new resources(0, (uint8_t*)&my_time, (uint8_t*)&no_need, sizeof(double), sizeof(double), 0);
 #endif
                 sync(0);
-                free(res);
+                delete res;
             }
 #ifdef USE_VERBS_API
             verbs_destroy();
