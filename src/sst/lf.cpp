@@ -12,6 +12,7 @@
 #include "derecho/sst/detail/sst_impl.hpp"
 #include "derecho/tcp/tcp.hpp"
 #include "derecho/utils/logger.hpp"
+#include "derecho/core/derecho_exception.hpp"
 
 #include <arpa/inet.h>
 #include <byteswap.h>
@@ -453,6 +454,45 @@ int _resources::post_remote_send(
     // fflush(stdout);
     // #endif//!NDEBUG
     return ret;
+}
+
+void _resources::register_oob_memory(void* addr, size_t size) {
+    // register it with the domain
+    struct fid_mr* oob_mr;
+    int ret = 
+    fail_if_nonzero_retry_on_eagain("register memory buffer for write", REPORT_ON_FAILURE,
+                                    fi_mr_reg, g_ctxt.domain, addr, size,
+                                    FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
+                                    0, 0, 0, &oob_mr, nullptr);
+    if (ret != 0) {
+        throw derecho::derecho_exception(std::string("fi_mr_reg() on oob memory failed with return value:") + std::to_string(ret));
+    }
+
+    // register
+    std::unique_lock lck(oob_mrs_mutex);
+    oob_mrs.emplace(reinterpret_cast<uint64_t>(addr),oob_mr);
+}
+
+void _resources::unregister_oob_memory(void* addr) {
+    std::shared_lock rd_lck(oob_mrs_mutex);
+    if (oob_mrs.find(reinterpret_cast<uint64_t>(addr)) == oob_mrs.end()) {
+        throw derecho::derecho_exception(std::string("oob memory region@") + std::to_string(reinterpret_cast<uint64_t>(addr)) + " is not found.");
+    }
+    rd_lck.unlock();
+    std::unique_lock wr_lock(oob_mrs_mutex);
+    struct fid_mr* oob_mr = oob_mrs.at(reinterpret_cast<uint64_t>(addr));
+    oob_mrs.erase(reinterpret_cast<uint64_t>(addr));
+    wr_lock.unlock();
+    fail_if_nonzero_retry_on_eagain("unregister write mr", REPORT_ON_FAILURE,
+                                    fi_close, &oob_mr->fid);
+}
+
+void _resources::oob_remote_write(const struct iovec& source, void* remote_addr, size_t size) {
+    //TODO:
+}
+
+void _resources::oob_remote_read(const struct iovec& dest, void* remote_addr, size_t size) {
+    //TODO:
 }
 
 void resources::report_failure() {

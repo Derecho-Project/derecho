@@ -16,6 +16,10 @@
 #include <rdma/fabric.h>
 #include <rdma/fi_errno.h>
 #include <thread>
+#include <mutex>
+#include <shared_mutex>
+#include <map>
+#include <tuple>
 
 #ifndef LF_VERSION
 #define LF_VERSION FI_VERSION(1, 5)
@@ -95,6 +99,51 @@ public:
     struct fid_eq* eq;
 
     /**
+     * Out-of-Band memory and send management
+     */
+private:
+    std::shared_mutex  oob_mrs_mutex;
+    std::map<uint64_t,struct fid_mr*> oob_mrs;
+
+public:
+    /**
+     * Register oob memory
+     * @param addr  the address of the OOB memory
+     * @param size  the size of the OOB memory
+     *
+     * @throws derecho_exception at failure.
+     */
+    void register_oob_memory(void* addr, size_t size);
+
+    /**
+     * Unregister oob memory
+     * @param addr the address of OOB memory
+     *
+     * @throws derecho_exception at failure.
+     */
+    void unregister_oob_memory(void* addr);
+
+    /*
+     * oob write
+     * @param source        The gather memory vector, the total size of the source should not go beyond 'size'.
+     * @param remote_addr   The remote address for receiving this message
+     * @param size          The size of the remote buffer
+     *
+     * @throws derecho_exception at failure.
+     */
+    void oob_remote_write(const struct iovec& source, void* remote_addr, size_t size);
+
+    /*
+     * oob read
+     * @param dest          The scatter memory vector, the total size of the source should not be smaller than 'size'
+     * @param remote_addr   The remote address for receiving this message
+     * @param size          The size of the remote buffer
+     *
+     * @throws derecho_exception at failure.
+     */
+    void oob_remote_read(const struct iovec& dest,void* remote_addr, size_t size);
+
+    /**
      * Constructor
      * Initializes the resources. Registers write_addr and read_addr as the read
      * and write buffers and connects a queue pair with the specified remote node.
@@ -149,6 +198,7 @@ public:
     void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+
 };
 
 /**
