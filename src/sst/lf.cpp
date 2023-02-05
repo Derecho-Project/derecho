@@ -354,6 +354,13 @@ _resources::_resources(
 
 _resources::~_resources() {
     dbg_default_trace("resources destructor:this={}", (void*)this);
+    std::unique_lock wr_lck(this->oob_mrs_mutex);
+    for (auto& oob_mr:this->oob_mrs) {
+        fail_if_nonzero_retry_on_eagain("close oob memory region", REPORT_ON_FAILURE,
+                                        fi_close, &oob_mr.second->fid);
+    }
+    oob_mrs.clear();
+    wr_lck.unlock();
     if(this->ep) {
         fail_if_nonzero_retry_on_eagain("close endpoint", REPORT_ON_FAILURE,
                                         fi_close, &this->ep->fid);
