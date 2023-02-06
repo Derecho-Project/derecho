@@ -570,4 +570,15 @@ std::vector<std::vector<node_id_t>> ExternalGroupClient<ReplicatedTypes...>::get
     }
     return ret;
 }
+
+
+template <typename... ReplicatedTypes>
+void ExternalGroupClient<ReplicatedTypes...>::register_oob_memory(void* addr, size_t size) {
+    sst::P2PConnection::register_oob_memory(addr,size);
+}
+
+template <typename... ReplicatedTypes>
+void ExternalGroupClient<ReplicatedTypes...>::unregister_oob_memory(void* addr) {
+    sst::P2PConnection::unregister_oob_memory(addr);
+}
 }  // namespace derecho

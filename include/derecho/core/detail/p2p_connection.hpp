@@ -97,5 +97,37 @@ public:
      * @param sequence_num The sequence number of the buffer to send.
      */
     void send(MESSAGE_TYPE type, uint64_t sequence_num);
+
+    /**
+     * Register Out-of-band memory region
+     * @param addr      The address of the memory region
+     * @param size      The size in bytes of the memory region
+     * @throw           derecho::derecho_exception on failure
+     */
+    static void register_oob_memory(void* addr, size_t size);
+    /**
+     * Unregister Out-of-band memory region
+     * @param addr      The address of the memory region
+     * @throw           derecho::derecho_exception on failure
+     */
+    static void unregister_oob_memory(void* addr);
+    /**
+     * oob write
+     * @param source
+     * @param remote_addr
+     * @param size
+     *
+     * @throws derecho::derecho_exception at failure
+     */
+    void oob_remote_write(const struct iovec& source, void* remote_addr, size_t size);
+    /**
+     * oob read
+     * @param dest
+     * @param remote_addr
+     * @param size
+     *
+     * @throws derecho::derecho_exception at failure
+     */
+    void oob_remote_read(const struct iovec& dest, void* remote_addr, size_t size);
 };
 }  // namespace sst

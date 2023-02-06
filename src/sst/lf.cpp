@@ -165,6 +165,19 @@ static void load_configuration() {
     g_ctxt.hints->rx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_RX_DEPTH);
 }
 
+std::shared_mutex _resources::oob_mrs_mutex;
+std::map<uint64_t,struct fid_mr*> _resources::oob_mrs;
+
+void _resources::global_release() {
+    std::unique_lock wr_lck(_resources::oob_mrs_mutex);
+    for (auto& oob_mr:_resources::oob_mrs) {
+        fail_if_nonzero_retry_on_eagain("close oob memory region", REPORT_ON_FAILURE,
+                                        fi_close, &oob_mr.second->fid);
+    }
+    _resources::oob_mrs.clear();
+    wr_lck.unlock();
+}
+
 int _resources::init_endpoint(struct fi_info* fi) {
     int ret = 0;
 
@@ -354,13 +367,6 @@ _resources::_resources(
 
 _resources::~_resources() {
     dbg_default_trace("resources destructor:this={}", (void*)this);
-    std::unique_lock wr_lck(this->oob_mrs_mutex);
-    for (auto& oob_mr:this->oob_mrs) {
-        fail_if_nonzero_retry_on_eagain("close oob memory region", REPORT_ON_FAILURE,
-                                        fi_close, &oob_mr.second->fid);
-    }
-    oob_mrs.clear();
-    wr_lck.unlock();
     if(this->ep) {
         fail_if_nonzero_retry_on_eagain("close endpoint", REPORT_ON_FAILURE,
                                         fi_close, &this->ep->fid);
@@ -868,7 +874,10 @@ void shutdown_polling_thread() {
 
 void lf_destroy() {
     shutdown_polling_thread();
+
     // TODO: make sure all resources are destroyed first.
+    _resources::global_release();
+
     if(g_ctxt.pep) {
         fail_if_nonzero_retry_on_eagain("close passive endpoint", REPORT_ON_FAILURE,
                                         fi_close, &g_ctxt.pep->fid);

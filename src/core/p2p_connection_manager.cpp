@@ -1,5 +1,6 @@
 #include "derecho/core/detail/p2p_connection_manager.hpp"
 
+#include "derecho/core/derecho_exception.hpp"
 #include "derecho/conf/conf.hpp"
 #include "derecho/sst/detail/poll_utils.hpp"
 #include "derecho/utils/logger.hpp"
@@ -310,4 +311,27 @@ void P2PConnectionManager::debug_print() {
     //     }
     // }
 }
+
+void P2PConnectionManager::oob_remote_write(const node_id_t& remote_node, const struct iovec& source, uint64_t remote_addr, size_t size) {
+    std::lock_guard lck(p2p_connections[remote_node].first);
+    if (p2p_connections[remote_node].second == nullptr) {
+        throw derecho::derecho_exception("oob write to unconnected node:" + std::to_string(remote_node));
+    }
+    if (active_p2p_connections[remote_node] == false) {
+        throw derecho::derecho_exception("oob write to inactive node:" + std::to_string(remote_node));
+    }
+    p2p_connections[remote_node].second->oob_remote_write(source,reinterpret_cast<void*>(remote_addr),size);
+}
+
+void P2PConnectionManager::oob_remote_read(const node_id_t& remote_node, const struct iovec& dest, uint64_t remote_addr, size_t size) {
+    std::lock_guard lck(p2p_connections[remote_node].first);
+    if (p2p_connections[remote_node].second == nullptr) {
+        throw derecho::derecho_exception("oob read from unconnected node:" + std::to_string(remote_node));
+    }
+    if (active_p2p_connections[remote_node] == false) {
+        throw derecho::derecho_exception("oob read from inactive node:" + std::to_string(remote_node));
+    }
+    p2p_connections[remote_node].second->oob_remote_read(dest,reinterpret_cast<void*>(remote_addr),size);
+}
+
 }  // namespace sst

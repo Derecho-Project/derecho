@@ -120,6 +120,22 @@ void P2PConnection::send(MESSAGE_TYPE type, uint64_t sequence_num) {
     }
 }
 
+void P2PConnection::register_oob_memory(void* addr, size_t size) {
+    _resources::register_oob_memory(addr,size);
+}
+
+void P2PConnection::unregister_oob_memory(void* addr) {
+    _resources::unregister_oob_memory(addr);
+}
+
+void P2PConnection::oob_remote_write(const struct iovec& source, void* remote_addr, size_t size) {
+    res->oob_remote_write(source,remote_addr,size);
+}
+
+void P2PConnection::oob_remote_read(const struct iovec& dest, void* remote_addr, size_t size) {
+    res->oob_remote_read(dest,remote_addr,size);
+}
+
 P2PConnection::~P2PConnection() {}
 
 }  // namespace sst

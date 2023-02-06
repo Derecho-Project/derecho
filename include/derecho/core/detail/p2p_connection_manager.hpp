@@ -130,5 +130,23 @@ public:
      */
     void filter_to(const std::vector<node_id_t>& live_nodes_list);
     void debug_print();
+    /**
+     * write to remote OOB memory
+     * @param remote_node       remote node id 
+     * @param source            gather of local memory regions
+     * @param remote_addr       the address of the remote memory region
+     * @param size              the size of the remote memory region
+     * @throw                   derecho::derecho_exception on error
+     */
+    void oob_remote_write(const node_id_t& remote_node, const struct iovec& source, uint64_t remote_addr, size_t size);
+    /**
+     * read from remote OOB memory
+     * @param remote_node       remote node id
+     * @param dest              scatter of local memory regions
+     * @param remote_addr       the address of the remote memory region
+     * @param size              the size of the remote memory region
+     * @throw                   derecho::derecho_exception on error 
+     */
+    void oob_remote_read(const node_id_t& remote_node, const struct iovec& dest, uint64_t remote_addr, size_t size);
 };
 }  // namespace sst

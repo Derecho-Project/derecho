@@ -102,8 +102,8 @@ public:
      * Out-of-Band memory and send management
      */
 private:
-    std::shared_mutex  oob_mrs_mutex;
-    std::map<uint64_t,struct fid_mr*> oob_mrs;
+    static std::shared_mutex  oob_mrs_mutex;
+    static std::map<uint64_t,struct fid_mr*> oob_mrs;
 
 public:
     /**
@@ -113,7 +113,7 @@ public:
      *
      * @throws derecho_exception at failure.
      */
-    void register_oob_memory(void* addr, size_t size);
+    static void register_oob_memory(void* addr, size_t size);
 
     /**
      * Unregister oob memory
@@ -121,7 +121,7 @@ public:
      *
      * @throws derecho_exception at failure.
      */
-    void unregister_oob_memory(void* addr);
+    static void unregister_oob_memory(void* addr);
 
     /*
      * oob write
@@ -142,6 +142,11 @@ public:
      * @throws derecho_exception at failure.
      */
     void oob_remote_read(const struct iovec& dest,void* remote_addr, size_t size);
+
+    /*
+     * release singleton resources
+     */
+    static void global_release();
 
     /**
      * Constructor

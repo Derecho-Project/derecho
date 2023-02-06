@@ -546,4 +546,14 @@ void Group<ReplicatedTypes...>::debug_print_status() const {
     view_manager.debug_print_status();
 }
 
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::register_oob_memory(void* addr, size_t size) {
+    sst::P2PConnection::register_oob_memory(addr,size);
+}
+
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::unregister_oob_memory(void* addr) {
+    sst::P2PConnection::unregister_oob_memory(addr);
+}
+
 } /* namespace derecho */
