@@ -572,12 +572,12 @@ node_id_t RPCManager::get_rpc_caller_id() {
     return rpc_caller_id;
 }
 
-void RPCManager::oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, size_t size) {
-    connections->oob_remote_write(remote_node,iov,iovcnt,remote_dest_addr,size);
+void RPCManager::oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, uint64_t rkey, size_t size) {
+    connections->oob_remote_write(remote_node,iov,iovcnt,remote_dest_addr,rkey,size);
 }
 
-void RPCManager::oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, size_t size) {
-    connections->oob_remote_read(remote_node,iov,iovcnt,remote_src_addr,size);
+void RPCManager::oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size) {
+    connections->oob_remote_read(remote_node,iov,iovcnt,remote_src_addr,rkey,size);
 }
 bool in_rpc_handler() {
     return _in_rpc_handler;

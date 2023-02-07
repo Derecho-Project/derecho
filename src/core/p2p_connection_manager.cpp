@@ -312,7 +312,7 @@ void P2PConnectionManager::debug_print() {
     // }
 }
 
-void P2PConnectionManager::oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, size_t size) {
+void P2PConnectionManager::oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, uint64_t rkey, size_t size) {
     std::lock_guard lck(p2p_connections[remote_node].first);
     if (p2p_connections[remote_node].second == nullptr) {
         throw derecho::derecho_exception("oob write to unconnected node:" + std::to_string(remote_node));
@@ -320,10 +320,10 @@ void P2PConnectionManager::oob_remote_write(const node_id_t& remote_node, const 
     if (active_p2p_connections[remote_node] == false) {
         throw derecho::derecho_exception("oob write to inactive node:" + std::to_string(remote_node));
     }
-    p2p_connections[remote_node].second->oob_remote_write(iov,iovcnt,reinterpret_cast<void*>(remote_dest_addr),size);
+    p2p_connections[remote_node].second->oob_remote_write(iov,iovcnt,reinterpret_cast<void*>(remote_dest_addr),rkey,size);
 }
 
-void P2PConnectionManager::oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, size_t size) {
+void P2PConnectionManager::oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size) {
     std::lock_guard lck(p2p_connections[remote_node].first);
     if (p2p_connections[remote_node].second == nullptr) {
         throw derecho::derecho_exception("oob read from unconnected node:" + std::to_string(remote_node));
@@ -331,7 +331,7 @@ void P2PConnectionManager::oob_remote_read(const node_id_t& remote_node, const s
     if (active_p2p_connections[remote_node] == false) {
         throw derecho::derecho_exception("oob read from inactive node:" + std::to_string(remote_node));
     }
-    p2p_connections[remote_node].second->oob_remote_read(iov,iovcnt,reinterpret_cast<void*>(remote_src_addr),size);
+    p2p_connections[remote_node].second->oob_remote_read(iov,iovcnt,reinterpret_cast<void*>(remote_src_addr),rkey,size);
 }
 
 }  // namespace sst

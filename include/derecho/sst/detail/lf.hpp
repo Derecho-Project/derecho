@@ -110,10 +110,13 @@ private:
     static std::shared_mutex  oob_mrs_mutex;
     static std::map<uint64_t,struct oob_mr_t> oob_mrs;
     /**
-     * To test is iovec is covered by oob memory regions.
+     * get the descriptor of the corresponding oob memory region
      * Important: it assumes shared lock on oob_mrs_mutex.
+     * If iov does not fall into an oob memory region, it fails with nullptr.
+     * @param iov
+     * @return the descriptor of type void*, or nullptr in case of failure.
      */
-    static bool is_valid_oob_mr(const struct iovec& iov);
+    static void* get_oob_mr_desc(const struct iovec& iov);
 
 public:
     /**
@@ -138,22 +141,24 @@ public:
      * @param iov               The gather memory vector, the total size of the source should not go beyond 'size'.
      * @param iovcnt            The length of the vector.
      * @param remote_dest_addr  The remote address for receiving this message
+     * @param rkey              The access key for the remote memory.
      * @param size              The size of the remote buffer
      *
      * @throws derecho_exception at failure.
      */
-    void oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, size_t size);
+    void oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size);
 
     /*
      * oob read
      * @param iov               The scatter memory vector, the total size of the source should not go beyond 'size'.
      * @param iovcnt            The length of the vector.
      * @param remote_src_addr   The remote address for receiving this message
+     * @param rkey              The access key for the remote memory.
      * @param size              The size of the remote buffer
      *
      * @throws derecho_exception at failure.
      */
-    void oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, size_t size);
+    void oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size);
 
     /*
      * release singleton resources

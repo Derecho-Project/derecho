@@ -116,20 +116,22 @@ public:
      * @param iov
      * @param iovcnt
      * @param remote_dest_addr
+     * @param rkey
      * @param size
      *
      * @throws derecho::derecho_exception at failure
      */
-    void oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, size_t size);
+    void oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size);
     /**
      * oob read
      * @param iov
      * @param iovcnt
      * @param remote_src_addr
+     * @param rkey
      * @param size
      *
      * @throws derecho::derecho_exception at failure
      */
-    void oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, size_t size);
+    void oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size);
 };
 }  // namespace sst

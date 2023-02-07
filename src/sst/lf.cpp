@@ -504,33 +504,55 @@ void _resources::unregister_oob_memory(void* addr) {
                                     fi_close, &oob_mr->fid);
 }
 
-bool _resources::is_valid_oob_mr(const struct iovec& iov) {
-    bool found = false;
+void* _resources::get_oob_mr_desc(const struct iovec& iov) {
     for (const auto& oob_mr:oob_mrs) {
         if (reinterpret_cast<uint64_t>(iov.iov_base) >= oob_mr.first &&
             (reinterpret_cast<uint64_t>(iov.iov_base) + static_cast<uint64_t>(iov.iov_len)) <= 
             (reinterpret_cast<uint64_t>(oob_mr.second.addr) + static_cast<uint64_t>(oob_mr.second.size))) {
-            found = true;
-            break;
+            return fi_mr_desc(oob_mr.second.mr);
         }
     }
-    return found;
+    return nullptr;
 }
 
-void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, size_t size) {
+void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
     std::shared_lock rd_lck(oob_mrs_mutex);
     // STEP 1: check if remote_addr is valid
+    size_t iov_tot_sz = 0;
+    void* desc[iovcnt];
     for (int i=0;i<iovcnt;i++) {
-        if (!is_valid_oob_mr(iov[i])) {
-            throw derecho::derecho_exception("oob_remote_write() see invalid iovec.");
+        desc[i] = get_oob_mr_desc(iov[i]);
+        if (!desc[i]) {
+            throw derecho::derecho_exception("oob_remote_write() see invalid iovec, entry:" + std::to_string(i));
         }
+        iov_tot_sz += iov[i].iov_len;
     }
-    // STEP 2: do one-sided RDM transfer
-    //TODO:
+    if (iov_tot_sz > size) {
+        throw derecho::derecho_exception("oob_remote_write(): remote buffer is smaller than data.");
+    }
+
+    // STEP 2: do one-sided RDMA transfer
+    struct fi_rma_iov rma_iov;
+    struct fi_msg_rma msg;
+
+    rma_iov.addr = ((LF_USE_VADDR) ? reinterpret_cast<uint64_t>(remote_dest_addr) : 0);
+    rma_iov.len = size;
+    rma_iov.key = rkey;
+
+    msg.msg_iov = iov;
+    msg.iov_count = iovcnt;
+    msg.desc = desc;
+    msg.addr = 0; // not used for a connection endpoint
+    msg.rma_iov = &rma_iov;
+    msg.rma_iov_count = 1;
+    msg.context = nullptr;
+    msg.data = 0l; // not used
+    
+    // TODO: send it...
     // STEP 3: barrier???
 }
 
-void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_addr, size_t size) {
+void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_addr, uint64_t rkey, size_t size) {
     //TODO:
 }
 
