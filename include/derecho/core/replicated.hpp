@@ -414,22 +414,24 @@ public:
     /*
      * write to remote OOB memory
      * @param remote_node       remote node id
-     * @param source            gather of local memory regions
-     * @param remote_addr       the address of the remote memory region
+     * @param iov               gather of local memory regions
+     * @param iovcnt
+     * @param remote_dest_addr  the address of the remote memory region
      * @param size              the size of the remote memory region
      * @throw                   derecho::derecho_exception on error
      */
-    virtual void oob_remote_write(const node_id_t& remote_node, const struct iovec& source, uint64_t remote_addr, size_t size);
+    virtual void oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, size_t size);
 
     /*
      * read from remote OOB memory
      * @param remote_node       remote node id
-     * @param dest              scatter of local memory regions
-     * @param remote_addr       the address of the remote memory region
+     * @param iov               scatter of local memory regions
+     * @param iovcnt
+     * @param remote_src_addr   the address of the remote memory region
      * @param size              the size of the remote memory region
      * @throw                   derecho::derecho_exception on error
      */
-    virtual void oob_remote_read(const node_id_t& remote_node, const struct iovec& dest, uint64_t remote_addr, size_t size);
+    virtual void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, size_t size);
 };
 
 template <typename T>

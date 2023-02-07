@@ -113,21 +113,23 @@ public:
     static void unregister_oob_memory(void* addr);
     /**
      * oob write
-     * @param source
-     * @param remote_addr
+     * @param iov
+     * @param iovcnt
+     * @param remote_dest_addr
      * @param size
      *
      * @throws derecho::derecho_exception at failure
      */
-    void oob_remote_write(const struct iovec& source, void* remote_addr, size_t size);
+    void oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, size_t size);
     /**
      * oob read
-     * @param dest
-     * @param remote_addr
+     * @param iov
+     * @param iovcnt
+     * @param remote_src_addr
      * @param size
      *
      * @throws derecho::derecho_exception at failure
      */
-    void oob_remote_read(const struct iovec& dest, void* remote_addr, size_t size);
+    void oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, size_t size);
 };
 }  // namespace sst

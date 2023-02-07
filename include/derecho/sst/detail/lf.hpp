@@ -102,8 +102,18 @@ public:
      * Out-of-Band memory and send management
      */
 private:
+    struct oob_mr_t {
+        void*           addr;
+        size_t          size;
+        struct  fid_mr* mr;
+    };
     static std::shared_mutex  oob_mrs_mutex;
-    static std::map<uint64_t,struct fid_mr*> oob_mrs;
+    static std::map<uint64_t,struct oob_mr_t> oob_mrs;
+    /**
+     * To test is iovec is covered by oob memory regions.
+     * Important: it assumes shared lock on oob_mrs_mutex.
+     */
+    static bool is_valid_oob_mr(const struct iovec& iov);
 
 public:
     /**
@@ -125,23 +135,25 @@ public:
 
     /*
      * oob write
-     * @param source        The gather memory vector, the total size of the source should not go beyond 'size'.
-     * @param remote_addr   The remote address for receiving this message
-     * @param size          The size of the remote buffer
+     * @param iov               The gather memory vector, the total size of the source should not go beyond 'size'.
+     * @param iovcnt            The length of the vector.
+     * @param remote_dest_addr  The remote address for receiving this message
+     * @param size              The size of the remote buffer
      *
      * @throws derecho_exception at failure.
      */
-    void oob_remote_write(const struct iovec& source, void* remote_addr, size_t size);
+    void oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, size_t size);
 
     /*
      * oob read
-     * @param dest          The scatter memory vector, the total size of the source should not be smaller than 'size'
-     * @param remote_addr   The remote address for receiving this message
-     * @param size          The size of the remote buffer
+     * @param iov               The scatter memory vector, the total size of the source should not go beyond 'size'.
+     * @param iovcnt            The length of the vector.
+     * @param remote_src_addr   The remote address for receiving this message
+     * @param size              The size of the remote buffer
      *
      * @throws derecho_exception at failure.
      */
-    void oob_remote_read(const struct iovec& dest,void* remote_addr, size_t size);
+    void oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, size_t size);
 
     /*
      * release singleton resources

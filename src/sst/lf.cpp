@@ -166,13 +166,13 @@ static void load_configuration() {
 }
 
 std::shared_mutex _resources::oob_mrs_mutex;
-std::map<uint64_t,struct fid_mr*> _resources::oob_mrs;
+std::map<uint64_t,struct _resources::oob_mr_t> _resources::oob_mrs;
 
 void _resources::global_release() {
     std::unique_lock wr_lck(_resources::oob_mrs_mutex);
     for (auto& oob_mr:_resources::oob_mrs) {
         fail_if_nonzero_retry_on_eagain("close oob memory region", REPORT_ON_FAILURE,
-                                        fi_close, &oob_mr.second->fid);
+                                        fi_close, &oob_mr.second.mr->fid);
     }
     _resources::oob_mrs.clear();
     wr_lck.unlock();
@@ -483,7 +483,11 @@ void _resources::register_oob_memory(void* addr, size_t size) {
 
     // register
     std::unique_lock lck(oob_mrs_mutex);
-    oob_mrs.emplace(reinterpret_cast<uint64_t>(addr),oob_mr);
+    struct oob_mr_t mr;
+    mr.addr = addr;
+    mr.size = size;
+    mr.mr = oob_mr;
+    oob_mrs.emplace(reinterpret_cast<uint64_t>(addr),mr);
 }
 
 void _resources::unregister_oob_memory(void* addr) {
@@ -493,18 +497,40 @@ void _resources::unregister_oob_memory(void* addr) {
     }
     rd_lck.unlock();
     std::unique_lock wr_lock(oob_mrs_mutex);
-    struct fid_mr* oob_mr = oob_mrs.at(reinterpret_cast<uint64_t>(addr));
+    struct fid_mr* oob_mr = oob_mrs.at(reinterpret_cast<uint64_t>(addr)).mr;
     oob_mrs.erase(reinterpret_cast<uint64_t>(addr));
     wr_lock.unlock();
     fail_if_nonzero_retry_on_eagain("unregister write mr", REPORT_ON_FAILURE,
                                     fi_close, &oob_mr->fid);
 }
 
-void _resources::oob_remote_write(const struct iovec& source, void* remote_addr, size_t size) {
-    //TODO:
+bool _resources::is_valid_oob_mr(const struct iovec& iov) {
+    bool found = false;
+    for (const auto& oob_mr:oob_mrs) {
+        if (reinterpret_cast<uint64_t>(iov.iov_base) >= oob_mr.first &&
+            (reinterpret_cast<uint64_t>(iov.iov_base) + static_cast<uint64_t>(iov.iov_len)) <= 
+            (reinterpret_cast<uint64_t>(oob_mr.second.addr) + static_cast<uint64_t>(oob_mr.second.size))) {
+            found = true;
+            break;
+        }
+    }
+    return found;
 }
 
-void _resources::oob_remote_read(const struct iovec& dest, void* remote_addr, size_t size) {
+void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, size_t size) {
+    std::shared_lock rd_lck(oob_mrs_mutex);
+    // STEP 1: check if remote_addr is valid
+    for (int i=0;i<iovcnt;i++) {
+        if (!is_valid_oob_mr(iov[i])) {
+            throw derecho::derecho_exception("oob_remote_write() see invalid iovec.");
+        }
+    }
+    // STEP 2: do one-sided RDM transfer
+    //TODO:
+    // STEP 3: barrier???
+}
+
+void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_addr, size_t size) {
     //TODO:
 }
 
