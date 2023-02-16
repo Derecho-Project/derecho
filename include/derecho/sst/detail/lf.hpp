@@ -136,6 +136,23 @@ public:
      */
     static void unregister_oob_memory(void* addr);
 
+private:
+#define OOB_OP_READ     0x0
+#define OOB_OP_WRITE    0x1
+    /*
+     * oob operation
+     * @param op                The operation, current we support OOB_OP_READ and OOB_OP_WRITE.
+     * @param iov               The gather memory vector, the total size of the source should not go beyond 'size'.
+     * @param iovcnt            The length of the vector.
+     * @param remote_dest_addr  The remote address for receiving this message
+     * @param rkey              The access key for the remote memory.
+     * @param size              The size of the remote buffer
+     *
+     * @throws derecho_exception at failure.
+     */
+    void oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size);
+
+public:
     /*
      * oob write
      * @param iov               The gather memory vector, the total size of the source should not go beyond 'size'.
@@ -287,7 +304,9 @@ void filter_external_to(const std::vector<node_id_t>& live_nodes_list);
 void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& internal_ip_addrs_and_ports,
                    const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports,
                    uint32_t node_id);
-/** Polls for completion of a single posted remote write. */
+/** Polls for completion of a single posted remote write. 
+ * @return a pair: <completion_entry_index,<remote_id,result(1/0)>>
+ */
 std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion();
 /** Shutdown the polling thread. */
 void shutdown_polling_thread();

@@ -515,9 +515,9 @@ void* _resources::get_oob_mr_desc(const struct iovec& iov) {
     return nullptr;
 }
 
-void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
+void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
     std::shared_lock rd_lck(oob_mrs_mutex);
-    // STEP 1: check if remote_addr is valid
+    // STEP 1: check if io vector is valid
     size_t iov_tot_sz = 0;
     void* desc[iovcnt];
     for (int i=0;i<iovcnt;i++) {
@@ -545,15 +545,95 @@ void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* rem
     msg.addr = 0; // not used for a connection endpoint
     msg.rma_iov = &rma_iov;
     msg.rma_iov_count = 1;
-    msg.context = nullptr;
     msg.data = 0l; // not used
     
-    // TODO: send it...
-    // STEP 3: barrier???
+    // set up completion entry.
+    const auto tid = std::this_thread::get_id();
+    uint32_t ce_idx = util::polling_data.get_index(tid);
+    util::polling_data.set_waiting(tid);
+    lf_sender_ctxt sctxt;
+    sctxt.set_remote_id(remote_id);
+    sctxt.set_ce_idx(ce_idx);
+    msg.context = (void*)&sctxt;
+
+    int ret = -1;
+    if (op == OOB_OP_WRITE) {
+        // STEP 3: According to the IBTA Spec, we need to put a barrier (atomic operation) after the data has been written.
+        // Cited from IBTA spec o9-20:
+        // """
+        // An application shall not depend on the contents of an RDMA WRITE buffer at the responder until one of the
+        // following has occurred:
+        // - Arrival and Completion of the last RDMA WRTIE request packet when used with Immediate data.
+        // - Arrival and completion of a subsequent SEND message.
+        // - Update of a memory element by a subsequent ATOMIC operation.
+        // """
+        // However, SST assumes that the contents will be visible to the responder in the order it appears. The CMU FaRM
+        // uses the same assumption. It sounds plausible but more implementation dependent. We have many other RDMA
+        // implementations too. We need to re-check this later.
+        //
+        // So far, we wait for the completion.
+        ret = retry_on_eagain_unless("fi_writemsg failed.",
+                                     [this](){return remote_failed.load();},
+                                     fi_writemsg,
+                                     this->ep,
+                                     &msg, FI_COMPLETION);
+    } else if (op == OOB_OP_READ) {
+        // STEP 3: According to the IBTA Spec, we need wait for the completion before we can use this data.
+        // Cited from IBTA spec o9-21:
+        // """
+        // An application shall not depend on the contents of an RDMA READ target buffer at the requestor until the completion of the corresponding WQE
+        // """
+        //
+        ret = retry_on_eagain_unless("fi_readmsg failed.",
+                                     [this](){return remote_failed.load();},
+                                     fi_readmsg,
+                                     this->ep,
+                                     &msg, FI_COMPLETION);
+    }
+
+    if (ret != 0) {
+        throw derecho::derecho_exception("oob_remote_op() failed with " + std::to_string(ret));
+    }
+
+    // STEP 4: wait for completion
+    std::optional<std::pair<int32_t, int32_t>> ce;
+    uint64_t        start_time_msec;
+    uint64_t        cur_time_msec;
+    struct timeval  cur_time;
+    gettimeofday(&cur_time, NULL);
+    start_time_msec = (cur_time.tv_sec*1e3)+(cur_time.tv_usec/1e3);
+    uint64_t        poll_cq_timeout_ms = derecho::getConfUInt64(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS);
+
+    while (true) {
+        ce = util::polling_data.get_completion_entry(tid);
+        if (ce) {
+            break;
+        }
+        gettimeofday(&cur_time, NULL);
+        cur_time_msec = (cur_time.tv_sec*1e3) + (cur_time.tv_usec/1e3);
+        if ((cur_time_msec - start_time_msec) >= poll_cq_timeout_ms) {
+            //timeout
+            break;
+        }
+    }
+
+    if (!ce) {
+        // timeout or failed.
+        throw derecho::derecho_exception("oob_remote_op() with node:" + std::to_string(remote_id) + " timeout.");
+    }
+
+    auto ce_v = ce.value();
+    if ((ce_v.first != remote_id) || (ce_v.second != 1)) {
+        throw derecho::derecho_exception("oob_remote_op() with node:" + std::to_string(remote_id) + " failed with unknown error.");
+    }
 }
 
-void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_addr, uint64_t rkey, size_t size) {
-    //TODO:
+void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
+    oob_remote_op(OOB_OP_WRITE,iov,iovcnt,remote_dest_addr,rkey,size);
+}
+
+void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size) {
+    oob_remote_op(OOB_OP_READ, iov,iovcnt,remote_src_addr,rkey,size);
 }
 
 void resources::report_failure() {
