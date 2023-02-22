@@ -512,7 +512,15 @@ void* _resources::get_oob_mr_desc(const struct iovec& iov) {
             return fi_mr_desc(oob_mr.second.mr);
         }
     }
-    return nullptr;
+    throw derecho::derecho_exception("get_oob_mr_desc():address does not fall in memory region.");
+}
+
+void* _resources::get_oob_mr_desc(void* addr) {
+    std::lock_guard rd_lck(oob_mrs_mutex);
+    struct iovec iov;
+    iov.iov_base = addr;
+    iov.iov_len = 1;
+    return get_oob_mr_desc(iov);
 }
 
 void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {

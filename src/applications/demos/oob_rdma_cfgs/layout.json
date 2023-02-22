@@ -1,0 +1,13 @@
+[
+    {
+        "type_alias":   "OOBRDMA",
+        "layout":       [
+                            {
+                                "min_nodes_by_shard": ["2"],
+                                "max_nodes_by_shard": ["5"],
+                                "delivery_modes_by_shard": ["Ordered"],
+                                "profiles_by_shard": ["DEFAULT"]
+                            }
+                        ]
+    }
+]

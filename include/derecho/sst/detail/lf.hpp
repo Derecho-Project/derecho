@@ -120,6 +120,15 @@ private:
 
 public:
     /**
+     * Get the descriptor of the corresponding oob memory region
+     *
+     * @param addr      The address of registered oob memory
+     *
+     * @return the descriptor of type void*, or nullptr in case of failure.
+     */
+    static void* get_oob_mr_desc(void* addr);
+    
+    /**
      * Register oob memory
      * @param addr  the address of the OOB memory
      * @param size  the size of the OOB memory

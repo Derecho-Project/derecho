@@ -99,6 +99,14 @@ public:
     void send(MESSAGE_TYPE type, uint64_t sequence_num);
 
     /**
+     * Get remote access key of a memory region
+     * @param addr      memory region address
+     * @return          remote access key
+     * @throw           derecho::derecho_exception on failure
+     */
+    static uint64_t get_oob_memory_rkey(void* addr);
+
+    /**
      * Register Out-of-band memory region
      * @param addr      The address of the memory region
      * @param size      The size in bytes of the memory region

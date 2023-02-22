@@ -552,6 +552,11 @@ void Group<ReplicatedTypes...>::register_oob_memory(void* addr, size_t size) {
 }
 
 template <typename... ReplicatedTypes>
+uint64_t Group<ReplicatedTypes...>::get_oob_memory_rkey(void* addr) {
+    return sst::P2PConnection::get_oob_memory_rkey(addr);
+}
+
+template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::unregister_oob_memory(void* addr) {
     sst::P2PConnection::unregister_oob_memory(addr);
 }
