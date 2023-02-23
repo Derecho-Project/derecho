@@ -30,23 +30,23 @@ private:
 public:
     /**
      * put data (At @addr with @rkey of size @size)
-     * @param addr  the address on the caller side
-     * @param rkey  the sender memory region's remote access key
-     * @param size  the size of the data
+     * @param caller_addr   the address on the caller side
+     * @param rkey          the sender memory region's remote access key
+     * @param size          the size of the data
      *
      * @return the address on the callee side where the data put.
      */
-    uint64_t put(const uint64_t& addr, const uint64_t rkey, const uint64_t size) const;
+    uint64_t put(const uint64_t& caller_addr, const uint64_t rkey, const uint64_t size) const;
 
     /** get data (At @addr with @rkey of size @size)
-     * @param addr  the address on the callee side
-     * @param laddr the address on the caller side
-     * @param rkey  the sender memory region's remote access key
-     * @param size  the size of the data
+     * @param callee_addr   the address on the callee side
+     * @param caller_addr   the address on the caller side
+     * @param rkey          the sender memory region's remote access key
+     * @param size          the size of the data
      *
      * @return true for success, otherwise false.
      */ 
-    bool get(const uint64_t& addr, const uint64_t& laddr, const uint64_t rkey, const uint64_t size) const;
+    bool get(const uint64_t& callee_addr, const uint64_t& caller_addr, const uint64_t rkey, const uint64_t size) const;
 
     // constructors
     OOBRDMA(void* _oob_mr_ptr, size_t _oob_mr_size) : 
@@ -72,48 +72,50 @@ public:
     REGISTER_RPC_FUNCTIONS(OOBRDMA,P2P_TARGETS(put,get))
 };
 
-uint64_t OOBRDMA::put(const uint64_t& addr, const uint64_t rkey, const uint64_t size) const {
+uint64_t OOBRDMA::put(const uint64_t& caller_addr, const uint64_t rkey, const uint64_t size) const {
     // STEP 1 - validate the memory size
     if (size > oob_mr_size) {
         std::cerr << "Cannot put " << size << " bytes of data, it's more than my memory region limit:" << oob_mr_size << std::endl;
         return 0ull;
     }
     // STEP 2 - get a random address
-    uint64_t laddr = reinterpret_cast<uint64_t>(oob_mr_ptr) + (static_cast<uint64_t>(rand()%((oob_mr_size - size) >> 12))<<12);
+    uint64_t callee_addr = reinterpret_cast<uint64_t>(oob_mr_ptr) + (static_cast<uint64_t>(rand()%((oob_mr_size - size) >> 12))<<12);
     // STEP 3 - do RDMA read to get the OOB data.
     auto& subgroup_handle = group->template get_subgroup<OOBRDMA>(this->subgroup_index);
     struct iovec iov;
-    iov.iov_base    = reinterpret_cast<void*>(laddr);
+    iov.iov_base    = reinterpret_cast<void*>(callee_addr);
     iov.iov_len     = static_cast<size_t>(size);
+
     subgroup_handle.oob_remote_read(group->get_rpc_caller_id(),&iov,1,addr,rkey,size);
-    return laddr;
+
+    return callee_addr;
 }
 
-bool OOBRDMA::get(const uint64_t& addr, const uint64_t& laddr, const uint64_t rkey, const uint64_t size) const {
+bool OOBRDMA::get(const uint64_t& callee_addr, const uint64_t& caller_addr, const uint64_t rkey, const uint64_t size) const {
     // STEP 1 - validate the memory size
-    if( (laddr < reinterpret_cast<uint64_t>(oob_mr_ptr)) || 
-        ((laddr+size) > reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_mr_size)) {
-        std::cerr << "Local address: " << laddr << " or size " << size << " is invalid." << std::endl;
+    if( (callee_addr < reinterpret_cast<uint64_t>(oob_mr_ptr)) || 
+        ((callee_addr+size) > reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_mr_size)) {
+        std::cerr << "callee address:0x" << std::hex << callee_addr << " or size " << size << " is invalid." << std::dec << std::endl;
         return false;
     }
     // STEP 2 - do RDMA write to send the OOB data
     auto& subgroup_handle = group->template get_subgroup<OOBRDMA>(this->subgroup_index);
     struct iovec iov;
-    iov.iov_base    = reinterpret_cast<void*>(laddr);
+    iov.iov_base    = reinterpret_cast<void*>(callee_addr);
     iov.iov_len     = static_cast<size_t>(size);
-    subgroup_handle.oob_remote_write(group->get_rpc_caller_id(),&iov,1,addr,rkey,size);
+    subgroup_handle.oob_remote_write(group->get_rpc_caller_id(),&iov,1,caller_addr,rkey,size);
     return true;
 }
 
 /**
- * oob_rdma server [oob memory in MB=1] [data size in Byte=256] [count=3]
- * oob_rdma client [oob memory in MB=1] [data size in Byte=256] [count=3]
+ * oob_rdma server [oob memory in MB=1] [data size in Byte=256] [count=1]
+ * oob_rdma client [oob memory in MB=1] [data size in Byte=256] [count=1]
  */
 int main(int argc, char** argv) {
 
     if (argc < 2) {
         std::cout << "Usage:" << argv[0] 
-                  << " server/client [oob memory in MB=1] [data size in Byte=256] [count=3]" << std::endl;
+                  << " server/client [oob memory in MB=1] [data size in Byte=256] [count=1]" << std::endl;
         return 1;
     }
 
@@ -125,7 +127,7 @@ int main(int argc, char** argv) {
     if (argc >= 4) {
         oob_data_size = (std::stoul(argv[3]));
     }
-    size_t count            = 3;
+    size_t count            = 1;
     if (argc >= 5) {
         count = std::stol(argv[4]);
     }
@@ -163,6 +165,7 @@ int main(int argc, char** argv) {
                                       std::vector<derecho::view_upcall_t>{}, oobrdma_factory);
     
         std::cout << "Finished constructing/joining Group." << std::endl;
+        memset(oob_mr_ptr,'A',oob_mr_size);
         group.register_oob_memory(oob_mr_ptr, oob_mr_size);
         std::cout << oob_mr_size << "bytes of OOB Memory registered" << std::endl;
 
@@ -195,7 +198,7 @@ int main(int argc, char** argv) {
                 // do put
                 uint64_t remote_addr;
                 {
-                    std::cout << "Put with oob to node-1" << std::endl;
+                    std::cout << "Put with oob to node-" << nid << std::endl;
                     auto results = external_caller.template p2p_send<RPC_NAME(put)>(nid,put_buffer_laddr,rkey,oob_data_size);
                     std::cout << "Wait for return" << std::endl;
                     remote_addr = results.get().get(nid);
@@ -203,8 +206,12 @@ int main(int argc, char** argv) {
                 }
                 // do get
                 {
+                    std::cout << "Get with oob from node-" << nid << std::endl;
                     auto results = external_caller.template p2p_send<RPC_NAME(get)>(nid,remote_addr,get_buffer_laddr,rkey,oob_data_size);
+                    std::cout << "Wait for return" << std::endl;
                     results.get().get(nid);
+                    std::cout << "Data get from remote address @" << std::hex << remote_addr 
+                              << " to local address @" << get_buffer_laddr << std::endl;
                 }
                 // print 16 bytes of contents
                 std::cout << "get data:" << std::endl;

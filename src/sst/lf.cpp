@@ -488,6 +488,12 @@ void _resources::register_oob_memory(void* addr, size_t size) {
     mr.size = size;
     mr.mr = oob_mr;
     oob_mrs.emplace(reinterpret_cast<uint64_t>(addr),mr);
+
+    dbg_default_trace("OOB memory registered with \n"
+                      "\taddr = {:p}\n"
+                      "\tsize = {:x}\n"
+                      "\trkey = {:x}\n",
+                      addr,size,reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)));
 }
 
 void _resources::unregister_oob_memory(void* addr) {
@@ -563,6 +569,7 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     sctxt.set_remote_id(remote_id);
     sctxt.set_ce_idx(ce_idx);
     msg.context = (void*)&sctxt;
+    dbg_default_trace("{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
 
     int ret = -1;
     if (op == OOB_OP_WRITE) {
