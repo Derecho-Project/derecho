@@ -107,15 +107,29 @@ bool OOBRDMA::get(const uint64_t& callee_addr, const uint64_t& caller_addr, cons
     return true;
 }
 
+static void print_data (void* addr,size_t size) {
+    std::cout << "data@0x" << std::hex << reinterpret_cast<uint64_t>(addr) << " [ " << std::endl;
+    for (uint32_t cidx=0;cidx<16;cidx++) {
+        std::cout << reinterpret_cast<char*>(addr)[cidx] << " ";
+    }
+    std::cout << std::endl;
+    std::cout << "..." << std::endl;
+    for (uint32_t cidx=size - 16;cidx<size;cidx++) {
+        std::cout << reinterpret_cast<char*>(addr)[cidx] << " ";
+    }
+    std::cout << std::endl;
+    std::cout << "]" << std::endl;
+}
+
 /**
- * oob_rdma server [oob memory in MB=1] [data size in Byte=256] [count=1]
- * oob_rdma client [oob memory in MB=1] [data size in Byte=256] [count=1]
+ * oob_rdma server [oob memory in MB=1] [data size in Byte=256]
+ * oob_rdma client [oob memory in MB=1] [data size in Byte=256] [count=3]
  */
 int main(int argc, char** argv) {
 
     if (argc < 2) {
         std::cout << "Usage:" << argv[0] 
-                  << " server/client [oob memory in MB=1] [data size in Byte=256] [count=1]" << std::endl;
+                  << " server/client [oob memory in MB=1] [data size in Byte=256] [count=3]" << std::endl;
         return 1;
     }
 
@@ -127,7 +141,7 @@ int main(int argc, char** argv) {
     if (argc >= 4) {
         oob_data_size = (std::stoul(argv[3]));
     }
-    size_t count            = 1;
+    size_t count            = 3;
     if (argc >= 5) {
         count = std::stol(argv[4]);
     }
@@ -195,6 +209,12 @@ int main(int argc, char** argv) {
                 node_id_t nid = i%external_group.get_members().size();
                 std::cout << "ROUND-" << i << std::endl;
                 memset(reinterpret_cast<void*>(put_buffer_laddr), 'A'-1+i, oob_data_size);
+                std::cout << "put buffer" << std::endl;
+                std::cout << "==========" << std::endl;
+                print_data(reinterpret_cast<void*>(put_buffer_laddr),oob_data_size);
+                std::cout << "get buffer" << std::endl;
+                std::cout << "==========" << std::endl;
+                print_data(reinterpret_cast<void*>(get_buffer_laddr),oob_data_size);
                 // do put
                 uint64_t remote_addr;
                 {
@@ -214,19 +234,12 @@ int main(int argc, char** argv) {
                               << " to local address @" << get_buffer_laddr << std::endl;
                 }
                 // print 16 bytes of contents
-                std::cout << "get data:" << std::endl;
-                std::cout << "[" << std::endl;
-                std::cout << "  ";
-                for (uint32_t cidx=0;cidx<16;cidx++) {
-                    std::cout << reinterpret_cast<char*>(get_buffer_laddr)[cidx] << " " << std::endl;
-                }
-                std::cout << std::endl;
-                std::cout << "..." << std::endl;
-                for (uint32_t cidx=oob_data_size - 16;cidx<oob_data_size;cidx++) {
-                    std::cout << reinterpret_cast<char*>(get_buffer_laddr)[cidx] << " " << std::endl;
-                }
-                std::cout << std::endl;
-                std::cout << "]" << std::endl;
+                std::cout << "put buffer" << std::endl;
+                std::cout << "==========" << std::endl;
+                print_data(reinterpret_cast<void*>(put_buffer_laddr),oob_data_size);
+                std::cout << "get buffer" << std::endl;
+                std::cout << "==========" << std::endl;
+                print_data(reinterpret_cast<void*>(get_buffer_laddr),oob_data_size);
             }
         }
 
