@@ -120,8 +120,8 @@ void P2PConnection::send(MESSAGE_TYPE type, uint64_t sequence_num) {
     }
 }
 
-uint64_t P2PConnection::get_oob_memory_rkey(void *addr) {
-    return reinterpret_cast<uint64_t>(_resources::get_oob_mr_desc(addr));
+uint64_t P2PConnection::get_oob_memory_key(void *addr) {
+    return _resources::get_oob_mr_key(addr);
 }
 
 void P2PConnection::register_oob_memory(void* addr, size_t size) {

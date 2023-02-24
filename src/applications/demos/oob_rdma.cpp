@@ -86,7 +86,7 @@ uint64_t OOBRDMA::put(const uint64_t& caller_addr, const uint64_t rkey, const ui
     iov.iov_base    = reinterpret_cast<void*>(callee_addr);
     iov.iov_len     = static_cast<size_t>(size);
 
-    subgroup_handle.oob_remote_read(group->get_rpc_caller_id(),&iov,1,addr,rkey,size);
+    subgroup_handle.oob_remote_read(group->get_rpc_caller_id(),&iov,1,caller_addr,rkey,size);
 
     return callee_addr;
 }
@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
         std::cout << oob_mr_size << "bytes of OOB Memory registered" << std::endl;
 
         {
-            uint64_t rkey             = external_group.get_oob_memory_rkey(oob_mr_ptr);
+            uint64_t rkey             = external_group.get_oob_memory_key(oob_mr_ptr);
             uint64_t put_buffer_laddr = reinterpret_cast<uint64_t>(oob_mr_ptr);
             uint64_t get_buffer_laddr = (((reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_data_size + 4095)>>12)<<12);
 

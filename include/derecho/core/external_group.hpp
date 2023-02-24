@@ -289,7 +289,7 @@ public:
      * @return          remote access key of the memory region
      * @throw           derecho::derecho_exception if address does not fall in the memory region.
      */
-    uint64_t get_oob_memory_rkey(void* addr);
+    uint64_t get_oob_memory_key(void* addr);
 
     /**
      * Register Out-of-band memory region

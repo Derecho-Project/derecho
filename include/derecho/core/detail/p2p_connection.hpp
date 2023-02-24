@@ -104,7 +104,7 @@ public:
      * @return          remote access key
      * @throw           derecho::derecho_exception on failure
      */
-    static uint64_t get_oob_memory_rkey(void* addr);
+    static uint64_t get_oob_memory_key(void* addr);
 
     /**
      * Register Out-of-band memory region

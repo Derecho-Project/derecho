@@ -113,20 +113,35 @@ private:
      * get the descriptor of the corresponding oob memory region
      * Important: it assumes shared lock on oob_mrs_mutex.
      * If iov does not fall into an oob memory region, it fails with nullptr.
+     *
      * @param iov
+     *
      * @return the descriptor of type void*, or nullptr in case of failure.
      */
     static void* get_oob_mr_desc(const struct iovec& iov);
 
 public:
     /**
-     * Get the descriptor of the corresponding oob memory region
+     * get the descriptor of the corresponding oob memory region
+     * Important: it assumes shared lock on oob_mrs_mutex.
+     * If iov does not fall into an oob memory region, it fails with nullptr.
+     *
+     * @param iov
+     *
+     * @return the descriptor of type void*, or nullptr in case of failure.
+     * @throw   derecho::derecho_exception if not found.
+     */
+    static void* get_oob_mr_desc(void* addr);
+
+    /**
+     * Get the key of the corresponding oob memory region for remote access.
      *
      * @param addr      The address of registered oob memory
      *
-     * @return the descriptor of type void*, or nullptr in case of failure.
+     * @return  the remote access key,
+     * @throw   derecho::derecho_exception if not found.
      */
-    static void* get_oob_mr_desc(void* addr);
+    static uint64_t get_oob_mr_key(void* addr);
     
     /**
      * Register oob memory

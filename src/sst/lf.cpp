@@ -489,11 +489,12 @@ void _resources::register_oob_memory(void* addr, size_t size) {
     mr.mr = oob_mr;
     oob_mrs.emplace(reinterpret_cast<uint64_t>(addr),mr);
 
-    dbg_default_trace("OOB memory registered with \n"
+    dbg_default_warn("OOB memory registered with \n"
                       "\taddr = {:p}\n"
                       "\tsize = {:x}\n"
+                      "\tdesc = {:x}\n"
                       "\trkey = {:x}\n",
-                      addr,size,reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)));
+                      addr,size,reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)),fi_mr_key(oob_mr));
 }
 
 void _resources::unregister_oob_memory(void* addr) {
@@ -527,6 +528,17 @@ void* _resources::get_oob_mr_desc(void* addr) {
     iov.iov_base = addr;
     iov.iov_len = 1;
     return get_oob_mr_desc(iov);
+}
+
+uint64_t _resources::get_oob_mr_key(void* addr) {
+    std::lock_guard rd_lck(oob_mrs_mutex);
+    for (const auto& oob_mr:oob_mrs) {
+        if ((reinterpret_cast<uint64_t>(addr) >= reinterpret_cast<uint64_t>(oob_mr.second.addr)) &&
+            (reinterpret_cast<uint64_t>(addr) <  reinterpret_cast<uint64_t>(oob_mr.second.addr) + reinterpret_cast<uint64_t>(oob_mr.second.size))) {
+            return fi_mr_key(oob_mr.second.mr);
+        }
+    }
+    throw derecho::derecho_exception("get_oob_mr_key():address does not fall in memory region");
 }
 
 void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
@@ -570,6 +582,29 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     sctxt.set_ce_idx(ce_idx);
     msg.context = (void*)&sctxt;
     dbg_default_trace("{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
+
+    dbg_default_warn("{}: op = {:d}, msg.context = {:p}\n"
+                     "\tmsg.msg_iov.iov_base     = {:p}\n"
+                     "\tmsg.msg_iov.iov_len      = {:x}\n"
+                     "\tmsg.iov_count            = {}\n"
+                     "\tmsg.desc[0]              = {:x}\n"
+                     "\tmsg.rma_iov->addr        = {:x}\n"
+                     "\tmsg.rma_iov->len         = {:x}\n"
+                     "\tmsg.rma_iov->key         = {:x}\n"
+                     "\tmsg.rma_iov_count        = {}\n"
+                     "\tmsg.data                 = {}\n"
+                     ,
+                     __func__,op,static_cast<void*>(&sctxt),
+                     msg.msg_iov->iov_base,
+                     msg.msg_iov->iov_len,
+                     msg.iov_count,
+                     reinterpret_cast<uint64_t>(msg.desc[0]),
+                     msg.rma_iov->addr,
+                     msg.rma_iov->len,
+                     msg.rma_iov->key,
+                     msg.rma_iov_count,
+                     msg.data
+            );
 
     int ret = -1;
     if (op == OOB_OP_WRITE) {

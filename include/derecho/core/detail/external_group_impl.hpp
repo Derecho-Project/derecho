@@ -572,8 +572,8 @@ std::vector<std::vector<node_id_t>> ExternalGroupClient<ReplicatedTypes...>::get
 }
 
 template <typename... ReplicatedTypes>
-uint64_t ExternalGroupClient<ReplicatedTypes...>::get_oob_memory_rkey(void* addr) {
-    return sst::P2PConnection::get_oob_memory_rkey(addr);
+uint64_t ExternalGroupClient<ReplicatedTypes...>::get_oob_memory_key(void* addr) {
+    return sst::P2PConnection::get_oob_memory_key(addr);
 }
 
 template <typename... ReplicatedTypes>
