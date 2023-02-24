@@ -121,8 +121,46 @@ static void print_data (void* addr,size_t size) {
     std::cout << "]" << std::endl;
 }
 
+template <typename P2PCaller>
+void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buffer_laddr, void* get_buffer_laddr, size_t oob_data_size) {
+    std::cout << "Testing node-" << nid << std::endl;
+    memset(put_buffer_laddr, 'A', oob_data_size);
+    memset(get_buffer_laddr, 'a', oob_data_size);
+    std::cout << "put buffer" << std::endl;
+    std::cout << "==========" << std::endl;
+    print_data(put_buffer_laddr,oob_data_size);
+    std::cout << "get buffer" << std::endl;
+    std::cout << "==========" << std::endl;
+    print_data(get_buffer_laddr,oob_data_size);
+    // do put
+    uint64_t remote_addr;
+    {
+        std::cout << "Put with oob to node-" << nid << std::endl;
+        auto results = p2p_caller.template p2p_send<RPC_NAME(put)>(nid,reinterpret_cast<uint64_t>(put_buffer_laddr),rkey,oob_data_size);
+        std::cout << "Wait for return" << std::endl;
+        remote_addr = results.get().get(nid);
+        std::cout << "Data put to remote address @" << std::hex << remote_addr << std::dec << std::endl;
+    }
+    // do get
+    {
+        std::cout << "Get with oob from node-" << nid << std::endl;
+        auto results = p2p_caller.template p2p_send<RPC_NAME(get)>(nid,remote_addr,reinterpret_cast<uint64_t>(get_buffer_laddr),rkey,oob_data_size);
+        std::cout << "Wait for return" << std::endl;
+        results.get().get(nid);
+        std::cout << "Data get from remote address @" << std::hex << remote_addr 
+                  << " to local address @" << reinterpret_cast<uint64_t>(get_buffer_laddr) << std::endl;
+    }
+    // print 16 bytes of contents
+    std::cout << "put buffer" << std::endl;
+    std::cout << "==========" << std::endl;
+    print_data(put_buffer_laddr,oob_data_size);
+    std::cout << "get buffer" << std::endl;
+    std::cout << "==========" << std::endl;
+    print_data(get_buffer_laddr,oob_data_size);
+}
+
 /**
- * oob_rdma server [oob memory in MB=1] [data size in Byte=256]
+ * oob_rdma server [oob memory in MB=1] [data size in Byte=256] [count=3]
  * oob_rdma client [oob memory in MB=1] [data size in Byte=256] [count=3]
  */
 int main(int argc, char** argv) {
@@ -184,6 +222,22 @@ int main(int argc, char** argv) {
         std::cout << oob_mr_size << "bytes of OOB Memory registered" << std::endl;
 
         std::cout << "Press Enter to shutdown gracefully." << std::endl;
+
+        // test OOB put/get to a random peer
+        if (group.get_my_rank() == 0) {
+            uint64_t rkey           = group.get_oob_memory_key(oob_mr_ptr);
+            void* put_buffer_laddr  = oob_mr_ptr;
+            void* get_buffer_laddr  = reinterpret_cast<void*>(((reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_data_size + 4095)>>12)<<12);
+
+            for(const auto& member: group.get_members()) {
+                if (member == group.get_my_id()) {
+                    continue;
+                }
+                // TEST
+                do_test(group.get_subgroup<OOBRDMA>(),member,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size);
+            }
+        }
+
         // wait here
         std::cin.get();
 
@@ -201,45 +255,13 @@ int main(int argc, char** argv) {
         std::cout << oob_mr_size << "bytes of OOB Memory registered" << std::endl;
 
         {
-            uint64_t rkey             = external_group.get_oob_memory_key(oob_mr_ptr);
-            uint64_t put_buffer_laddr = reinterpret_cast<uint64_t>(oob_mr_ptr);
-            uint64_t get_buffer_laddr = (((reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_data_size + 4095)>>12)<<12);
+            uint64_t rkey           = external_group.get_oob_memory_key(oob_mr_ptr);
+            void* put_buffer_laddr  = oob_mr_ptr;
+            void* get_buffer_laddr  = reinterpret_cast<void*>(((reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_data_size + 4095)>>12)<<12);
 
             for (uint32_t i=1;i<=count;i++) {
                 node_id_t nid = i%external_group.get_members().size();
-                std::cout << "ROUND-" << i << std::endl;
-                memset(reinterpret_cast<void*>(put_buffer_laddr), 'A'-1+i, oob_data_size);
-                std::cout << "put buffer" << std::endl;
-                std::cout << "==========" << std::endl;
-                print_data(reinterpret_cast<void*>(put_buffer_laddr),oob_data_size);
-                std::cout << "get buffer" << std::endl;
-                std::cout << "==========" << std::endl;
-                print_data(reinterpret_cast<void*>(get_buffer_laddr),oob_data_size);
-                // do put
-                uint64_t remote_addr;
-                {
-                    std::cout << "Put with oob to node-" << nid << std::endl;
-                    auto results = external_caller.template p2p_send<RPC_NAME(put)>(nid,put_buffer_laddr,rkey,oob_data_size);
-                    std::cout << "Wait for return" << std::endl;
-                    remote_addr = results.get().get(nid);
-                    std::cout << "Data put to remote address @" << std::hex << remote_addr << std::dec << std::endl;
-                }
-                // do get
-                {
-                    std::cout << "Get with oob from node-" << nid << std::endl;
-                    auto results = external_caller.template p2p_send<RPC_NAME(get)>(nid,remote_addr,get_buffer_laddr,rkey,oob_data_size);
-                    std::cout << "Wait for return" << std::endl;
-                    results.get().get(nid);
-                    std::cout << "Data get from remote address @" << std::hex << remote_addr 
-                              << " to local address @" << get_buffer_laddr << std::endl;
-                }
-                // print 16 bytes of contents
-                std::cout << "put buffer" << std::endl;
-                std::cout << "==========" << std::endl;
-                print_data(reinterpret_cast<void*>(put_buffer_laddr),oob_data_size);
-                std::cout << "get buffer" << std::endl;
-                std::cout << "==========" << std::endl;
-                print_data(reinterpret_cast<void*>(get_buffer_laddr),oob_data_size);
+                do_test(external_caller,nid,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size);
             }
         }
 
