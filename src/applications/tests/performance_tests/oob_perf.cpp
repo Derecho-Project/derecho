@@ -122,7 +122,8 @@ void perf_test (
         void* put_buffer_laddr, 
         void* get_buffer_laddr, 
         size_t oob_data_size, 
-        size_t duration_sec) {
+        size_t duration_sec,
+        size_t nround = 1) {
     std::cout << "put_buffer_addr=" << put_buffer_laddr << std::endl;
     std::cout << "get_buffer_addr=" << get_buffer_laddr << std::endl;
     memset(put_buffer_laddr, 'A', oob_data_size);
@@ -152,7 +153,7 @@ void perf_test (
         cur_ns = get_time();
         ts_log[num_put] = cur_ns;
     }
-    std::ofstream put_log("oob_put.dat");
+    std::ofstream put_log(std::to_string(oob_data_size) + "." + std::to_string(nround) + "_put.dat");
     for(uint64_t i=0;i<num_put;i++) {
         put_log << ts_log[i] << "\t" << ts_log[i+1] << std::endl;
     }
@@ -170,38 +171,47 @@ void perf_test (
         cur_ns = get_time();
         ts_log[num_get] = cur_ns;
     }
-    std::ofstream get_log("oob_get.dat");
+    std::ofstream get_log(std::to_string(oob_data_size) + "." + std::to_string(nround) + "_get.dat");
     for(uint64_t i=0;i<num_get;i++) {
         get_log << ts_log[i] << "\t" << ts_log[i+1] << std::endl;
     }
     get_log.close();
 }
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/**
- * oob_perf [options]
- * --datasize=<the data size, default to 256>, -d
- *      The oob data size in bytes
- * --duration=<exp in sec, default to 5>, -D
- *      The duration of the experiment
- * --hugepage=<page size is MB>, -h
- *      using huge page OOB of the given size in MBytes. It could be 2 (MB) or 1024 (MB).
- */
+
+void print_help() {
+    std::cout << "oob_perf [options]\n"
+                 "--datasize=<the data size, default to 256>, -d\n"
+                 "     The oob data size in bytes\n"
+                 "--duration=<exp in sec, default to 5>, -D\n"
+                 "     The duration of the experiment\n"
+                 "--hugepage=<page size is MB>, -H\n"
+                 "     using huge page OOB of the given size in MBytes. It could be 2 (MB) or 1024 (MB).\n"
+                 "--count=<number of rounds, default to 1>, -c\n"
+                 "     set number of rounds.\n"
+                 "--help, -h\n"
+                 "     print this information"
+              << std::endl;
+}
+
 int main(int argc, char** argv) {
 
     // STEP 1 - parse the argument
     static struct option perf_options[] = {
         {"datasize",    required_argument,  0,  'd'},
         {"duration",    required_argument,  0,  'D'},
-        {"hugepage",    required_argument,  0,  'h'},
+        {"hugepage",    required_argument,  0,  'H'},
+        {"count",       required_argument,  0,  'c'},
+        {"help",        no_argument,        0,  'h'},
         {0,0,0,0}
     };
 
     size_t oob_data_size = 256;
     size_t duration_sec  = 5;
     size_t hugepage_size = 0;
+    size_t count         = 1;
     while(true) {
         int c,option_index=0;
-        c = getopt_long(argc,argv,"d:D:h:",perf_options,&option_index);
+        c = getopt_long(argc,argv,"d:D:H:c:h",perf_options,&option_index);
         if (c == -1) {
             break;
         }
@@ -212,9 +222,15 @@ int main(int argc, char** argv) {
                 break;
             case 'D':
                 duration_sec  = std::stol(optarg);
-            case 'h':
+            case 'H':
                 hugepage_size = (std::stol(optarg) << 20);
                 break;
+            case 'c':
+                count = std::stol(optarg);
+                break;
+            case 'h':
+                print_help();
+                return 0;
             case '?':
             default:
                 std::cerr << "Unknown argument:" << argv[optind-1] << std::endl;
@@ -289,7 +305,9 @@ int main(int argc, char** argv) {
                     continue;
                 }
                 // TEST
-                perf_test(group.get_subgroup<OOBRDMA>(),member,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size,duration_sec);
+                for (size_t nr=1;nr<=count;nr++) {
+                    perf_test(group.get_subgroup<OOBRDMA>(),member,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size,duration_sec,nr);
+                }
             }
         }
 
