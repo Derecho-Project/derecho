@@ -51,5 +51,5 @@ target_link_libraries(signed_bw_test derecho)
 add_executable(signed_store_test signed_store_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(signed_store_test derecho)
 
-add_executable(oob_perf oob_perf.cpp)
+add_executable(oob_perf oob_perf.cpp bytes_object.cpp)
 target_link_libraries(oob_perf derecho)
