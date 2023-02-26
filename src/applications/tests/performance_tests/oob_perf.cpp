@@ -171,10 +171,10 @@ void perf_test (
                                         derecho::remote_invocation_utilities::header_space();
     const uint64_t max_rep_size = derecho::getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) - rpc_header_size;
     const uint64_t max_req_size   = derecho::getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) - rpc_header_size;
-    if (max_rep_size < oob_data_size) {
+    if (inband && (max_rep_size < oob_data_size)) {
         throw derecho::derecho_exception("max_reply_size (" + std::to_string(max_rep_size) + ") is smaller than data size(" + std::to_string(oob_data_size));
     }
-    if (max_req_size < oob_data_size) {
+    if (inband && (max_req_size < oob_data_size)) {
         throw derecho::derecho_exception("max_request_size (" + std::to_string(max_req_size) + ") is smaller than data size(" + std::to_string(oob_data_size));
     }
     uint8_t* buf = new uint8_t[oob_data_size];
