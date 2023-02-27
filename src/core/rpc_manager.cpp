@@ -560,7 +560,7 @@ void RPCManager::p2p_receive_loop() {
             if(time_elapsed_in_ms > busy_wait_before_sleep_ms) {
                 using namespace std::chrono_literals;
                 // std::this_thread::sleep_for(1ms);
-                std::this_thread::yeild();
+                std::this_thread::yield();
             }
         }
     }
