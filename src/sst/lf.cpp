@@ -871,7 +871,7 @@ void polling_loop() {
             // check if the system has been inactive for enough time to induce sleep
             double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
                                         + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
-            if(time_elapsed_in_ms > 1) {
+            if(time_elapsed_in_ms > 100) {
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
             }
@@ -901,7 +901,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         // check if the system has been inactive for enough time to induce sleep
         double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
                                     + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
-        if(time_elapsed_in_ms > 1) {
+        if(time_elapsed_in_ms > 100) {
             using namespace std::chrono_literals;
             std::this_thread::sleep_for(1ms);
         }
