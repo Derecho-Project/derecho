@@ -559,7 +559,8 @@ void RPCManager::p2p_receive_loop() {
                                         + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
             if(time_elapsed_in_ms > busy_wait_before_sleep_ms) {
                 using namespace std::chrono_literals;
-                std::this_thread::sleep_for(1ms);
+                // std::this_thread::sleep_for(1ms);
+                std::this_thread::yeild();
             }
         }
     }
