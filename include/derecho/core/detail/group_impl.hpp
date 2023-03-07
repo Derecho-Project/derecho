@@ -49,6 +49,15 @@ std::vector<std::vector<node_id_t>> _Group::get_subgroup_members(uint32_t subgro
 }
 
 template <typename SubgroupType>
+std::vector<std::vector<IpAndPorts>> _Group::get_subgroup_member_addresses(uint32_t subgroup_index) {
+    if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_subgroup_member_addresses(subgroup_index);
+    } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
+
+template <typename SubgroupType>
 std::size_t _Group::get_number_of_shards(uint32_t subgroup_index) {
     if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
         return gptr->get_number_of_shards(subgroup_index);
@@ -95,6 +104,12 @@ template <typename ReplicatedType>
 std::vector<std::vector<node_id_t>>
 GroupProjection<ReplicatedType>::get_subgroup_members(uint32_t subgroup_index) {
     return get_view_manager().get_subgroup_members(get_index_of_type(typeid(ReplicatedType)), subgroup_index);
+}
+
+template <typename ReplicatedType>
+std::vector<std::vector<IpAndPorts>>
+GroupProjection<ReplicatedType>::get_subgroup_member_addresses(uint32_t subgroup_index) {
+    return get_view_manager().get_subgroup_member_addresses(get_index_of_type(typeid(ReplicatedType)), subgroup_index);
 }
 
 template <typename ReplicatedType>
@@ -505,10 +520,22 @@ std::vector<node_id_t> Group<ReplicatedTypes...>::get_members() {
 }
 
 template <typename... ReplicatedTypes>
+std::vector<IpAndPorts> Group<ReplicatedTypes...>::get_member_addresses() {
+    return view_manager.get_member_addresses();
+}
+
+template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 std::vector<std::vector<node_id_t>> Group<ReplicatedTypes...>::get_subgroup_members(uint32_t subgroup_index) {
     return GroupProjection<SubgroupType>::get_subgroup_members(subgroup_index);
 }
+
+template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+std::vector<std::vector<IpAndPorts>> Group<ReplicatedTypes...>::get_subgroup_member_addresses(uint32_t subgroup_index) {
+    return GroupProjection<SubgroupType>::get_subgroup_member_addresses(subgroup_index);
+}
+
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 int32_t Group<ReplicatedTypes...>::get_my_shard(uint32_t subgroup_index) {

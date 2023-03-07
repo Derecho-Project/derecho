@@ -2494,6 +2494,11 @@ std::vector<node_id_t> ViewManager::get_members() {
     return curr_view->members;
 }
 
+std::vector<IpAndPorts> ViewManager::get_member_addresses() {
+    shared_lock_t read_lock(view_mutex);
+    return curr_view->member_ips_and_ports;
+}
+
 int32_t ViewManager::get_my_rank() {
     shared_lock_t read_lock(view_mutex);
     return curr_view->my_rank;
@@ -2507,6 +2512,16 @@ std::vector<std::vector<node_id_t>> ViewManager::get_subgroup_members(subgroup_t
         subgroup_members.push_back(shard_view.members);
     }
     return subgroup_members;
+}
+
+std::vector<std::vector<IpAndPorts>> ViewManager::get_subgroup_member_addresses(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
+    shared_lock_t read_lock(view_mutex);
+    subgroup_id_t subgroup_id = curr_view->subgroup_ids_by_type_id.at(subgroup_type).at(subgroup_index);
+    std::vector<std::vector<IpAndPorts>> subgroup_member_ips;
+    for(const auto& shard_view : curr_view->subgroup_shard_views.at(subgroup_id)) {
+        subgroup_member_ips.push_back(shard_view.member_ips_and_ports);
+    }
+    return subgroup_member_ips;
 }
 
 std::size_t ViewManager::get_number_of_shards_in_subgroup(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
