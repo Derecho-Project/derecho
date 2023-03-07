@@ -92,6 +92,9 @@ public:
     template <typename SubgroupType>
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
 
+    template <typename SubgroupType>
+    std::vector<std::vector<IpAndPorts>> get_subgroup_member_addresses(uint32_t subgroup_index = 0);
+
     virtual node_id_t get_my_id() = 0;
 
     virtual node_id_t get_rpc_caller_id() = 0;
@@ -110,6 +113,7 @@ public:
     PeerCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
     ExternalClientCallback<ReplicatedType>& get_client_callback(uint32_t subgroup_index = 0);
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
+    std::vector<std::vector<IpAndPorts>> get_subgroup_member_addresses(uint32_t subgroup_index = 0);
     std::size_t get_number_of_shards(uint32_t subgroup_index = 0);
     uint32_t get_num_subgroups();
 };
@@ -375,6 +379,16 @@ public:
     std::vector<node_id_t> get_members();
 
     /**
+     * Returns a vector listing the IP addresses (and Derecho ports) of nodes that
+     * are currently members of the group, in the same order as the node ID list
+     * returned by get_members(). Although the list includes the set of Derecho ports
+     * for each member, note that Derecho has already made connections to the other
+     * nodes on each of these ports, so they should not be used by the caller to
+     * initiate a new connection.
+     */
+    std::vector<IpAndPorts> get_member_addresses();
+
+    /**
      * Returns the number of subgroups of the specified type. This information
      * is also in the configuration file or SubgroupInfo function, but this method
      * is provided for convenience.
@@ -396,6 +410,20 @@ public:
      */
     template <typename SubgroupType>
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
+
+    /**
+     * Gets a list of IP addresses of nodes currently assigned to the subgroup
+     * of the specified type and index, organized by shard. This has the same
+     * structure as the vector returned by get_subgroup_members() but with IP
+     * address-and-port structures in place of node IDs.
+     * @tparam SubgroupType the subgroup type
+     * @param subgroup_index The index of the subgroup (of the same type)
+     * @return A vector of vectors, where the outer index represents a shard
+     * number, and the inner index counts individual nodes in that shard.
+     */
+    template <typename SubgroupType>
+    std::vector<std::vector<IpAndPorts>> get_subgroup_member_addresses(uint32_t subgroup_index = 0);
+
 
     /** @returns the order of this node in the sequence of members of the group */
     std::int32_t get_my_rank();
