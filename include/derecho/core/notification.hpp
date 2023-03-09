@@ -91,7 +91,12 @@ struct NotificationMessage : mutils::ByteRepresentable {
 
 using notification_handler_t = std::function<void(const NotificationMessage&)>;
 
-struct NotificationSupport {
+/**
+ * A base class that enables client-side notification support in a Derecho subgroup.
+ * The user-provided Replicated Object type (i.e. the T in Replicated<T>) must inherit
+ * from this class in order for clients of that type's subgroup to get notifications.
+ */
+class NotificationSupport {
 public:
     std::optional<notification_handler_t> handler;
 

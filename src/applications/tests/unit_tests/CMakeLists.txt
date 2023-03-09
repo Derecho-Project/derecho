@@ -44,3 +44,6 @@ target_link_libraries(persistence_notification_test derecho)
 
 add_executable(deserialize_and_run_test deserialize_and_run_test.cpp)
 target_link_libraries(deserialize_and_run_test derecho)
+
+add_executable(subgroup_view_callbacks subgroup_view_callbacks.cpp)
+target_link_libraries(subgroup_view_callbacks derecho)

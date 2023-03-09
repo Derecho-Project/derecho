@@ -107,6 +107,7 @@ enum class ExternalClientRequest {
 template <typename T>
 using SharedLockedReference = LockedReference<std::shared_lock<std::shared_timed_mutex>, T>;
 
+/** Type of a function that can be called by ViewManager to notify another component that a new view was installed */
 using view_upcall_t = std::function<void(const View&)>;
 
 /** Type of a 2-dimensional vector used to store potential node IDs, or -1 */

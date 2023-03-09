@@ -51,12 +51,41 @@ class SignedPersistentFields : public PersistsFields {};
 template <typename T>
 using has_persistent_fields = std::is_base_of<PersistsFields, T>;
 
+/** Shortcut for has_persistent_fields<T>::value */
+template <typename T>
+inline constexpr bool has_persistent_fields_v = has_persistent_fields<T>::value;
+
 /**
  * A template whose member field "value" will be true if type T inherits from
  * SignedPersistentFields.
  */
 template <typename T>
 using has_signed_fields = std::is_base_of<SignedPersistentFields, T>;
+
+/** Shortcut for has_signed_fields<T>::value */
+template <typename T>
+inline constexpr bool has_signed_fields_v = has_signed_fields<T>::value;
+
+/**
+ * An interface that user-defined Replicated Object types (i.e. the T in a
+ * Replicated<T>) can implement to indicate that they would like to receive a
+ * callback when the Derecho group installs a new view.
+ */
+class GetsViewChangeCallback {
+public:
+    virtual void new_view_callback(const View& new_view) = 0;
+};
+
+/**
+ * A template whose member field "value" will be true if type T inherits
+ * from GetsViewChangeCallback.
+*/
+template<typename T>
+using view_callback_enabled = std::is_base_of<GetsViewChangeCallback, T>;
+
+/** Shortcut for view_callback_enabled<T>::value */
+template<typename T>
+inline constexpr bool view_callback_enabled_v = view_callback_enabled<T>::value;
 
 /**
  * An empty class to be used as the "replicated type" for a subgroup that
@@ -284,6 +313,15 @@ public:
      * @return The number of bytes read from the buffer.
      */
     std::size_t receive_object(uint8_t* buffer);
+
+    /**
+     * A function called by Group to notify this Replicated object that a new
+     * view has been installed. Forwards the notification to the wrapped object
+     * of type T if T derives from GetsViewChangeCallback.
+     *
+     * @param new_view The new view that has been installed by the Group
+     */
+    void new_view_callback(const View& new_view);
 
     const uint64_t compute_global_stability_frontier();
 

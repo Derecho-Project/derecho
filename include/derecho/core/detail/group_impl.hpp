@@ -56,7 +56,6 @@ std::vector<std::vector<IpAndPorts>> _Group::get_subgroup_member_addresses(uint3
         throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
 }
 
-
 template <typename SubgroupType>
 std::size_t _Group::get_number_of_shards(uint32_t subgroup_index) {
     if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
@@ -140,7 +139,7 @@ uint32_t Group<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) 
                      (index_of_type<ReplicatedTypes, ReplicatedTypes...>)
                                                                                : 0)
             + ... + 0);
-    //return index_of_type<SubgroupType, ReplicatedTypes...>;
+    // return index_of_type<SubgroupType, ReplicatedTypes...>;
 }
 
 template <typename... ReplicatedTypes>
@@ -177,7 +176,7 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           user_deserialization_context(deserialization_context),
           persistence_manager(objects_by_subgroup_id,
-                              std::disjunction_v<std::is_base_of<SignedPersistentFields, ReplicatedTypes>...>,
+                              std::disjunction_v<has_signed_fields<ReplicatedTypes>...>,
                               callbacks.local_persistence_callback),
           view_manager(subgroup_info,
                        {std::type_index(typeid(ReplicatedTypes))...},
@@ -192,21 +191,21 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
           factories(make_kind_map<Factory>(factories...)) {
 #endif
     bool in_total_restart = view_manager.first_init();
-    //State transfer must complete before an initial view can commit, and must retry if the view is aborted
+    // State transfer must complete before an initial view can commit, and must retry if the view is aborted
     bool initial_view_confirmed = false;
     bool restart_leader_failed = false;
     while(!initial_view_confirmed) {
         if(restart_leader_failed) {
-            //Retry connecting to the restart leader
+            // Retry connecting to the restart leader
             dbg_default_warn("Restart leader failed during 2PC! Trying again...");
             in_total_restart = view_manager.restart_to_initial_view();
         }
-        //This might be the shard leaders from the previous view,
-        //or the nodes with the longest logs in their shard if we're doing total restart,
-        //or empty if this is the first View of a new group
+        // This might be the shard leaders from the previous view,
+        // or the nodes with the longest logs in their shard if we're doing total restart,
+        // or empty if this is the first View of a new group
         const vector_int64_2d& old_shard_leaders = view_manager.get_old_shard_leaders();
-        //As a side effect, construct_objects filters old_shard_leaders to just the leaders
-        //this node needs to receive object state from
+        // As a side effect, construct_objects filters old_shard_leaders to just the leaders
+        // this node needs to receive object state from
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive
                 = construct_objects<ReplicatedTypes...>(view_manager.get_current_or_restart_view().get(),
                                                         old_shard_leaders, in_total_restart);
@@ -220,16 +219,16 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
                 bool leader_has_quorum = true;
                 view_manager.leader_prepare_initial_view(initial_view_confirmed, leader_has_quorum);
                 if(!leader_has_quorum) {
-                    //If quorum was lost due to failures during the prepare message,
-                    //stop here and wait for more nodes to rejoin before going back to state-transfer
+                    // If quorum was lost due to failures during the prepare message,
+                    // stop here and wait for more nodes to rejoin before going back to state-transfer
                     view_manager.await_rejoining_nodes(my_id);
                 }
             } else {
                 initial_view_confirmed = true;
             }
         } else {
-            //This will wait for a new view to be sent if the view was aborted
-            //It must be called even in the non-restart case, since the initial view could still be aborted
+            // This will wait for a new view to be sent if the view was aborted
+            // It must be called even in the non-restart case, since the initial view could still be aborted
             view_manager.check_view_committed(initial_view_confirmed, restart_leader_failed);
             if(restart_leader_failed && !(in_total_restart && getConfBoolean(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS))) {
                 throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
@@ -237,33 +236,33 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
         }
     }
     if(view_manager.is_starting_leader()) {
-        //In restart mode, once a prepare is successful, send a commit
+        // In restart mode, once a prepare is successful, send a commit
         //(this function does nothing if we're not doing total restart)
         view_manager.leader_commit_initial_view();
     }
-    //At this point the initial view is committed
-    //Set up the multicast groups (including RDMA initialization) and register their callbacks
+    // At this point the initial view is committed
+    // Set up the multicast groups (including RDMA initialization) and register their callbacks
     MulticastGroupCallbacks internal_callbacks{
-            //RPC message handler
+            // RPC message handler
             [this](subgroup_id_t subgroup, node_id_t sender, persistent::version_t version, uint64_t timestamp, uint8_t* buf, uint32_t size) {
                 rpc_manager.rpc_message_handler(subgroup, sender, version, timestamp, buf, size);
             },
-            //Post-next-version callback (set in ViewManager)
+            // Post-next-version callback (set in ViewManager)
             nullptr,
-            //Global persistence callback
+            // Global persistence callback
             [this](subgroup_id_t subgroup, persistent::version_t version) {
                 rpc_manager.notify_global_persistence_finished(subgroup, version);
             },
-            //Verification callback
+            // Verification callback
             [this](subgroup_id_t subgroup, persistent::version_t version) {
                 rpc_manager.notify_verification_finished(subgroup, version);
             }};
     view_manager.initialize_multicast_groups(callbacks, internal_callbacks);
     rpc_manager.create_connections();
-    //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
+    // This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
     set_up_components();
     view_manager.finish_setup();
-    //Start all the predicates and listeners threads
+    // Start all the predicates and listeners threads
     rpc_manager.start_listening();
     view_manager.start();
     persistence_manager.start();
@@ -294,7 +293,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
     if(!curr_view.is_adequately_provisioned) {
         return subgroups_to_receive;
     }
-    //The numeric type ID of this subgroup type is its position in the ordered list of subgroup types
+    // The numeric type ID of this subgroup type is its position in the ordered list of subgroup types
     const subgroup_type_id_t subgroup_type_id = index_of_type<FirstType, ReplicatedTypes...>;
     const auto& subgroup_ids = curr_view.subgroup_ids_by_type_id.at(subgroup_type_id);
     for(uint32_t subgroup_index = 0; subgroup_index < subgroup_ids.size(); ++subgroup_index) {
@@ -317,12 +316,12 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                     objects_by_subgroup_id.erase(subgroup_id);
                     replicated_objects.template get<FirstType>().erase(old_object);
                 }
-                //Determine if there is existing state for this shard on another node
+                // Determine if there is existing state for this shard on another node
                 bool has_previous_leader = old_shard_leaders.size() > subgroup_id
                                            && old_shard_leaders[subgroup_id].size() > shard_num
                                            && old_shard_leaders[subgroup_id][shard_num] > -1
                                            && old_shard_leaders[subgroup_id][shard_num] != my_id;
-                //If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
+                // If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
                 if(replicated_objects.template get<FirstType>().count(subgroup_index) == 0) {
                     dbg_default_debug("Constructing a Replicated Object for type {}, subgroup {}, shard {}",
                                       typeid(FirstType).name(), subgroup_id, shard_num);
@@ -346,9 +345,9 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                     objects_by_subgroup_id.emplace(subgroup_id,
                                                    &replicated_objects.template get<FirstType>().at(subgroup_index));
                 } else if(in_restart && has_previous_leader) {
-                    //In restart mode, construct_objects may be called multiple times if the initial view
-                    //is aborted, so we need to receive state for this shard even if we already constructed
-                    //the Replicated<T> for it
+                    // In restart mode, construct_objects may be called multiple times if the initial view
+                    // is aborted, so we need to receive state for this shard even if we already constructed
+                    // the Replicated<T> for it
                     subgroups_to_receive.emplace(subgroup_id, old_shard_leaders[subgroup_id][shard_num]);
                 }
                 break;  // This node can be in at most one shard, so stop here
@@ -378,28 +377,50 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
-    //Give PersistenceManager this pointer to break the circular dependency
+    // Give PersistenceManager this pointer to break the circular dependency
     persistence_manager.set_view_manager(view_manager);
-    //Register RPCManager's notify_persistence_finished as a persistence callback
+    // Register RPCManager's notify_persistence_finished as a persistence callback
     persistence_manager.add_persistence_callback([this](subgroup_id_t subgroup_id, persistent::version_t version) {
         rpc_manager.notify_persistence_finished(subgroup_id, version);
     });
-    //Connect ViewManager's external_join_handler to RPCManager
+    // Connect ViewManager's external_join_handler to RPCManager
     view_manager.register_add_external_connection_upcall([this](uint32_t node_id) {
         rpc_manager.add_external_connection(node_id);
     });
-    //Give RPCManager a standard "new view callback" on every View change
+    // Give RPCManager a standard "new view callback" on every View change
     view_manager.add_view_upcall([this](const View& new_view) {
         rpc_manager.new_view_callback(new_view);
     });
-    //ViewManager must call back to Group after a view change in order to call construct_objects,
-    //since ViewManager doesn't know the template parameters
+    // Give this class a new view callback on every View change
+    view_manager.add_view_upcall([this](const View& new_view) { new_view_callback(new_view); });
+    // ViewManager must call back to Group after a view change in order to call construct_objects,
+    // since ViewManager doesn't know the template parameters
     view_manager.register_initialize_objects_upcall([this](node_id_t my_id, const View& view,
                                                            const vector_int64_2d& old_shard_leaders) {
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
                 = construct_objects<ReplicatedTypes...>(view, old_shard_leaders, false);
         receive_objects(subgroups_and_leaders);
     });
+}
+
+template <typename... ReplicatedTypes>
+template <typename FirstType, typename... RestTypes>
+void Group<ReplicatedTypes...>::new_view_callback_per_type(const View& new_view) {
+    // Catching exceptions is inefficient, but KindMap doesn't have a find() or contains()
+    try {
+        replicated_index_map<FirstType>& subgroup_map = replicated_objects.template get<FirstType>();
+        for(auto& subgroup_map_entry : subgroup_map) {
+            subgroup_map_entry.second.new_view_callback(new_view);
+        }
+    } catch(std::out_of_range&) {
+        // Do nothing; FirstType wasn't in replicated_objects, so we don't have any objects to notify
+    }
+    new_view_callback_per_type<RestTypes...>(new_view);
+}
+
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::new_view_callback(const View& new_view) {
+    new_view_callback_per_type<ReplicatedTypes...>(new_view);
 }
 
 template <typename... ReplicatedTypes>
@@ -441,11 +462,11 @@ template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 uint32_t Group<ReplicatedTypes...>::get_num_subgroups() {
     static_assert(contains<SubgroupType, ReplicatedTypes...>::value, "get_num_subgroups was called with a template parameter that did not match any subgroup type");
-    //No need to ask view_manager. This avoids locking the view_mutex.
+    // No need to ask view_manager. This avoids locking the view_mutex.
     try {
         return replicated_objects.template get<SubgroupType>().size();
     } catch(std::out_of_range& ex) {
-        //The SubgroupType must either be in replicated_objects or peer_callers
+        // The SubgroupType must either be in replicated_objects or peer_callers
         return peer_callers.template get<SubgroupType>().size();
     }
 }
@@ -471,7 +492,7 @@ ShardIterator<SubgroupType> Group<ReplicatedTypes...>::get_shard_iterator(uint32
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgroup_id_t, node_id_t>>& subgroups_and_leaders) {
-    //This will receive one object from each shard leader in ascending order of subgroup ID
+    // This will receive one object from each shard leader in ascending order of subgroup ID
     for(const auto& subgroup_and_leader : subgroups_and_leaders) {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
                 = view_manager.get_transfer_socket(subgroup_and_leader.second);
@@ -492,7 +513,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
             dbg_default_trace("Deserializing Replicated Object from buffer of size {}", buffer_size);
             subgroup_object->receive_object(buffer.get());
         } catch(tcp::socket_error& e) {
-            //Convert socket exceptions to a more readable error message, since this will cause a crash
+            // Convert socket exceptions to a more readable error message, since this will cause a crash
             throw derecho_exception("Fatal error: Node " + std::to_string(subgroup_and_leader.second) + " failed during state transfer!");
         }
     }
@@ -575,7 +596,7 @@ void Group<ReplicatedTypes...>::debug_print_status() const {
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::register_oob_memory(void* addr, size_t size) {
-    sst::P2PConnection::register_oob_memory(addr,size);
+    sst::P2PConnection::register_oob_memory(addr, size);
 }
 
 template <typename... ReplicatedTypes>
