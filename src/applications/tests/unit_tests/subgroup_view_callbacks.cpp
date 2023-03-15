@@ -22,10 +22,13 @@ class CallbackTestObject : public mutils::ByteRepresentable,
     using derecho::GroupReference::group;
     using derecho::GroupReference::subgroup_index;
 
+    derecho::subgroup_id_t my_subgroup_id;
+
     std::string state;
 
 public:
-    CallbackTestObject(const std::string& initial_state = "") : state(initial_state) {}
+    CallbackTestObject(derecho::subgroup_id_t subgroup_id, const std::string& initial_state = "")
+            : my_subgroup_id(subgroup_id), state(initial_state) {}
     std::string get_state() const {
         return state;
     }
@@ -34,13 +37,12 @@ public:
     }
     void new_view_callback(const derecho::View& new_view);
 
-    DEFAULT_SERIALIZATION_SUPPORT(CallbackTestObject, state);
+    DEFAULT_SERIALIZATION_SUPPORT(CallbackTestObject, my_subgroup_id, state);
     REGISTER_RPC_FUNCTIONS(CallbackTestObject, P2P_TARGETS(get_state), ORDERED_TARGETS(update_state));
 };
 
 void CallbackTestObject::new_view_callback(const derecho::View& new_view) {
-    derecho::subgroup_id_t my_subgroup_id = group->template get_subgroup<CallbackTestObject>(subgroup_index).get_subgroup_id();
-    std::uint32_t my_shard_num = group->template get_subgroup<CallbackTestObject>(subgroup_index).get_shard_num();
+    std::uint32_t my_shard_num = new_view.my_subgroups.at(my_subgroup_id);
     const derecho::SubView& my_shard_view = new_view.subgroup_shard_views.at(my_subgroup_id).at(my_shard_num);
     std::cout << "Got a new view callback for view " << new_view.vid << "."
               << " My CallbackTestObject shard members are: " << my_shard_view.members << std::endl;
@@ -95,12 +97,16 @@ int main(int argc, char** argv) {
 
     derecho::Group<CallbackTestObject, NoCallbackTestObject> group(
             subgroup_info,
-            [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<CallbackTestObject>(); },
-            [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<NoCallbackTestObject>(); });
+            [](persistent::PersistentRegistry*, derecho::subgroup_id_t subgroup_id) {
+                return std::make_unique<CallbackTestObject>(subgroup_id);
+            },
+            [](persistent::PersistentRegistry*, derecho::subgroup_id_t) {
+                return std::make_unique<NoCallbackTestObject>();
+            });
     // Figure out which subgroup this node got assigned to
     int32_t my_shard_callback_subgroup = group.get_my_shard<CallbackTestObject>();
     int32_t my_shard_nocallback_subgroup = group.get_my_shard<NoCallbackTestObject>();
-    if(my_shard_callback_subgroup != 1) {
+    if(my_shard_callback_subgroup != -1) {
         std::cout << "In the CallbackTestObject subgroup" << std::endl;
         derecho::Replicated<CallbackTestObject>& subgroup_handle = group.get_subgroup<CallbackTestObject>();
         // Send some random updates so there is some activity besides the view changes
@@ -111,7 +117,7 @@ int main(int argc, char** argv) {
             subgroup_handle.ordered_send<RPC_NAME(update_state)>(new_string);
         }
         // At some point while these updates are sending, you should kill a group member to cause a view change
-    } else if(my_shard_nocallback_subgroup != 1) {
+    } else if(my_shard_nocallback_subgroup != -1) {
         std::cout << "In the NoCallbackTestObject subgroup" << std::endl;
         derecho::Replicated<NoCallbackTestObject>& subgroup_handle = group.get_subgroup<NoCallbackTestObject>();
         for(unsigned counter = 0; counter < num_updates; ++counter) {
