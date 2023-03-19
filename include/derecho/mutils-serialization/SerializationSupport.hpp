@@ -312,7 +312,7 @@ std::size_t bytes_size(const std::tuple<T...>& t) {
     return std::apply(bytes_size_helper<T...>, t);
 }
 
-template<typename T>
+template <typename T>
 std::size_t bytes_size(const std::unique_ptr<T>& ptr) {
     return 1 + (ptr ? bytes_size(*ptr) : 0);
 }
@@ -605,7 +605,7 @@ template <typename... T>
 std::size_t to_bytes(const std::tuple<T...>& tuple, uint8_t* buffer);
 
 template <typename T>
-std::size_t to_bytes(const std::set<T>& s, uint8_t* _v);
+std::size_t to_bytes(const std::set<T>& s, uint8_t* buffer);
 
 template <typename K, typename V>
 std::size_t to_bytes(const std::map<K, V>& m, uint8_t* buffer);
@@ -625,13 +625,15 @@ from_bytes_noalloc(DeserializationManager*, uint8_t* buffer,
                    context_ptr<T> = context_ptr<T>{});
 
 template <typename T>
-std::enable_if_t<is_string<std::remove_cv_t<T>>::value, context_ptr<const T>>
+std::enable_if_t<is_string<T>::value, context_ptr<const T>>
 from_bytes_noalloc(DeserializationManager*, uint8_t const* const buffer,
                    context_ptr<const T> = context_ptr<const T>{});
 
+// Note that remove_cv_t is needed here because is_set won't match const set,
+// whereas is_string does match const string
 template <typename T>
-std::unique_ptr<type_check<is_set, T>> from_bytes(DeserializationManager* ctx,
-                                                  const uint8_t* _buffer);
+std::enable_if_t<is_set<std::remove_cv_t<T>>::value, std::unique_ptr<T>>
+from_bytes(DeserializationManager* ctx, const uint8_t* _buffer);
 
 template <typename T>
 context_ptr<type_check<is_set, T>>
@@ -656,7 +658,17 @@ from_bytes_noalloc(DeserializationManager* ctx, uint8_t* buffer,
                    context_ptr<T> = context_ptr<T>{});
 
 template <typename T>
-std::enable_if_t<is_pair<std::remove_cv_t<T>>::value, context_ptr<const T>>
+std::enable_if_t<is_pair<T>::value, context_ptr<const T>>
+from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
+                   context_ptr<const T> = context_ptr<const T>{});
+
+template <typename T>
+context_ptr<type_check<is_tuple, T>>
+from_bytes_noalloc(DeserializationManager* ctx, uint8_t* buffer,
+                   context_ptr<T> = context_ptr<T>{});
+
+template <typename T>
+std::enable_if_t<is_tuple<std::remove_cv_t<T>>::value, context_ptr<const T>>
 from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
                    context_ptr<const T> = context_ptr<const T>{});
 
@@ -691,7 +703,7 @@ from_bytes_noalloc(DeserializationManager* ctx, uint8_t* buffer,
                    context_ptr<T> = context_ptr<T>{});
 
 template <typename T>
-std::enable_if_t<is_map<std::remove_cv_t<T>>::value, context_ptr<const T>>
+std::enable_if_t<is_map<T>::value, context_ptr<const T>>
 from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
                    context_ptr<const T> = context_ptr<const T>{});
 
@@ -701,7 +713,7 @@ from_bytes_noalloc(DeserializationManager* ctx, uint8_t* buffer,
                    context_ptr<T> = context_ptr<T>{});
 
 template <typename T>
-std::enable_if_t<is_unordered_map<std::remove_cv_t<T>>::value, context_ptr<const T>>
+std::enable_if_t<is_unordered_map<T>::value, context_ptr<const T>>
 from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
                    context_ptr<const T> = context_ptr<const T>{});
 
@@ -788,8 +800,8 @@ void post_object(const std::function<void(uint8_t const* const, std::size_t)>& c
 }
 
 template <typename T>
-void post_object(const std::function<void(uint8_t const *const, std::size_t)>& f,
-                 const std::unique_ptr<T>& ptr){
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f,
+                 const std::unique_ptr<T>& ptr) {
     bool has_value(ptr);
     f((uint8_t*)&has_value, sizeof(has_value));
     if(has_value) {
@@ -812,8 +824,6 @@ std::size_t to_bytes(const T& t, uint8_t* buffer) {
     (void)res;
     return sizeof(T);
 }
-
-std::size_t to_bytes(const std::vector<bool>& vec, uint8_t* buffer);
 
 template <typename T>
 std::size_t to_bytes(const std::vector<T>& vec, uint8_t* buffer) {
@@ -892,13 +902,12 @@ std::size_t to_bytes(const std::unordered_map<K, V>& m, uint8_t* buffer) {
     return bsize;
 }
 
-template<typename T>
+template <typename T>
 std::size_t to_bytes(const std::unique_ptr<T>& ptr, uint8_t* buffer) {
     std::size_t index = 0;
     post_object(post_to_buffer(index, buffer), ptr);
     return bytes_size(ptr);
 }
-
 // end to_bytes section
 
 #ifdef MUTILS_DEBUG
@@ -929,7 +938,7 @@ void ensure_registered(const std::list<T>& v, DeserializationManager& dm) {
         ensure_registered(e, dm);
 }
 
-template<typename T>
+template <typename T>
 void ensure_registered(const std::unique_ptr<T>& ptr, DeserializationManager& dm) {
     if(ptr)
         ensure_registered(*ptr, dm);
@@ -1008,7 +1017,7 @@ from_bytes_noalloc(DeserializationManager*, uint8_t* buffer,
 }
 
 template <typename T>
-std::enable_if_t<is_string<std::remove_cv_t<T>>::value, context_ptr<const T>>
+std::enable_if_t<is_string<T>::value, context_ptr<const T>>
 from_bytes_noalloc(DeserializationManager*, uint8_t const* const buffer,
                    context_ptr<const T>) {
     assert(buffer);
@@ -1016,8 +1025,8 @@ from_bytes_noalloc(DeserializationManager*, uint8_t const* const buffer,
 }
 
 template <typename T>
-std::unique_ptr<type_check<is_set, T>> from_bytes(DeserializationManager* ctx,
-                                                  const uint8_t* _buffer) {
+std::enable_if_t<is_set<std::remove_cv_t<T>>::value, std::unique_ptr<T>>
+from_bytes(DeserializationManager* ctx, const uint8_t* _buffer) {
     int size = ((int*)_buffer)[0];
     const uint8_t* buffer = _buffer + sizeof(int);
     auto r = std::make_unique<std::set<typename T::key_type>>();
@@ -1026,7 +1035,11 @@ std::unique_ptr<type_check<is_set, T>> from_bytes(DeserializationManager* ctx,
         buffer += bytes_size(*e);
         r->insert(*e);
     }
+#if __GNUC_PREREQ(9, 0)
+    return r;
+#else
     return std::move(r);
+#endif
 }
 
 template <typename T>
@@ -1065,7 +1078,18 @@ std::unique_ptr<type_check<is_list, L>> from_bytes(DeserializationManager* ctx,
         buf_ptr += bytes_size(*item);
         return_list->push_back(*item);
     }
+#if __GNUC_PREREQ(9, 0)
+    return return_list;
+#else
     return std::move(return_list);
+#endif
+}
+
+template <typename L>
+context_ptr<type_check<is_list, L>>
+from_bytes_noalloc(DeserializationManager* ctx, const uint8_t* buffer,
+                   context_ptr<L> = context_ptr<L>{}) {
+    return context_ptr<L>{from_bytes<std::decay_t<L>>(ctx, buffer).release()};
 }
 
 template <typename T>
@@ -1076,7 +1100,7 @@ from_bytes_noalloc(DeserializationManager* ctx, uint8_t* buffer,
 }
 
 template <typename T>
-std::enable_if_t<is_pair<std::remove_cv_t<T>>::value, context_ptr<const T>>
+std::enable_if_t<is_pair<T>::value, context_ptr<const T>>
 from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
                    context_ptr<const T>) {
     return context_ptr<const T>{from_bytes<T>(ctx, buffer).release()};
@@ -1097,6 +1121,19 @@ auto from_bytes_helper(DeserializationManager* ctx, uint8_t const* buffer) {
 template <typename T>
 std::unique_ptr<type_check<is_tuple, T>> from_bytes(DeserializationManager* ctx, uint8_t const* buffer) {
     return std::make_unique<T>(std::move(from_bytes_helper<T, 0>(ctx, buffer)));
+}
+
+template <typename T>
+context_ptr<type_check<is_tuple, T>> from_bytes_noalloc(DeserializationManager* ctx, uint8_t* buffer,
+                                                        context_ptr<T>) {
+    return context_ptr<T>{new T(std::move(from_bytes_helper<T, 0>(ctx, buffer)))};
+}
+
+template <typename T>
+std::enable_if_t<is_tuple<std::remove_cv_t<T>>::value, context_ptr<const T>>
+from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
+                   context_ptr<const T>) {
+    return context_ptr<const T>{new T(std::move(from_bytes_helper<T, 0>(ctx, buffer)))};
 }
 
 // Note: T is the type of the vector, not the vector's type parameter T
@@ -1159,7 +1196,8 @@ from_bytes(DeserializationManager* ctx, uint8_t const* buffer) {
     int size = ((int*)buffer)[0];
     const uint8_t* buf_ptr = buffer + sizeof(int);
 
-    auto new_map = std::make_unique<T>();
+    // T could be const std::map, but we don't want to create a const map here
+    auto new_map = std::make_unique<std::remove_cv_t<T>>();
     for(int i = 0; i < size; ++i) {
         auto key = from_bytes_noalloc<const key_t>(ctx, buf_ptr);
         buf_ptr += bytes_size(*key);
@@ -1182,7 +1220,7 @@ from_bytes_noalloc(DeserializationManager* ctx, uint8_t* buffer,
 }
 
 template <typename T>
-std::enable_if_t<is_map<std::remove_cv_t<T>>::value, context_ptr<const T>>
+std::enable_if_t<is_map<T>::value, context_ptr<const T>>
 from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
                    context_ptr<const T>) {
     return context_ptr<const T>{from_bytes<T>(ctx, buffer).release()};
@@ -1196,7 +1234,7 @@ from_bytes_noalloc(DeserializationManager* ctx, uint8_t* buffer,
 }
 
 template <typename T>
-std::enable_if_t<is_unordered_map<std::remove_cv_t<T>>::value, context_ptr<const T>>
+std::enable_if_t<is_unordered_map<T>::value, context_ptr<const T>>
 from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
                    context_ptr<const T>) {
     return context_ptr<const T>{from_bytes<T>(ctx, buffer).release()};
@@ -1206,11 +1244,11 @@ from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
  * which is probably not what you want. This is necessary to maintain compatibility
  * with the std::set and std::map deserializers, which dereference each
  * from_bytes<value_t> before inserting it. */
-template<typename T>
-std::unique_ptr<type_check<is_unique_ptr, T>> from_bytes(DeserializationManager* ctx, char const* buffer) {
+template <typename T>
+std::unique_ptr<type_check<is_unique_ptr, T>> from_bytes(DeserializationManager* ctx, uint8_t const* buffer) {
     using value_t = typename T::element_type;
-    bool is_valid = ((bool *)buffer)[0];
-    const char* buf_ptr = buffer + sizeof(bool);
+    bool is_valid = ((bool*)buffer)[0];
+    const uint8_t* buf_ptr = buffer + sizeof(bool);
     if(is_valid) {
         return std::make_unique<T>(from_bytes<value_t>(ctx, buf_ptr));
     } else {
@@ -1218,13 +1256,13 @@ std::unique_ptr<type_check<is_unique_ptr, T>> from_bytes(DeserializationManager*
     }
 }
 
-template<typename T>
+template <typename T>
 context_ptr<type_check<is_unique_ptr, T>>
-from_bytes_noalloc(DeserializationManager* ctx, char const* buffer,
+from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* buffer,
                    context_ptr<T> = context_ptr<T>{}) {
     using value_t = typename T::element_type;
-    bool is_valid = ((bool *)buffer)[0];
-    const char* buf_ptr = buffer + sizeof(bool);
+    bool is_valid = ((bool*)buffer)[0];
+    const uint8_t* buf_ptr = buffer + sizeof(bool);
     context_ptr<T> ret{new T()};
     if(is_valid) {
         *ret = from_bytes<value_t>(ctx, buf_ptr);
