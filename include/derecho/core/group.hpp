@@ -66,6 +66,12 @@ using contains = std::integral_constant<bool, (std::is_same<TargetType, TypePack
 template <typename T>
 using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
+/**
+ * Type-erased base class for Group that provides the public API functions
+ * (get_subgroup, get_nonmember_subgroup, etc.). Each method is implemented
+ * by dynamically casting "this" to a GroupProjection of the correct subgroup
+ * type and then forwarding the call to GroupProjection.
+ */
 class _Group {
 private:
 protected:
@@ -100,6 +106,14 @@ public:
     virtual node_id_t get_rpc_caller_id() = 0;
 };
 
+/**
+ * A base class for Group that provides the subgroup-related API functions
+ * for only a single subgroup type; thus it is a projection of the
+ * Group<ReplicatedTypes...> onto a single ReplicatedType. Group will inherit
+ * from one copy of this class for each ReplicatedType in its parameter pack.
+ *
+ * @tparam ReplicatedType The subgroup type that this GroupProjection can operate on
+ */
 template <typename ReplicatedType>
 class GroupProjection : public virtual _Group {
 protected:
@@ -118,8 +132,15 @@ public:
     uint32_t get_num_subgroups();
 };
 
+/**
+ * A base class that user-defined replicated object types (i.e. the T in
+ * Replicated<T>) can inherit from to get access to a type-erased pointer to
+ * the Group object that manages them. This pointer can be used to call some of
+ * Group's public API methods, such as get_subgroup() and get_subgroup_members().
+ */
 class GroupReference {
 public:
+    /** A pointer to the Group that contains the replicated object */
     _Group* group;
     uint32_t subgroup_index;
     void set_group_pointers(_Group* group, uint32_t subgroup_index) {
@@ -226,6 +247,28 @@ private:
      * subgroups that need to have their state initialized from the leader.
      */
     void receive_objects(const std::set<std::pair<subgroup_id_t, node_id_t>>& subgroups_and_leaders);
+
+    /** Base case for new_view_callback_per_type with an empty parameter pack, does nothing */
+    template <typename... Empty>
+    std::enable_if_t<0 == sizeof...(Empty)> new_view_callback_per_type(const View&) {};
+
+    /**
+     * A helper method for new_view_callback that unpacks the Group's template
+     * parameter pack and uses each type to access replicated_objects. This is
+     * the only way to iterate through the KindMap.
+     */
+    template<typename FirstType, typename...RestTypes>
+    void new_view_callback_per_type(const View& new_view);
+
+    /**
+     * A method that matches ViewManager's view_upcall_t interface, to be called
+     * by ViewManager after a new view has finished being installed. Forwards
+     * the new-view notification to each Replicated<T>, in case the user-provided
+     * object (T) wants to receive it.
+     *
+     * @param new_view The new View
+     */
+    void new_view_callback(const View& new_view);
 
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();

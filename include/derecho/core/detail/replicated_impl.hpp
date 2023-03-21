@@ -34,7 +34,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
     if constexpr(std::is_base_of_v<GroupReference, T>) {
         (**user_object_ptr).set_group_pointers(group, subgroup_index);
     }
-    if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
+    if constexpr(has_signed_fields_v<T>) {
         // Attempt to load the private key and create a Signer
         // This will crash with a file_error if the private key doesn't actually exist
         signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
@@ -61,7 +61,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
                                                                      type_id, subgroup_id,
                                                                      T::register_functions())),
           group(group) {
-    if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
+    if constexpr(has_signed_fields_v<T>) {
         // Attempt to load the private key and create a Signer
         // This will crash with a file_error if the private key doesn't actually exist
         signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
@@ -209,13 +209,21 @@ std::size_t Replicated<T>::receive_object(uint8_t* buffer) {
 }
 
 template <typename T>
+void Replicated<T>::new_view_callback(const View& new_view) {
+    if constexpr(view_callback_enabled_v<T>) {
+        (**user_object_ptr).new_view_callback(new_view);
+    }
+}
+
+
+template <typename T>
 void Replicated<T>::make_version(persistent::version_t ver, const HLC& hlc) {
     persistent_registry->makeVersion(ver, hlc);
 }
 
 template <typename T>
 persistent::version_t Replicated<T>::persist(persistent::version_t version, uint8_t* signature) {
-    if constexpr(!std::is_base_of_v<PersistsFields, T>) {
+    if constexpr(!has_persistent_fields_v<T>) {
         // for replicated<T> without Persistent fields,
         // tell the persistent thread that we are done.
         return version;
@@ -227,7 +235,7 @@ persistent::version_t Replicated<T>::persist(persistent::version_t version, uint
     // until the latest version has been both signed and persisted.
     do {
         signed_ver = persisted_ver;
-        if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
+        if constexpr(has_signed_fields_v<T>) {
             persistent_registry->sign(signed_ver, *signer, signature);
         }
         persisted_ver = persistent_registry->persist(signed_ver);
@@ -239,7 +247,7 @@ template <typename T>
 bool Replicated<T>::verify_log(persistent::version_t version, openssl::Verifier& verifier,
                                const uint8_t* other_signature) {
     // If there are no signatures in this object's log, it can't be verified
-    if constexpr(std::is_base_of_v<SignedPersistentFields, T>) {
+    if constexpr(has_signed_fields_v<T>) {
         return persistent_registry->verify(version, verifier, other_signature);
     } else {
         return false;
