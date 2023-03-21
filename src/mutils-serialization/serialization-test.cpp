@@ -157,6 +157,8 @@ int main(int argc, char** argv) {
     std::unique_ptr<TestObject> deserialized_obj;
     std::size_t buffer_size = mutils::bytes_size(obj);
     // Scope for test_buffer
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
     {
         uint8_t test_buffer[buffer_size];
         mutils::to_bytes(obj, test_buffer);
@@ -167,6 +169,7 @@ int main(int argc, char** argv) {
         assert(result == (5 + 6 + 7 + 8));
         deserialized_obj = mutils::from_bytes<TestObject>(&dsm, test_buffer);
     }
+#pragma GCC diagnostic pop
     assert(obj == *deserialized_obj);
 
     std::cout << "Test passed" << std::endl;
