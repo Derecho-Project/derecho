@@ -4,5 +4,3 @@ target_include_directories(utils PRIVATE
 )
 # OBJECT libraries are not linked, but this command can be used to declare library dependencies
 target_link_libraries(utils spdlog::spdlog)
-
-add_custom_target(format_utils clang-format -i *.cpp *.hpp)

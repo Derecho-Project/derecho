@@ -20,5 +20,3 @@ target_include_directories(core PRIVATE
 )
 # OBJECT libraries are not linked, but this command can be used to declare library dependencies
 target_link_libraries(core spdlog::spdlog)
-
-add_custom_target(format_core clang-format -i *.cpp *.h)
