@@ -15,5 +15,3 @@ target_include_directories(rdmc PRIVATE
 
 #ADD_EXECUTABLE(verbs-mcast experiment.cpp)
 #TARGET_LINK_LIBRARIES(verbs-mcast rdmc)
-
-add_custom_target(format_rdmc clang-format -i *.cpp *.h)

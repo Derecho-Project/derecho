@@ -22,5 +22,3 @@ target_include_directories(persistent_test PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
 )
 target_link_libraries(persistent_test pthread mutils stdc++fs OpenSSL::Crypto spdlog::spdlog)
-
-add_custom_target(format_persistent clang-format -i *.cpp *.hpp)

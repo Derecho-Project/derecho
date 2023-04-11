@@ -1,15 +1,15 @@
 #pragma once
 
+#include "derecho/conf/conf.hpp"
 #include "derecho/tcp/tcp.hpp"
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/persistence_manager.hpp"
 #include "detail/rpc_manager.hpp"
 #include "detail/view_manager.hpp"
+#include "notification.hpp"
 #include "replicated.hpp"
 #include "subgroup_info.hpp"
-#include "notification.hpp"
-#include "derecho/conf/conf.hpp"
 
 #include <mutils-containers/KindMap.hpp>
 #include <mutils-containers/TypeMap2.hpp>
@@ -250,14 +250,14 @@ private:
 
     /** Base case for new_view_callback_per_type with an empty parameter pack, does nothing */
     template <typename... Empty>
-    std::enable_if_t<0 == sizeof...(Empty)> new_view_callback_per_type(const View&) {};
+    std::enable_if_t<0 == sizeof...(Empty)> new_view_callback_per_type(const View&){};
 
     /**
      * A helper method for new_view_callback that unpacks the Group's template
      * parameter pack and uses each type to access replicated_objects. This is
      * the only way to iterate through the KindMap.
      */
-    template<typename FirstType, typename...RestTypes>
+    template <typename FirstType, typename... RestTypes>
     void new_view_callback_per_type(const View& new_view);
 
     /**
@@ -467,7 +467,6 @@ public:
     template <typename SubgroupType>
     std::vector<std::vector<IpAndPorts>> get_subgroup_member_addresses(uint32_t subgroup_index = 0);
 
-
     /** @returns the order of this node in the sequence of members of the group */
     std::int32_t get_my_rank();
 
@@ -495,7 +494,7 @@ public:
      * @return a vector of subgroup indexes, or an empty vector if this node
      * is not a member of any subgroup of type SubgroupType
      */
-    template<typename SubgroupType>
+    template <typename SubgroupType>
     std::vector<uint32_t> get_my_subgroup_indexes();
 
     /** Reports to the GMS that the given node has failed. */

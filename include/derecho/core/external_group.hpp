@@ -70,17 +70,17 @@ public:
 
     /**
      * Registers a new notification function that will be called when a server
-     * sends a notification to this subgroup. 
+     * sends a notification to this subgroup.
      * If such a lambda function has been registered, it will be replaced by the new one.
      * @param func      The notification function
      */
-    template<typename CopyOfT = T>
+    template <typename CopyOfT = T>
     std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
     register_notification_handler(const notification_handler_t& func);
     /**
      * Unregister the notification function
      */
-    template<typename CopyOfT = T>
+    template <typename CopyOfT = T>
     std::enable_if_t<std::is_base_of_v<derecho::NotificationSupport, CopyOfT>>
     unregister_notification();
     /** Sets up a P2P connection to the specified node, if one does not yet exist. */
