@@ -36,11 +36,14 @@ namespace derecho {
  * first sizeof(header) bytes in the message's data buffer.
  */
 struct __attribute__((__packed__)) header {
-    uint32_t header_size;
-    int32_t index;
-    uint64_t timestamp;
-    uint32_t num_nulls;
-    bool cooked_send;
+    uint32_t    header_size;
+    int32_t     index;
+    uint64_t    timestamp;
+    uint32_t    num_nulls;
+    uint8_t     cooked_send;
+    uint8_t     resv_b1;
+    uint8_t     resv_b2;
+    uint8_t     resv_b3;
 };
 
 /**
