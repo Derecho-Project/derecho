@@ -44,6 +44,7 @@ struct __attribute__((__packed__)) header {
     uint8_t     resv_b1;
     uint8_t     resv_b2;
     uint8_t     resv_b3;
+    uint64_t    resv_q4;
 };
 
 /**
