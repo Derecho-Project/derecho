@@ -40,6 +40,12 @@ socket::socket(std::string server_ip, uint16_t server_port, bool retry)
     if(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval))) {
         fprintf(stderr, "WARNING: Failed to disable Nagle's algorithm, continue without TCP_NODELAY...\n");
     }
+    if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+        fprintf(stderr, "WARNING: Failed to enable SO_REUSEADDR, restarting this process after a crash may fail because its address is still in use\n");
+    }
+    if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) < 0) {
+        fprintf(stderr, "WARNING: Failed to enable SO_REUSEPORT, restarting this process after a crash may fail because its address is still in use\n");
+    }
 
     if(retry) {
         while(connect(sock, (sockaddr*)&serv_addr, sizeof(serv_addr)) < 0)
