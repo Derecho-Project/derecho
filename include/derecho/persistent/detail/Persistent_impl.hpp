@@ -529,9 +529,12 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, cons
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         v.finalizeCurrentDelta([&](uint8_t const* const buf, size_t len) {
-            // will not create a log for versions without data change.
+            // Don't create a log entry for versions without data change.
             if (len > 0) {
                 this->m_pLog->append((const void* const)buf, len, ver, mhlc);
+            } else {
+                // Advance the log's version so it still reports the correct "current version"
+                this->m_pLog->advanceVersion(ver);
             }
         });
     } else {
