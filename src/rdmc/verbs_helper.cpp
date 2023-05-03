@@ -257,7 +257,16 @@ void verbs_destroy() {
 
 bool verbs_initialize(const map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
                       uint32_t node_id) {
-    rdmc_connections = new tcp::tcp_connections(node_id, ip_addrs_and_ports);
+    uint16_t my_port = ip_addrs_and_ports.at(node_id).second;
+    rdmc_connections = new tcp::tcp_connections(node_id, my_port);
+    for(const auto& node_entry : ip_addrs_and_ports) {
+        if(node_entry.first != node_id
+           && !rdmc_connections->add_node(node_entry.first, node_entry.second)) {
+            std::cerr << "verbs_initialize could not establish a TCP connection to node " << node_entry.first
+                      << " at " << node_entry.second.first << ":" << node_entry.second.second << std::endl;
+            return false;
+        }
+    }
     memset(&verbs_resources, 0, sizeof(verbs_resources));
     auto res = &verbs_resources;
 

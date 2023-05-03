@@ -17,18 +17,24 @@ class tcp_connections {
     std::map<node_id_t, socket> sockets;
     bool add_connection(const node_id_t other_id,
                         const std::pair<ip_addr_t, uint16_t>& other_ip_and_port);
-    void establish_node_connections(
-            const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports);
-
 public:
     /**
-     * Creates a TCP connection manager for a set of connections
-     * to all of the initial set of addresses.
+     * Creates a TCP connection manager with an empty set of connections and
+     * starts listening on the specified port for incoming connections
      * @param my_id The ID of this node
-     * @param ip_addrs_and_ports The map of IP address-port pairs to connect to, indexed by node ID
+     * @param my_port The port this node should listen on
      */
-    tcp_connections(node_id_t my_id,
-                    const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports);
+    tcp_connections(node_id_t my_id, uint16_t my_port);
+    /**
+     * Creates a TCP connection manager with an empty set of connections
+     * but does not create a connection_listener for incoming connections.
+     * @param my_id The ID of this node
+     */
+    tcp_connections(node_id_t my_id);
+    /**
+     * Deletes all of the connections and the incoming connection listener
+     * without deleting the tcp_connections object itself.
+     */
     void destroy();
     /**
      * Writes size bytes from a buffer to the node with ID node_id, using the

@@ -207,8 +207,11 @@ void _resources::connect_endpoint(bool is_lf_server) {
     try {
         if(sst_connections->contains_node(this->remote_id)) {
             sst_connections->exchange(this->remote_id, local_cm_data, remote_cm_data);
-        } else {
+        } else if(external_client_connections->contains_node(this->remote_id)) {
             external_client_connections->exchange(this->remote_id, local_cm_data, remote_cm_data);
+        } else {
+            dbg_default_error("No TCP connection exists with node {}, cannot exchange connection info", this->remote_id);
+            crash_with_message("No TCP connection exists with node %d, cannot exchange connection info\n", this->remote_id);
         }
     } catch(tcp::socket_error&) {
         dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
@@ -605,8 +608,10 @@ bool sync(uint32_t r_id) {
     try {
         if(sst_connections->contains_node(r_id)) {
             sst_connections->exchange(r_id, s, t);
-        } else {
+        } else if(external_client_connections->contains_node(r_id)) {
             external_client_connections->exchange(r_id, s, t);
+        } else {
+            return false;
         }
     } catch(tcp::socket_error&) {
         return false;
@@ -762,10 +767,27 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& internal_ip_addrs_and_ports,
                    const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports,
                    uint32_t node_id) {
-    // initialize derecho connection manager: This is derived from Sagar's code.
-    // May there be a better desgin?
-    sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
-    external_client_connections = new tcp::tcp_connections(node_id, external_ip_addrs_and_ports);
+    // initialize derecho connection manager
+    // May there be a better design?
+    uint16_t my_port = internal_ip_addrs_and_ports.at(node_id).second;
+    uint16_t my_external_port = external_ip_addrs_and_ports.at(node_id).second;
+    sst_connections = new tcp::tcp_connections(node_id, my_port);
+    for(const auto& node_entry : internal_ip_addrs_and_ports) {
+        if(node_entry.first != node_id
+           && !sst_connections->add_node(node_entry.first, node_entry.second)) {
+            // Following the rest of lf_initialize, crash immediately on an error instead of reporting it
+            dbg_default_error("lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
+            crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+        }
+    }
+    external_client_connections = new tcp::tcp_connections(node_id, my_external_port);
+    for(const auto& node_entry : external_ip_addrs_and_ports) {
+        if(node_entry.first != node_id
+           && !external_client_connections->add_node(node_entry.first, node_entry.second)) {
+            dbg_default_error("lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
+            crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+        }
+    }
 
     // initialize global resources:
     // STEP 1: initialize with configuration.
@@ -821,6 +843,10 @@ void shutdown_polling_thread() {
 
 void lf_destroy() {
     shutdown_polling_thread();
+
+    delete sst_connections;
+    delete external_client_connections;
+
     // TODO: make sure all resources are destroyed first.
     if(g_ctxt.pep) {
         fail_if_nonzero_retry_on_eagain("close passive endpoint", REPORT_ON_FAILURE,
