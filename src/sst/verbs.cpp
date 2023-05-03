@@ -752,19 +752,27 @@ void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
 void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_sst_ports,
                       const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_external_ports,
                       uint32_t node_id) {
-    uint16_t my_port = internal_ip_addrs_and_ports.at(node_id).second;
-    uint16_t my_external_port = external_ip_addrs_and_ports.at(node_id).second;
-    sst_connections = new tcp::tcp_connections(node_id, my_port);
-    for(const auto& node_entry : internal_ip_addrs_and_ports) {
-        if(!sst_connections->add_node(node_entry.first, node_entry.second)) {
-            // resources_create has no error reporting other than printing to cerr, so I guess that's what we'll do here
-            cerr << "Failure in verbs_initialize! Could not establish a TCP connection to " << node_entry.second.first << ":" << node_entry.second.second << endl;
+    if(ip_addrs_and_sst_ports.empty()) {
+        sst_connections = new tcp::tcp_connections(node_id);
+    } else {
+        uint16_t my_port = ip_addrs_and_sst_ports.at(node_id).second;
+        sst_connections = new tcp::tcp_connections(node_id, my_port);
+        for(const auto& node_entry : ip_addrs_and_sst_ports) {
+            if(!sst_connections->add_node(node_entry.first, node_entry.second)) {
+                // resources_create has no error reporting other than printing to cerr, so I guess that's what we'll do here
+                cerr << "Failure in verbs_initialize! Could not establish a TCP connection to " << node_entry.second.first << ":" << node_entry.second.second << endl;
+            }
         }
     }
-    external_client_connections = new tcp::tcp_connections(node_id, my_external_port);
-    for(const auto& node_entry : external_ip_addrs_and_ports) {
-        if(!external_client_connections->add_node(node_entry.first, node_entry.second)) {
-            cerr << "Failure in verbs_initialize! Could not establish a TCP connection to " << node_entry.second.first << ":" << node_entry.second.second << endl;
+    if(ip_addrs_and_external_ports.empty()) {
+        external_client_connections = new tcp::tcp_connections(node_id);
+    } else {
+        uint16_t my_external_port = ip_addrs_and_external_ports.at(node_id).second;
+        external_client_connections = new tcp::tcp_connections(node_id, my_external_port);
+        for(const auto& node_entry : ip_addrs_and_external_ports) {
+            if(!external_client_connections->add_node(node_entry.first, node_entry.second)) {
+                cerr << "Failure in verbs_initialize! Could not establish a TCP connection to " << node_entry.second.first << ":" << node_entry.second.second << endl;
+            }
         }
     }
 

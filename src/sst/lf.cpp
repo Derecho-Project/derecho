@@ -769,23 +769,31 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& in
                    uint32_t node_id) {
     // initialize derecho connection manager
     // May there be a better design?
-    uint16_t my_port = internal_ip_addrs_and_ports.at(node_id).second;
-    uint16_t my_external_port = external_ip_addrs_and_ports.at(node_id).second;
-    sst_connections = new tcp::tcp_connections(node_id, my_port);
-    for(const auto& node_entry : internal_ip_addrs_and_ports) {
-        if(node_entry.first != node_id
-           && !sst_connections->add_node(node_entry.first, node_entry.second)) {
-            // Following the rest of lf_initialize, crash immediately on an error instead of reporting it
-            dbg_default_error("lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
-            crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+    if(internal_ip_addrs_and_ports.empty()) {
+        sst_connections = new tcp::tcp_connections(node_id);
+    } else {
+        uint16_t my_port = internal_ip_addrs_and_ports.at(node_id).second;
+        sst_connections = new tcp::tcp_connections(node_id, my_port);
+        for(const auto& node_entry : internal_ip_addrs_and_ports) {
+            if(node_entry.first != node_id
+            && !sst_connections->add_node(node_entry.first, node_entry.second)) {
+                // Following the rest of lf_initialize, crash immediately on an error instead of reporting it
+                dbg_default_error("lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
+                crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+            }
         }
     }
-    external_client_connections = new tcp::tcp_connections(node_id, my_external_port);
-    for(const auto& node_entry : external_ip_addrs_and_ports) {
-        if(node_entry.first != node_id
-           && !external_client_connections->add_node(node_entry.first, node_entry.second)) {
-            dbg_default_error("lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
-            crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+    if(external_ip_addrs_and_ports.empty()) {
+        external_client_connections = new tcp::tcp_connections(node_id);
+    } else {
+        uint16_t my_external_port = external_ip_addrs_and_ports.at(node_id).second;
+        external_client_connections = new tcp::tcp_connections(node_id, my_external_port);
+        for(const auto& node_entry : external_ip_addrs_and_ports) {
+            if(node_entry.first != node_id
+               && !external_client_connections->add_node(node_entry.first, node_entry.second)) {
+                dbg_default_error("lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
+                crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+            }
         }
     }
 
