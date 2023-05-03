@@ -292,6 +292,7 @@ void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, cons
 
 void FilePersistLog::advanceVersion(version_t ver) {
     FPL_WRLOCK;
+    dbg_default_trace("{} advance version to {}.", this->m_sName, ver);
     if(m_currMetaHeader.fields.ver < ver) {
         m_currMetaHeader.fields.ver = ver;
     } else {
@@ -317,6 +318,7 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
             FPL_UNLOCK;
             FPL_PERS_UNLOCK;
         }
+        dbg_default_trace("{} persist returning early with version {}", this->m_sName, ver_ret);
         return ver_ret;
     }
 

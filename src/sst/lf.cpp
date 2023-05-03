@@ -221,8 +221,11 @@ void _resources::connect_endpoint(bool is_lf_server) {
     try {
         if(sst_connections->contains_node(this->remote_id)) {
             sst_connections->exchange(this->remote_id, local_cm_data, remote_cm_data);
-        } else {
+        } else if(external_client_connections->contains_node(this->remote_id)) {
             external_client_connections->exchange(this->remote_id, local_cm_data, remote_cm_data);
+        } else {
+            dbg_default_error("No TCP connection exists with node {}, cannot exchange connection info", this->remote_id);
+            crash_with_message("No TCP connection exists with node %d, cannot exchange connection info\n", this->remote_id);
         }
     } catch(tcp::socket_error&) {
         dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
@@ -472,7 +475,7 @@ int _resources::post_remote_send(
 void _resources::register_oob_memory(void* addr, size_t size) {
     // register it with the domain
     struct fid_mr* oob_mr;
-    int ret = 
+    int ret =
     fail_if_nonzero_retry_on_eagain("register memory buffer for write", REPORT_ON_FAILURE,
                                     fi_mr_reg, g_ctxt.domain, addr, size,
                                     FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
@@ -514,7 +517,7 @@ void _resources::unregister_oob_memory(void* addr) {
 void* _resources::get_oob_mr_desc(const struct iovec& iov) {
     for (const auto& oob_mr:oob_mrs) {
         if (reinterpret_cast<uint64_t>(iov.iov_base) >= oob_mr.first &&
-            (reinterpret_cast<uint64_t>(iov.iov_base) + static_cast<uint64_t>(iov.iov_len)) <= 
+            (reinterpret_cast<uint64_t>(iov.iov_base) + static_cast<uint64_t>(iov.iov_len)) <=
             (reinterpret_cast<uint64_t>(oob_mr.second.addr) + static_cast<uint64_t>(oob_mr.second.size))) {
             return fi_mr_desc(oob_mr.second.mr);
         }
@@ -572,7 +575,7 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     msg.rma_iov = &rma_iov;
     msg.rma_iov_count = 1;
     msg.data = 0l; // not used
-    
+
     // set up completion entry.
     const auto tid = std::this_thread::get_id();
     uint32_t ce_idx = util::polling_data.get_index(tid);
@@ -836,8 +839,10 @@ bool sync(uint32_t r_id) {
     try {
         if(sst_connections->contains_node(r_id)) {
             sst_connections->exchange(r_id, s, t);
-        } else {
+        } else if(external_client_connections->contains_node(r_id)) {
             external_client_connections->exchange(r_id, s, t);
+        } else {
+            return false;
         }
     } catch(tcp::socket_error&) {
         return false;
@@ -993,10 +998,27 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& internal_ip_addrs_and_ports,
                    const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports,
                    uint32_t node_id) {
-    // initialize derecho connection manager: This is derived from Sagar's code.
-    // May there be a better desgin?
-    sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
-    external_client_connections = new tcp::tcp_connections(node_id, external_ip_addrs_and_ports);
+    // initialize derecho connection manager
+    // May there be a better design?
+    uint16_t my_port = internal_ip_addrs_and_ports.at(node_id).second;
+    uint16_t my_external_port = external_ip_addrs_and_ports.at(node_id).second;
+    sst_connections = new tcp::tcp_connections(node_id, my_port);
+    for(const auto& node_entry : internal_ip_addrs_and_ports) {
+        if(node_entry.first != node_id
+           && !sst_connections->add_node(node_entry.first, node_entry.second)) {
+            // Following the rest of lf_initialize, crash immediately on an error instead of reporting it
+            dbg_default_error("lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
+            crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+        }
+    }
+    external_client_connections = new tcp::tcp_connections(node_id, my_external_port);
+    for(const auto& node_entry : external_ip_addrs_and_ports) {
+        if(node_entry.first != node_id
+           && !external_client_connections->add_node(node_entry.first, node_entry.second)) {
+            dbg_default_error("lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
+            crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+        }
+    }
 
     // initialize global resources:
     // STEP 1: initialize with configuration.
@@ -1052,6 +1074,9 @@ void shutdown_polling_thread() {
 
 void lf_destroy() {
     shutdown_polling_thread();
+
+    delete sst_connections;
+    delete external_client_connections;
 
     // TODO: make sure all resources are destroyed first.
     _resources::global_release();

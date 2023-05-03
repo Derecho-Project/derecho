@@ -39,9 +39,7 @@ ViewManager::ViewManager(
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           subgroup_type_order(subgroup_type_order),
-          tcp_sockets(getConfUInt32(CONF_DERECHO_LOCAL_ID),
-                      {{getConfUInt32(CONF_DERECHO_LOCAL_ID),
-                        {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT)}}}),
+          tcp_sockets(getConfUInt32(CONF_DERECHO_LOCAL_ID), getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT)),
           subgroup_objects(object_pointer_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager(persistence_manager) {
@@ -501,10 +499,15 @@ void ViewManager::setup_initial_tcp_connections(const View& initial_view, const 
     //Establish TCP connections to each other member of the view in ascending order
     for(int i = 0; i < initial_view.num_members; ++i) {
         if(initial_view.members[i] != my_id) {
-            tcp_sockets.add_node(initial_view.members[i],
-                                 {initial_view.member_ips_and_ports[i].ip_address,
-                                  initial_view.member_ips_and_ports[i].state_transfer_port});
-            dbg_default_debug("Established a state-transfer TCP connection to node {}", initial_view.members[i]);
+            if(tcp_sockets.add_node(initial_view.members[i],
+                                    {initial_view.member_ips_and_ports[i].ip_address,
+                                     initial_view.member_ips_and_ports[i].state_transfer_port})) {
+                dbg_default_debug("Established a state-transfer TCP connection to node {}", initial_view.members[i]);
+            } else {
+                // This should rarely happen, and it's not clear how to recover from it,
+                // but at least print a readable error message before the inevitable crash
+                dbg_default_error("Failed to establish an initial TCP connection to node {}!", initial_view.members[i]);
+            }
         }
     }
 }
@@ -516,10 +519,13 @@ void ViewManager::reinit_tcp_connections(const View& initial_view, const node_id
     for(int i = 0; i < initial_view.num_members; ++i) {
         if(initial_view.members[i] != my_id
            && !tcp_sockets.contains_node(initial_view.members[i])) {
-            tcp_sockets.add_node(initial_view.members[i],
-                                 {initial_view.member_ips_and_ports[i].ip_address,
-                                  initial_view.member_ips_and_ports[i].state_transfer_port});
-            dbg_default_debug("Established a state-transfer TCP connection to node {}", initial_view.members[i]);
+            if(tcp_sockets.add_node(initial_view.members[i],
+                                    {initial_view.member_ips_and_ports[i].ip_address,
+                                     initial_view.member_ips_and_ports[i].state_transfer_port})) {
+                dbg_default_debug("Established a state-transfer TCP connection to node {}", initial_view.members[i]);
+            } else {
+                dbg_default_warn("Failed to establish a state-transfer TCP connection to node {}", initial_view.members[i]);
+            }
         }
     }
 }
@@ -1525,31 +1531,33 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 #endif
         sst::remove_node(failed_node_id);
     }
-    // if new members have joined, add their RDMA connections to SST and RDMC
+    // if new members have joined, tell RDMC and SST to add socket connections to them
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         // The new members will be the last joined.size() elements of the members lists
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
-        dbg_default_debug("Adding RDMC connection to node {}, at IP {} and port {}", next_view->members[joiner_rank], next_view->member_ips_and_ports[joiner_rank].ip_address, next_view->member_ips_and_ports[joiner_rank].rdmc_port);
+        dbg_default_debug("Adding global TCP connections to node {}, at IP {} and port {}", next_view->members[joiner_rank], next_view->member_ips_and_ports[joiner_rank].ip_address, next_view->member_ips_and_ports[joiner_rank].rdmc_port);
 
 #ifdef USE_VERBS_API
-        // rdma::impl::verbs_add_connection(next_view->members[joiner_rank],
-        //                                  next_view->member_ips_and_ports[joiner_rank], my_id);
         rdma::impl::verbs_add_connection(
                 next_view->members[joiner_rank],
                 {next_view->member_ips_and_ports[joiner_rank].ip_address,
                  next_view->member_ips_and_ports[joiner_rank].rdmc_port});
 #else
-        rdma::impl::lf_add_connection(
-                next_view->members[joiner_rank],
-                {next_view->member_ips_and_ports[joiner_rank].ip_address,
-                 next_view->member_ips_and_ports[joiner_rank].rdmc_port});
+        if(!rdma::impl::lf_add_connection(
+                   next_view->members[joiner_rank],
+                   {next_view->member_ips_and_ports[joiner_rank].ip_address,
+                    next_view->member_ips_and_ports[joiner_rank].rdmc_port})) {
+            dbg_default_warn("Failed to add an RDMC TCP connection to new node {}", next_view->members[joiner_rank]);
+        }
 #endif
     }
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
-        sst::add_node(next_view->members[joiner_rank],
-                      {next_view->member_ips_and_ports[joiner_rank].ip_address,
-                       next_view->member_ips_and_ports[joiner_rank].sst_port});
+        if(!sst::add_node(next_view->members[joiner_rank],
+                          {next_view->member_ips_and_ports[joiner_rank].ip_address,
+                           next_view->member_ips_and_ports[joiner_rank].sst_port})) {
+            dbg_default_warn("Failed to add an SST TCP connection to new node {}", next_view->members[joiner_rank]);
+        }
     }
 
     // This will block until everyone responds to SST/RDMC initial handshakes
@@ -1828,10 +1836,14 @@ void ViewManager::update_tcp_connections() {
         tcp_sockets.delete_node(removed_id);
     }
     for(const node_id_t& joiner_id : next_view->joined) {
-        tcp_sockets.add_node(joiner_id,
-                             {next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].ip_address,
-                              next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].state_transfer_port});
-        dbg_default_debug("Established a state-transfer TCP connection to node {}", joiner_id);
+        if(tcp_sockets.add_node(joiner_id,
+                                {next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].ip_address,
+                                 next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].state_transfer_port})) {
+            dbg_default_debug("Established a state-transfer TCP connection to node {}", joiner_id);
+        } else {
+            // This should be handled better: Mark the joining node as failed and immediately start another view change
+            dbg_default_warn("Failed to establish a TCP connection to joining node {}", joiner_id);
+        }
     }
 }
 
