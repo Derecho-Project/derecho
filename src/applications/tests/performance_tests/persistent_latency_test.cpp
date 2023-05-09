@@ -256,8 +256,8 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-        } catch(uint64_t exp) {
-            std::cout << "Exception caught:0x" << std::hex << exp << std::endl;
+        } catch(std::exception& exp) {
+            std::cout << "Exception caught: " << typeid(exp).name() << ": " << exp.what() << std::endl;
             return -1;
         }
     }
