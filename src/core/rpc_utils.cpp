@@ -8,6 +8,7 @@ std::shared_ptr<spdlog::logger> RpcLoggerPtr::logger;
 
 void RpcLoggerPtr::initialize() {
     logger = spdlog::get(LoggerFactory::RPC_LOGGER_NAME);
+    std::cout << "In RpcLoggerPtr::initialize(), logger = " << std::hex << logger.get() << std::endl;
     // This function must be called after RPC_LOGGER_NAME is already in the registry
     assert(logger);
 }
