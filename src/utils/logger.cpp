@@ -38,9 +38,11 @@ std::shared_ptr<spdlog::logger> LoggerFactory::_create_logger(
         log_sinks.end(),
         _thread_pool_holder,
         spdlog::async_overflow_policy::block);
-    spdlog::register_logger(log);
     log->set_pattern("[%H:%M:%S.%f] [%n] [Thread %t] [%^%l%$] %v");
     log->set_level(log_level);
+    spdlog::register_logger(log);
+    // Sanity check: Can I get the logger I just registered?
+    assert(spdlog::get(logger_name));
     return log;
 }
 

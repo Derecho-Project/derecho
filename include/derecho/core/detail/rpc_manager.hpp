@@ -252,18 +252,7 @@ class RPCManager {
 
 public:
     RPCManager(ViewManager& group_view_manager,
-               const std::vector<DeserializationContext*>& deserialization_context)
-            : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
-              rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(CONF_LOGGER_RPC_LOG_LEVEL))),
-              receivers(new std::decay_t<decltype(*receivers)>()),
-              view_manager(group_view_manager),
-              busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
-        RpcLoggerPtr::initialize();
-        for(const auto& deserialization_context_ptr : deserialization_context) {
-            rdv.push_back(deserialization_context_ptr);
-        }
-        rpc_listener_thread = std::thread(&RPCManager::p2p_receive_loop, this);
-    }
+               const std::vector<DeserializationContext*>& deserialization_context);
 
     ~RPCManager();
 
