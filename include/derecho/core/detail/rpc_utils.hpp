@@ -95,7 +95,7 @@ constexpr bool well_formed_macro(Carr&& first, Carr&& second, RestArgs... args) 
     if (!well_formed_macro(first)) {
         return false;
     }
-    
+
     return well_formed_macro(second,args...);
 }
 
@@ -119,6 +119,24 @@ constexpr FunctionTag to_internal_tag(FunctionTag user_tag) {
         return 2 * user_tag;
     }
 }
+
+/**
+ * A "class" whose only purpose is to contain a static pointer to the
+ * RPC logger and provide a static initialization function for it. The
+ * pointer will be initialized by RPCManager after it creates the logger.
+ */
+class RpcLoggerPtr {
+    static std::shared_ptr<spdlog::logger> logger;
+public:
+    static std::shared_ptr<spdlog::logger>& get();
+    /**
+     * Initializes the pointer by calling spdlog::get().
+     * spdlog::get() is already thread-safe and static; we just need this
+     * function to make sure it is only called after RPCManager creates the
+     * logger instead of at a random static-initialization time.
+     */
+    static void initialize();
+};
 
 /**
  * An RPC function call can be uniquely identified by the tuple
@@ -819,14 +837,14 @@ public:
      * @param who A list of nodes from which to expect responses.
      */
     void fulfill_map(const node_list_t& who) {
-        dbg_default_trace("Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name());
+        dbg_trace(RpcLoggerPtr::get(), "Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name());
         std::unique_ptr<futures_map<Ret>> futures = std::make_unique<futures_map<Ret>>();
         std::map<node_id_t, std::promise<Ret>> promises;
         for(const auto& e : who) {
             futures->emplace(e, promises[e].get_future());
         }
         dest_nodes.insert(who.begin(), who.end());
-        dbg_default_trace("Setting a value for reply_promises_are_ready");
+        dbg_trace(RpcLoggerPtr::get(), "Setting a value for reply_promises_are_ready");
         promise_for_reply_promises.set_value(std::move(promises));
         promise_for_pending_map.set_value(std::move(futures));
         map_fulfilled = true;
@@ -849,7 +867,7 @@ public:
      */
     void delete_self_ptr() {
         if(!heap_pointer_deleted) {
-            dbg_default_trace("delete_self_ptr() deleting the shared_ptr at {}", fmt::ptr(self_heap_ptr));
+            dbg_trace(RpcLoggerPtr::get(), "delete_self_ptr() deleting the shared_ptr at {}", fmt::ptr(self_heap_ptr));
             heap_pointer_deleted = true;
             //This must be the last statement in the method, since it might result in this object getting deleted
             delete self_heap_ptr;
@@ -913,7 +931,7 @@ public:
             responded_nodes.insert(nid);
         }
         if(reply_promises.size() == 0) {
-            dbg_default_trace("PendingResults<{}>::set_value about to wait on reply_promises_are_ready", typeid(Ret).name());
+            dbg_trace(RpcLoggerPtr::get(), "PendingResults<{}>::set_value about to wait on reply_promises_are_ready", typeid(Ret).name());
             reply_promises = std::move(reply_promises_are_ready.get());
         }
         reply_promises.at(nid).set_value(v);
