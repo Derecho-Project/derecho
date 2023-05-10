@@ -6,6 +6,7 @@ endif()
 target_include_directories(rdmc PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
 )
+target_link_libraries(rdmc spdlog::spdlog)
 
 #find_library(SLURM_FOUND slurm)
 #if (SLURM_FOUND)
