@@ -77,6 +77,10 @@ struct option Conf::long_options[] = {
         // [LOGGER]
         MAKE_LONG_OPT_ENTRY(CONF_LOGGER_LOG_FILE_DEPTH),
         MAKE_LONG_OPT_ENTRY(CONF_LOGGER_LOG_TO_TERMINAL),
+        MAKE_LONG_OPT_ENTRY(CONF_LOGGER_DEFAULT_LOG_LEVEL),
+        MAKE_LONG_OPT_ENTRY(CONF_LOGGER_SST_LOG_LEVEL),
+        MAKE_LONG_OPT_ENTRY(CONF_LOGGER_RPC_LOG_LEVEL),
+        MAKE_LONG_OPT_ENTRY(CONF_LOGGER_PERSISTENT_LOG_LEVEL),
         {0, 0, 0, 0}};
 
 void Conf::initialize(int argc, char* argv[], const char* conf_file) {
@@ -107,10 +111,16 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
         Conf::singleton = std::make_unique<Conf>(argc, argv, cfg);
         delete cfg;
 
-        // 3 - set the flag to initialized
+        // 3 - set optional log-level keys to equal the default log level if they are not present
+        const std::string& default_log_level = Conf::singleton->getString(CONF_LOGGER_DEFAULT_LOG_LEVEL);
+        Conf::singleton->config.try_emplace(CONF_LOGGER_SST_LOG_LEVEL, default_log_level);
+        Conf::singleton->config.try_emplace(CONF_LOGGER_RPC_LOG_LEVEL, default_log_level);
+        Conf::singleton->config.try_emplace(CONF_LOGGER_PERSISTENT_LOG_LEVEL, default_log_level);
+
+        // 4 - set the flag to initialized
         Conf::singleton_initialized_flag.store(CONF_INITIALIZED, std::memory_order_acq_rel);
 
-        // 4 - check the configuration for sanity
+        // 5 - check the configuration for sanity
         if(hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT) && hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT_FILE)) {
             throw std::logic_error("Configuration error: Both " CONF_LAYOUT_JSON_LAYOUT " and " CONF_LAYOUT_JSON_LAYOUT_FILE " were specified. These options are mutually exclusive");
         }

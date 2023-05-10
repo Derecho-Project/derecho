@@ -66,6 +66,9 @@ private:
 #define CONF_PERS_PRIVATE_KEY_FILE "PERS/private_key_file"
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
+#define CONF_LOGGER_SST_LOG_LEVEL "LOGGER/sst_log_level"
+#define CONF_LOGGER_RPC_LOG_LEVEL "LOGGER/rpc_log_level"
+#define CONF_LOGGER_PERSISTENT_LOG_LEVEL "LOGGER/persistent_log_level"
 #define CONF_LOGGER_LOG_TO_TERMINAL "LOGGER/log_to_terminal"
 #define CONF_LOGGER_LOG_FILE_DEPTH "LOGGER/log_file_depth"
 
