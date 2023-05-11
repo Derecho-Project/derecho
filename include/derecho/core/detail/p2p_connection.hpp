@@ -50,6 +50,7 @@ class P2PConnection {
     const uint32_t my_node_id;
     const uint32_t remote_id;
     const ConnectionParams& connection_params;
+    std::shared_ptr<spdlog::logger> rpc_logger;
     std::unique_ptr<volatile uint8_t[]> incoming_p2p_buffer;
     std::unique_ptr<volatile uint8_t[]> outgoing_p2p_buffer;
     std::unique_ptr<resources> res;

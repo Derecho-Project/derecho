@@ -16,6 +16,7 @@
 namespace sst {
 P2PConnectionManager::P2PConnectionManager(const P2PParams params)
         : my_node_id(params.my_node_id),
+          rpc_logger(spdlog::get(LoggerFactory::RPC_LOGGER_NAME)),
           p2p_connections(derecho::getConfUInt32(CONF_DERECHO_MAX_NODE_ID)),
           active_p2p_connections(new char[derecho::getConfUInt32(CONF_DERECHO_MAX_NODE_ID)]),
           failure_upcall(params.failure_upcall) {
@@ -121,7 +122,7 @@ std::optional<MessagePointer> P2PConnectionManager::probe_all() {
         } else if(buf_type_pair) {
             // this means that we have a null reply
             // we don't need to process it, but we still want to increment the seq num
-            dbg_default_trace("Got a null reply from node {} for a void P2P call", node_id);
+            dbg_trace(rpc_logger, "Got a null reply from node {} for a void P2P call", node_id);
             p2p_connections[node_id].second->increment_incoming_seq_num(buf_type_pair->second);
             return MessagePointer{INVALID_NODE_ID, nullptr, MESSAGE_TYPE::P2P_REPLY};
         }
