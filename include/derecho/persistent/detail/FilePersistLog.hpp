@@ -3,7 +3,7 @@
 
 #include "PersistLog.hpp"
 #include "util.hpp"
-#include <derecho/utils/logger.hpp>
+#include "derecho/utils/logger.hpp"
 #include <pthread.h>
 #include <string>
 
@@ -113,6 +113,8 @@ protected:
     const uint64_t m_iMaxLogEntry;
     // max data size
     const uint64_t m_iMaxDataSize;
+    // pointer to the Persistence-module logger
+    std::shared_ptr<spdlog::logger> m_logger;
 
     // the log file descriptor
     int m_iLogFileDesc;

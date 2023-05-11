@@ -6,6 +6,7 @@
 #else
 #include "derecho/sst/detail/lf.hpp"
 #endif
+#include "derecho/utils/logger.hpp"
 
 #include <atomic>
 #include <functional>
@@ -40,7 +41,8 @@ struct MessagePointer {
 
 class P2PConnectionManager {
     const node_id_t my_node_id;
-
+    /** A pointer to the RPC-module logger (since these P2P connections are used for Derecho RPC) */
+    std::shared_ptr<spdlog::logger> rpc_logger;
     ConnectionParams request_params;
     /**
      * Contains one entry per possible Node ID; the vector index is the node ID.
@@ -132,9 +134,9 @@ public:
     void debug_print();
     /**
      * write to remote OOB memory
-     * @param remote_node       remote node id 
+     * @param remote_node       remote node id
      * @param iov               gather of local memory regions
-     * @param iovcnt            
+     * @param iovcnt
      * @param remote_dest_addr  the address of the remote memory region
      * @param rkey              the access key for remote memory
      * @param size              the size of the remote memory region
@@ -145,11 +147,11 @@ public:
      * read from remote OOB memory
      * @param remote_node       remote node id
      * @param iov               scatter of local memory regions
-     * @param iovcnt            
+     * @param iovcnt
      * @param remote_src_addr   the address of the remote memory region
      * @param rkey              the access key for remote memory
      * @param size              the size of the remote memory region
-     * @throw                   derecho::derecho_exception on error 
+     * @throw                   derecho::derecho_exception on error
      */
     void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_srcaddr, uint64_t rkey, size_t size);
 };

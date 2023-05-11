@@ -53,7 +53,7 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
     if(derecho::getConfBoolean(CONF_PERS_RESET)) {
         if(fs::exists(filepath)) {
             if(!fs::remove(filepath)) {
-                dbg_default_error("{} loadNoLogObjectFromFile failed to remove file {}.", _NOLOG_OBJECT_NAME_, filepath);
+                dbg_error(PersistLogger::get(), "{} loadNoLogObjectFromFile failed to remove file {}.", _NOLOG_OBJECT_NAME_, filepath);
                 throw PERSIST_EXP_REMOVE_FILE(errno);
             }
         }
