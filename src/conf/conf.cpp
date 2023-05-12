@@ -80,6 +80,7 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_LOGGER_DEFAULT_LOG_LEVEL),
         MAKE_LONG_OPT_ENTRY(CONF_LOGGER_SST_LOG_LEVEL),
         MAKE_LONG_OPT_ENTRY(CONF_LOGGER_RPC_LOG_LEVEL),
+        MAKE_LONG_OPT_ENTRY(CONF_LOGGER_VIEWMANAGER_LOG_LEVEL),
         MAKE_LONG_OPT_ENTRY(CONF_LOGGER_PERSISTENCE_LOG_LEVEL),
         {0, 0, 0, 0}};
 
@@ -115,6 +116,7 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
         const std::string& default_log_level = Conf::singleton->getString(CONF_LOGGER_DEFAULT_LOG_LEVEL);
         Conf::singleton->config.try_emplace(CONF_LOGGER_SST_LOG_LEVEL, default_log_level);
         Conf::singleton->config.try_emplace(CONF_LOGGER_RPC_LOG_LEVEL, default_log_level);
+        Conf::singleton->config.try_emplace(CONF_LOGGER_VIEWMANAGER_LOG_LEVEL, default_log_level);
         Conf::singleton->config.try_emplace(CONF_LOGGER_PERSISTENCE_LOG_LEVEL, default_log_level);
 
         // 4 - set the flag to initialized

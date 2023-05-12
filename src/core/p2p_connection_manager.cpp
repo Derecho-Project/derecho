@@ -248,7 +248,7 @@ void P2PConnectionManager::check_failures_loop() {
         util::polling_data.reset_waiting(tid);
 
         for(auto nid : failed_node_indexes) {
-            dbg_default_debug("p2p_connection_manager detected failure/timeout on node {}", nid);
+            dbg_debug(rpc_logger, "p2p_connection_manager detected failure/timeout on node {}", nid);
             {
                 std::lock_guard<std::mutex> connection_lock(p2p_connections[nid].first);
                 if(p2p_connections[nid].second) {
