@@ -2,7 +2,7 @@
 #define PERSISTENT_UTIL_HPP
 
 #include "../PersistException.hpp"
-#include <derecho/conf/conf.hpp>
+#include "derecho/conf/conf.hpp"
 #include <errno.h>
 #include <fcntl.h>
 #include <string>
@@ -44,12 +44,12 @@ inline void checkOrCreateDir(const std::string& dirPath) {
     struct stat sb;
     if(stat(dirPath.c_str(), &sb) == 0) {
         if(!S_ISDIR(sb.st_mode)) {
-            throw PERSIST_EXP_INV_PATH;
+            throw persistent::persistent_exception("Invalid path: " + dirPath);
         }
     } else {
         // create it
         if(mkdir(dirPath.c_str(), 0700) != 0) {
-            throw PERSIST_EXP_CREATE_PATH(errno);
+            throw persistent::persistent_file_error("Failed to create path.", errno);
         }
     }
 }
@@ -61,7 +61,7 @@ inline bool checkRegularFile(const std::string& file) {
 
     if(stat(file.c_str(), &sb) == 0) {
         if(!S_ISREG(sb.st_mode)) {
-            throw PERSIST_EXP_INV_FILE;
+            throw persistent::persistent_exception("Invalid file: " + file);
         }
     } else {
         bRet = false;
@@ -80,11 +80,11 @@ inline bool checkOrCreateFileWithSize(const std::string& file, uint64_t size) {
 
     fd = open(file.c_str(), O_RDWR | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP | S_IROTH);
     if(fd < 0) {
-        throw PERSIST_EXP_CREATE_FILE(errno);
+        throw persistent::persistent_file_error("Failed to create file.", errno);
     }
 
     if(ftruncate(fd, size) != 0) {
-        throw PERSIST_EXP_TRUNCATE_FILE(errno);
+        throw persistent::persistent_file_error("Failed to truncate file.", errno);
     }
     close(fd);
     return bCreate;

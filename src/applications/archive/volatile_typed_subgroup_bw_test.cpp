@@ -166,8 +166,8 @@ int main(int argc, char* argv[]) {
             }
             clock_gettime(CLOCK_REALTIME, &t2);
 
-        } catch(uint64_t exp) {
-            std::cout << "Exception caught:0x" << std::hex << exp << std::endl;
+        } catch(std::exception& exp) {
+            std::cout << "Exception caught: " << typeid(exp).name() << ": " << exp.what() << std::endl;
             return -1;
         }
         int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec) * 1000000000 + t2.tv_nsec - t1.tv_nsec;

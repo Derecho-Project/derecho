@@ -561,7 +561,7 @@ public:
      *
      * @return  Returns whatever fun returns.
      *
-     * @throws PERSIST_EXP_INV_ENTRY_IDX(int64_t) if the idx is not found.
+     * @throws persistent_invalid_index if the idx is not found.
      */
     template <typename Func>
     auto getByIndex(
@@ -581,7 +581,7 @@ public:
      *
      * @return Return a copy of the object held by a unique pointer.
      *
-     * @throws PERSIST_EXP_INV_ENTRY_IDX(int64_t), if the idx is not found.
+     * @throws persistent_invalid_index, if the idx is not found.
      */
     std::unique_ptr<ObjectType> getByIndex(
             int64_t idx,
@@ -598,13 +598,13 @@ public:
      *
      * @param ver   if 'ver', the specified version, matches a log entry, the state corresponding to that entry will be
      *              send to 'fun'; if 'ver' does not match a log entry, the latest state before 'ver' will be applied to
-     *              'fun'; if the latest state before 'ver' is empty, it throws PERSIST_EXP_INV_VERSION.
+     *              'fun'; if the latest state before 'ver' is empty, it throws persistent_invalid_version.
      * @param fun   the user function to process a const ObjectType& object
      * @param dm    the deserialization manager
      *
      * @return Returns whatever fun returns.
      *
-     * @throws PERSIST_EXP_INV_VERSION, when the state at 'ver' has no state.
+     * @throws persistent_invalid_version, when the state at 'ver' has no state.
      */
     template <typename Func>
     auto get(
@@ -621,12 +621,12 @@ public:
      *
      * @param ver   if 'ver', the specified version, matches a log entry, the state corresponding to that entry will be
      *              send to 'fun'; if 'ver' does not match a log entry, the latest state before 'ver' will be applied to
-     *              'fun'; if the latest state before 'ver' is empty, it throws PERSIST_EXP_INV_VERSION.
+     *              'fun'; if the latest state before 'ver' is empty, it throws persistent_invalid_version.
      * @param dm    the deserialization manager
      *
      * @return a unique pointer to the deserialized copy of ObjectType.
      *
-     * @throws PERSIST_EXP_INV_VERSION, when the state at 'ver' has no state.
+     * @throws persistent_invalid_version, when the state at 'ver' has no state.
      */
     std::unique_ptr<ObjectType> get(
             const version_t ver,
@@ -650,7 +650,7 @@ public:
      *
      * @return Returns whatever fun returns.
      *
-     * @throws PERSIST_EXP_INV_INDEX, when the index 'idx' does not exists.
+     * @throws persistent_invalid_index, when the index 'idx' does not exists.
      */
     template <typename DeltaType, typename Func>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
@@ -672,7 +672,7 @@ public:
      *
      * @return Returns a unique pointer to the copied DeltaType object.
      *
-     * @throws PERSIST_EXP_INV_INDEX, when the index 'idx' does not exists.
+     * @throws persistent_invalid_index, when the index 'idx' does not exists.
      */
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
@@ -699,7 +699,7 @@ public:
      *
      * @return Returns whatever fun returns.
      *
-     * @throws PERSIST_EXP_INV_VERSION, when version 'ver' is not found in the log.
+     * @throws persistent_invalid_version, when version 'ver' is not found in the log.
      */
     template <typename DeltaType, typename Func>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
@@ -723,7 +723,7 @@ public:
      *
      * @return Returns a unique pointer to the copied DeltaType object.
      *
-     * @throws PERSIST_EXP_INV_VERSION, when version 'ver' is not found in the log.
+     * @throws persistent_invalid_version, when version 'ver' is not found in the log.
      */
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
@@ -800,7 +800,7 @@ public:
      *
      * @return Returns whatever fun returns.
      *
-     * @throws PERSIST_EXP_BEYOND_GSF if hlc is beyond the global stability frontier.
+     * @throws persistent_version_not_stable if hlc is beyond the global stability frontier.
      */
     template <typename Func>
     auto get(
@@ -820,7 +820,7 @@ public:
      *
      * @return a unique pointer to the copied ObjectType object.
      *
-     * @throws PERSIST_EXP_BEYOND_GSF if hlc is beyond the global stability frontier.
+     * @throws persistent_version_not_stable if hlc is beyond the global stability frontier.
      */
     std::unique_ptr<ObjectType> get(
             const HLC& hlc,
@@ -950,7 +950,7 @@ public:
      *              will throw an exception.
      * @param mhlc  the timestamp for this value, normally assigned by callbacks in PersistentRegistry.
      *
-     * @throws  PERSIST_EXP_INV_VERSION when ver is inclusively lower than the latest version in the log.
+     * @throws  persistent_invalid_version when ver is inclusively lower than the latest version in the log.
      */
     virtual void set(ObjectType& v, version_t ver, const HLC& mhlc);
 
@@ -963,7 +963,7 @@ public:
      * @param ver   the version of this value, if ver is inclusively lower than the latest version in the log, set()
      *              will throw an exception.
      *
-     * @throws  PERSIST_EXP_INV_VERSION when ver is inclusively lower than the latest version in the log.
+     * @throws  persistent_invalid_version when ver is inclusively lower than the latest version in the log.
      */
     virtual void set(ObjectType& v, version_t ver);
 
@@ -980,7 +980,7 @@ public:
      * @param ver   the version of this value, if ver is inclusively lower than the latest version in the log, set()
      *              will throw an exception.
      *
-     * @throws  PERSIST_EXP_INV_VERSION when ver is inclusively lower than the latest version in the log.
+     * @throws  persistent_invalid_version when ver is inclusively lower than the latest version in the log.
      */
     virtual void version(version_t ver);
 
