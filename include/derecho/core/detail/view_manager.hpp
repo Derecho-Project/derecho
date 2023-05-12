@@ -122,7 +122,8 @@ private:
     //Allow Replicated to access view_mutex and view_change_cv directly
     template <typename T>
     friend class Replicated;
-
+    /** The logger for the ViewManager module */
+    std::shared_ptr<spdlog::logger> vm_logger;
     /**
      * Mutex to protect the curr_view pointer. Non-SST-predicate threads that
      * access the current View through the pointer should acquire a shared_lock;

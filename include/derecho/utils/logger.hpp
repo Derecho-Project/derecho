@@ -71,6 +71,7 @@ public:
     static const std::string PERSISTENT_LOGGER_NAME;
     static const std::string SST_LOGGER_NAME;
     static const std::string RPC_LOGGER_NAME;
+    static const std::string VIEWMANAGER_LOGGER_NAME;
 };
 
 #ifndef NOLOG

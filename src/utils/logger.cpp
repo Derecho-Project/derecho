@@ -17,6 +17,7 @@
 const std::string LoggerFactory::PERSISTENT_LOGGER_NAME = "persistent";
 const std::string LoggerFactory::SST_LOGGER_NAME = "derecho_sst";
 const std::string LoggerFactory::RPC_LOGGER_NAME = "derecho_rpc";
+const std::string LoggerFactory::VIEWMANAGER_LOGGER_NAME = "viewmanager";
 std::atomic<uint32_t> LoggerFactory::_initialize_state = LOGGER_FACTORY_UNINITIALIZED;
 std::shared_ptr<spdlog::details::thread_pool> LoggerFactory::_thread_pool_holder;
 std::shared_ptr<spdlog::logger> LoggerFactory::_default_logger;
