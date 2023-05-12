@@ -1,51 +1,89 @@
 #ifndef PERSISTENT_EXCEPTION_HPP
 #define PERSISTENT_EXCEPTION_HPP
 
-#include <inttypes.h>
+#include <cstdint>
+#include <cstring>
+#include <stdexcept>
+#include <string>
 
 namespace persistent {
-// Exceptions definition
-#define PERSIST_EXP(errcode, usercode) \
-    ((((errcode)&0xffffffffull) << 32) | ((usercode)&0xffffffffull))
-#define PERSIST_EXP_USERCODE(x) ((uint32_t)((x)&0xffffffffull))
-#define PERSIST_EXP_UNIMPLEMENTED PERSIST_EXP(0, 0)
-#define PERSIST_EXP_NEW_FAILED_UNKNOWN PERSIST_EXP(1, 0)
-#define PERSIST_EXP_STORAGE_TYPE_UNKNOWN(x) PERSIST_EXP(2, (x))
-#define PERSIST_EXP_OPEN_FILE(x) PERSIST_EXP(3, (x))
-#define PERSIST_EXP_MMAP_FILE(x) PERSIST_EXP(4, (x))
-#define PERSIST_EXP_INV_PATH PERSIST_EXP(5, 0)
-#define PERSIST_EXP_CREATE_PATH(x) PERSIST_EXP(6, (x))
-#define PERSIST_EXP_INV_FILE PERSIST_EXP(7, 0)
-#define PERSIST_EXP_CREATE_FILE(x) PERSIST_EXP(8, (x))
-#define PERSIST_EXP_TRUNCATE_FILE(x) PERSIST_EXP(9, (x))
-#define PERSIST_EXP_RWLOCK_INIT(x) PERSIST_EXP(10, (x))
-#define PERSIST_EXP_RWLOCK_RDLOCK(x) PERSIST_EXP(11, (x))
-#define PERSIST_EXP_RWLOCK_WRLOCK(x) PERSIST_EXP(12, (x))
-#define PERSIST_EXP_RWLOCK_UNLOCK(x) PERSIST_EXP(13, (x))
-#define PERSIST_EXP_MSYNC(x) PERSIST_EXP(14, (x))
-#define PERSIST_EXP_INV_ENTRY_IDX(x) PERSIST_EXP(15, (x))
-#define PERSIST_EXP_EMPTY_LOG PERSIST_EXP(16, 0)
-#define PERSIST_EXP_SPIN_INIT(x) PERSIST_EXP(17, (x))
-#define PERSIST_EXP_SPIN_LOCK(x) PERSIST_EXP(18, (x))
-#define PERSIST_EXP_SPIN_UNLOCK(x) PERSIST_EXP(19, (x))
-#define PERSIST_EXP_INV_VERSION PERSIST_EXP(20, 0)
-#define PERSIST_EXP_ALLOC(x) PERSIST_EXP(21, (x))
-#define PERSIST_EXP_READ_FUTURE PERSIST_EXP(22, 0)
-#define PERSIST_EXP_INV_HLC PERSIST_EXP(23, 0)
-#define PERSIST_EXP_MUTEX_INIT(x) PERSIST_EXP(24, (x))
-#define PERSIST_EXP_MUTEX_LOCK(x) PERSIST_EXP(25, (x))
-#define PERSIST_EXP_MUTEX_UNLOCK(x) PERSIST_EXP(26, (x))
-#define PERSIST_EXP_READ_FILE(x) PERSIST_EXP(27, (x))
-#define PERSIST_EXP_WRITE_FILE(x) PERSIST_EXP(28, (x))
-#define PERSIST_EXP_RENAME_FILE(x) PERSIST_EXP(29, (x))
-#define PERSIST_EXP_NOSPACE(x) PERSIST_EXP(30, (x))
-#define PERSIST_EXP_NOSPACE_LOG PERSIST_EXP_NOSPACE(1)
-#define PERSIST_EXP_NOSPACE_DATA PERSIST_EXP_NOSPACE(2)
-#define PERSIST_EXP_BEYOND_GSF PERSIST_EXP(31, 0)
-#define PERSIST_EXP_OOM(x) PERSIST_EXP(32, (x))
-#define PERSIST_EXP_INV_OBJNAME PERSIST_EXP(33, 0)
-#define PERSIST_EXP_REMOVE_FILE(x) PERSIST_EXP(34, (x))
-#define PERSIST_EXP_SHA256_HASH(x) PERSIST_EXP(35, (x))
-}
 
+/** Base type for persistent exceptions, just a renaming of std::runtime_error */
+struct persistent_exception : public std::runtime_error {
+    persistent_exception(const std::string& message) : runtime_error(message) {}
+};
+
+struct persistent_not_implemented : public persistent_exception {
+    persistent_not_implemented(const std::string& message = "persistent_not_implemented")
+            : persistent_exception(message) {}
+};
+
+struct persistent_log_full : public persistent_exception {
+    persistent_log_full(const std::string& message = "persistent_log_full")
+            : persistent_exception(message) {}
+};
+
+/** Indicates that there was an error using a pthread lock, and includes the resulting errno */
+struct persistent_lock_error : public persistent_exception {
+    const int error_num;
+    persistent_lock_error(const std::string& message, int errno_value)
+            : persistent_exception(message + " Errno: " + std::to_string(errno_value) + ". Description: " + std::strerror(errno_value)),
+              error_num(errno_value) {}
+};
+
+/** Indicates that there was an error with a file operation, and includes the resulting errno */
+struct persistent_file_error : public persistent_exception {
+    const int error_num;
+    persistent_file_error(const std::string& message, int errno_value)
+            : persistent_exception(message + " Errno: " + std::to_string(errno_value) + ". Description: " + std::strerror(errno_value)),
+              error_num(errno_value) {}
+};
+
+/**
+ * Type of persistent exception that indicates a requested index, version, etc.
+ * was out-of-range for the log. Subtypes specify the type of thing that was out of range.
+ */
+struct persistent_out_of_range : public persistent_exception {
+    persistent_out_of_range(const std::string& message) : persistent_exception(message) {}
+};
+
+/**
+ * A persistent exception that indicates the requested version is invalid (out-of-range)
+ */
+struct persistent_invalid_version : public persistent_out_of_range {
+    // Use int64_t instead of version_t so this file won't depend on Persistent.hpp
+    const int64_t invalid_version;
+    persistent_invalid_version(int64_t ver)
+            : persistent_out_of_range("Invalid version: " + std::to_string(ver)),
+              invalid_version(ver) {}
+};
+
+/**
+ * A persistent exception that indicates the requested HLC is invalid (out-of-range)
+ */
+struct persistent_invalid_hlc : public persistent_out_of_range {
+    // For now, this doesn't include the requested HLC because HLC doesn't have a string conversion
+    persistent_invalid_hlc() : persistent_out_of_range("Invalid HLC.") {}
+};
+
+/**
+ * A persistent exception that indicates the requested log index is invalid (out-of-range)
+ */
+struct persistent_invalid_index : public persistent_out_of_range {
+    const int64_t invalid_index;
+    persistent_invalid_index(int64_t index)
+            : persistent_out_of_range("Invalid index: " + std::to_string(index)),
+              invalid_index(index) {}
+};
+
+/**
+ * A Derecho-specific error indicating that a requested version or HLC is beyond
+ * the global stability frontier and thus not available.
+ */
+struct persistent_version_not_stable : public persistent_out_of_range {
+    persistent_version_not_stable()
+            : persistent_out_of_range("Requested version is beyond the global stability frontier") {}
+};
+
+}  //namespace persistent
 #endif  //PERSISTENT_EXCEPTION_HPP
