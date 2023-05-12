@@ -24,7 +24,7 @@ template <typename ObjectType, StorageType storageType>
 _NameMaker<ObjectType, storageType>::_NameMaker() : m_sObjectTypeName(typeid(ObjectType).name()) {
     this->m_iCounter = 0;
     if(pthread_spin_init(&this->m_oLck, PTHREAD_PROCESS_SHARED) != 0) {
-        throw PERSIST_EXP_SPIN_INIT(errno);
+        throw persistent_lock_error("pthread_spin_init failed.", errno);
     }
 }
 
@@ -37,11 +37,11 @@ template <typename ObjectType, StorageType storageType>
 std::unique_ptr<std::string> _NameMaker<ObjectType, storageType>::make(const char* prefix) {
     int cnt;
     if(pthread_spin_lock(&this->m_oLck) != 0) {
-        throw PERSIST_EXP_SPIN_LOCK(errno);
+        throw persistent_lock_error("pthread_spin_lock failed.", errno);
     }
     cnt = this->m_iCounter++;
     if(pthread_spin_unlock(&this->m_oLck) != 0) {
-        throw PERSIST_EXP_SPIN_UNLOCK(errno);
+        throw persistent_lock_error("pthread_spin_unlock failed.", errno);
     }
     std::unique_ptr<std::string> ret = std::make_unique<std::string>();
     //char * buf = (char *)malloc((strlen(this->m_sObjectTypeName)+13)/8*8);
@@ -53,7 +53,7 @@ std::unique_ptr<std::string> _NameMaker<ObjectType, storageType>::make(const cha
     } catch(openssl::openssl_error& ex) {
         dbg_error(PersistLogger::get(), "{}:{} Unable to compute SHA256 of typename. string = {}, length = {}, OpenSSL error: {}",
                           __FILE__, __func__, this->m_sObjectTypeName, strlen(this->m_sObjectTypeName), ex.what());
-        throw PERSIST_EXP_SHA256_HASH(errno);
+        throw;
     }
 
     // char prefix[strlen(this->m_sObjectTypeName) * 2 + 32];
@@ -83,7 +83,7 @@ inline void Persistent<ObjectType, storageType>::initialize_log(const char* obje
         case ST_FILE:
             this->m_pLog = std::make_unique<FilePersistLog>(object_name, enable_signatures);
             if(this->m_pLog == nullptr) {
-                throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
+                throw persistent_exception("Failed to create FilePersistLog for an unknown reason");
             }
             break;
         // volatile
@@ -91,13 +91,13 @@ inline void Persistent<ObjectType, storageType>::initialize_log(const char* obje
             // const std::string tmpfsPath = "/dev/shm/volatile_t";
             this->m_pLog = std::make_unique<FilePersistLog>(object_name, getPersRamdiskPath(), enable_signatures);
             if(this->m_pLog == nullptr) {
-                throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
+                throw persistent_exception("Failed to create FilePersistLog for an unknown reason");
             }
             break;
         }
         //default
         default:
-            throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
+            throw persistent_unknown_storage_type(storageType);
     }
 }
 
@@ -312,7 +312,7 @@ auto Persistent<ObjectType, storageType>::get(
         mutils::DeserializationManager* dm) const {
     uint8_t* pdat = (uint8_t*)this->m_pLog->getEntry(ver);
     if(pdat == nullptr) {
-        throw PERSIST_EXP_INV_VERSION;
+        throw persistent_invalid_version(ver);
     }
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
@@ -331,7 +331,7 @@ Persistent<ObjectType, storageType>::getDelta(const version_t ver,
                                               const Func& fun, mutils::DeserializationManager* dm) const {
     uint8_t * pdat = (uint8_t*)this->m_pLog->getEntry(ver, exact);
     if(pdat == nullptr) {
-        throw PERSIST_EXP_INV_VERSION;
+        throw persistent_invalid_version(ver);
     }
     return mutils::deserialize_and_run(dm, pdat, fun);
 }
@@ -343,7 +343,7 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
         mutils::DeserializationManager* dm) const {
     int64_t idx = this->m_pLog->getVersionIndex(ver);
     if(idx == INVALID_INDEX) {
-        throw PERSIST_EXP_INV_VERSION;
+        throw persistent_invalid_version(ver);
     }
 
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
@@ -363,7 +363,7 @@ Persistent<ObjectType, storageType>::getDelta(
         mutils::DeserializationManager* dm) const {
     int64_t idx = this->m_pLog->getVersionIndex(ver, exact);
     if(idx == INVALID_INDEX) {
-        throw PERSIST_EXP_INV_VERSION;
+        throw persistent_invalid_version(ver);
     }
 
     return mutils::from_bytes<DeltaType>(dm, (const uint8_t*)this->m_pLog->getEntryByIndex(idx));
@@ -424,19 +424,19 @@ auto Persistent<ObjectType, storageType>::get(
         mutils::DeserializationManager* dm) const {
     // global stability frontier test
     if(m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
-        throw PERSIST_EXP_BEYOND_GSF;
+        throw persistent_version_not_stable();
     }
 
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         int64_t idx = this->m_pLog->getHLCIndex(hlc);
         if(idx == INVALID_INDEX) {
-            throw PERSIST_EXP_INV_HLC;
+            throw persistent_invalid_hlc();
         }
         return getByIndex(idx, fun, dm);
     } else {
         uint8_t* pdat = (uint8_t*)this->m_pLog->getEntry(hlc);
         if(pdat == nullptr) {
-            throw PERSIST_EXP_INV_HLC;
+            throw persistent_invalid_hlc();
         }
         return mutils::deserialize_and_run(dm, pdat, fun);
     }
@@ -449,18 +449,18 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
         mutils::DeserializationManager* dm) const {
     // global stability frontier test
     if(m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
-        throw PERSIST_EXP_BEYOND_GSF;
+        throw persistent_version_not_stable();
     }
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         int64_t idx = this->m_pLog->getHLCIndex(hlc);
         if(idx == INVALID_INDEX) {
-            throw PERSIST_EXP_INV_HLC;
+            throw persistent_invalid_hlc();
         }
         return getByIndex(idx, dm);
     } else {
         uint8_t const* pdat = (uint8_t const*)this->m_pLog->getEntry(hlc);
         if(pdat == nullptr) {
-            throw PERSIST_EXP_INV_HLC;
+            throw persistent_invalid_hlc();
         }
         return mutils::from_bytes<ObjectType>(dm, pdat);
     }
@@ -769,7 +769,7 @@ void saveObject(ObjectType& obj, const char* object_name) {
             break;
         }
         default:
-            throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
+            throw persistent_unknown_storage_type(storageType);
     }
 }
 
@@ -783,7 +783,7 @@ std::unique_ptr<ObjectType> loadObject(const char* object_name) {
         case ST_MEM:
             return loadNoLogObjectFromMem<ObjectType>(object_name);
         default:
-            throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
+            throw persistent_unknown_storage_type(storageType);
     }
 }
 

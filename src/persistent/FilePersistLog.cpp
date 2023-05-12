@@ -3,6 +3,7 @@
 #include "derecho/conf/conf.hpp"
 #include "derecho/persistent/detail/util.hpp"
 #include "derecho/persistent/detail/logger.hpp"
+#include "derecho/persistent/PersistException.hpp"
 
 #include <dirent.h>
 #include <errno.h>
@@ -48,10 +49,10 @@ FilePersistLog::FilePersistLog(const string& name, const string& dataPath, bool 
           m_pLog(MAP_FAILED),
           m_pData(MAP_FAILED) {
     if(pthread_rwlock_init(&this->m_rwlock, NULL) != 0) {
-        throw PERSIST_EXP_RWLOCK_INIT(errno);
+        throw persistent_lock_error("rwlock_init failed", errno);
     }
     if(pthread_mutex_init(&this->m_perslock, NULL) != 0) {
-        throw PERSIST_EXP_MUTEX_INIT(errno);
+        throw persistent_lock_error("mutex_init failed", errno);
     }
     dbg_trace(m_logger, "{0} constructor: before load()", name);
     if(derecho::getConfBoolean(CONF_PERS_RESET)) {
@@ -66,15 +67,15 @@ void FilePersistLog::reset() {
     if(fs::exists(this->m_sMetaFile)) {
         if(!fs::remove(this->m_sMetaFile)) {
             dbg_error(m_logger, "{0} reset failed to remove the file:{1}", this->m_sName, this->m_sMetaFile);
-            throw PERSIST_EXP_REMOVE_FILE(errno);
+            throw persistent_file_error("Failed to remove file.", errno);
         }
         if(!fs::remove(this->m_sLogFile)) {
             dbg_error(m_logger, "{0} reset failed to remove the file:{1}", this->m_sName, this->m_sLogFile);
-            throw PERSIST_EXP_REMOVE_FILE(errno);
+            throw persistent_file_error("Failed to remove file.", errno);
         }
         if(!fs::remove(this->m_sDataFile)) {
             dbg_error(m_logger, "{0} reset failed to remove the file:{1}", this->m_sName, this->m_sDataFile);
-            throw PERSIST_EXP_REMOVE_FILE(errno);
+            throw persistent_file_error("Failed to remove file.", errno);
         }
     }
     dbg_trace(m_logger, "{0} reset state...done", this->m_sName);
@@ -93,11 +94,11 @@ void FilePersistLog::load() {
     // STEP 2: open files
     this->m_iLogFileDesc = open(this->m_sLogFile.c_str(), O_RDWR);
     if(this->m_iLogFileDesc == -1) {
-        throw PERSIST_EXP_OPEN_FILE(errno);
+        throw persistent_file_error("Failed to open file.", errno);
     }
     this->m_iDataFileDesc = open(this->m_sDataFile.c_str(), O_RDWR);
     if(this->m_iDataFileDesc == -1) {
-        throw PERSIST_EXP_OPEN_FILE(errno);
+        throw persistent_file_error("Failed to open file.", errno);
     }
     // STEP 3: mmap to memory
     //// we map the log entry and data twice to faciliate the search and data
@@ -106,29 +107,29 @@ void FilePersistLog::load() {
     this->m_pLog = mmap(NULL, MAX_LOG_SIZE << 1, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if(this->m_pLog == MAP_FAILED) {
         dbg_error(m_logger, "{0}:reserve map space for log failed.", this->m_sName);
-        throw PERSIST_EXP_MMAP_FILE(errno);
+        throw persistent_file_error("mmap failed.", errno);
     }
     if(mmap(this->m_pLog, MAX_LOG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iLogFileDesc, 0) == MAP_FAILED) {
         dbg_error(m_logger, "{0}:map ringbuffer space for the first half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
-        throw PERSIST_EXP_MMAP_FILE(errno);
+        throw persistent_file_error("mmap failed.", errno);
     }
     if(mmap((void*)((uint64_t)this->m_pLog + MAX_LOG_SIZE), MAX_LOG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iLogFileDesc, 0) == MAP_FAILED) {
         dbg_error(m_logger, "{0}:map ringbuffer space for the second half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
-        throw PERSIST_EXP_MMAP_FILE(errno);
+        throw persistent_file_error("mmap failed.", errno);
     }
     //// data ringbuffer
     this->m_pData = mmap(NULL, (size_t)(MAX_DATA_SIZE << 1), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if(this->m_pData == MAP_FAILED) {
         dbg_error(m_logger, "{0}:reserve map space for data failed.", this->m_sName);
-        throw PERSIST_EXP_MMAP_FILE(errno);
+        throw persistent_file_error("mmap failed.", errno);
     }
     if(mmap(this->m_pData, (size_t)(MAX_DATA_SIZE), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iDataFileDesc, 0) == MAP_FAILED) {
         dbg_error(m_logger, "{0}:map ringbuffer space for the first half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
-        throw PERSIST_EXP_MMAP_FILE(errno);
+        throw persistent_file_error("mmap failed.", errno);
     }
     if(mmap((void*)((uint64_t)this->m_pData + MAX_DATA_SIZE), (size_t)MAX_DATA_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iDataFileDesc, 0) == MAP_FAILED) {
         dbg_error(m_logger, "{0}:map ringbuffer space for the second half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
-        throw PERSIST_EXP_MMAP_FILE(errno);
+        throw persistent_file_error("mmap failed.", errno);
     }
     dbg_trace(m_logger, "{0}:data/meta file mapped to memory", this->m_sName);
     // STEP 4: initialize the header for new created Metafile
@@ -145,10 +146,10 @@ void FilePersistLog::load() {
 
         try {
             persistMetaHeaderAtomically(&m_currMetaHeader);
-        } catch(uint64_t e) {
+        } catch(std::exception& e) {
             FPL_PERS_UNLOCK;
             FPL_UNLOCK;
-            throw e;
+            throw;
         }
         FPL_PERS_UNLOCK;
         FPL_UNLOCK;
@@ -159,12 +160,12 @@ void FilePersistLog::load() {
         try {
             int fd = open(this->m_sMetaFile.c_str(), O_RDONLY);
             if(fd == -1) {
-                throw PERSIST_EXP_OPEN_FILE(errno);
+                throw persistent_file_error("Failed to open file.", errno);
             }
             ssize_t nRead = read(fd, (void*)&m_persMetaHeader, sizeof(MetaHeader));
             if(nRead != sizeof(MetaHeader)) {
                 close(fd);
-                throw PERSIST_EXP_READ_FILE(errno);
+                throw persistent_file_error("Failed to read file.", errno);
             }
             close(fd);
             m_currMetaHeader = m_persMetaHeader;
@@ -176,10 +177,10 @@ void FilePersistLog::load() {
                 _ent.log_idx = idx;
                 this->hidx.insert(_ent);
             }
-        } catch(uint64_t e) {
+        } catch(std::exception& e) {
             FPL_PERS_UNLOCK;
             FPL_UNLOCK;
-            throw e;
+            throw;
         }
 
         FPL_PERS_UNLOCK;
@@ -221,17 +222,17 @@ inline void FilePersistLog::do_append_validation(const uint64_t size, const int6
                   this->m_sName, NUM_FREE_SLOTS);
         dbg_flush(m_logger);
         FPL_UNLOCK;
-        std::cerr << "PERSIST_EXP_NOSPACE_LOG: FREESLOT=" << NUM_FREE_SLOTS << ",version=" << ver << std::endl;
-        throw PERSIST_EXP_NOSPACE_LOG;
+        std::cerr << "No space in log: FREESLOT=" << NUM_FREE_SLOTS << ",version=" << ver << std::endl;
+        throw persistent_log_full("No free slots in the log.");
     }
     if(NUM_FREE_BYTES < (signature_size + size)) {
         dbg_error(m_logger, "{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}, signature_size={3}",
                   this->m_sName, NUM_FREE_BYTES, size, signature_size);
         dbg_flush(m_logger);
         FPL_UNLOCK;
-        std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size
+        std::cerr << "No space for data: FREE:" << NUM_FREE_BYTES << ",size=" << size
                   << ",signature_size=" << signature_size << std::endl;
-        throw PERSIST_EXP_NOSPACE_DATA;
+        throw persistent_log_full("Insufficient space in the log for the data.");
     }
     if((CURR_LOG_IDX != INVALID_INDEX) && (m_currMetaHeader.fields.ver >= ver)) {
         int64_t cver = m_currMetaHeader.fields.ver;
@@ -239,8 +240,8 @@ inline void FilePersistLog::do_append_validation(const uint64_t size, const int6
                   (int64_t)cver, (int64_t)ver);
         dbg_flush(m_logger);
         FPL_UNLOCK;
-        std::cerr << "PERSIST_EXP_INV_VERSION:cver=" << cver << ",ver=" << ver << std::endl;
-        throw PERSIST_EXP_INV_VERSION;
+        std::cerr << "Invalid version: cver=" << cver << ",ver=" << ver << std::endl;
+        throw persistent_invalid_version(ver);
     }
 }
 
@@ -268,25 +269,14 @@ void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, cons
     NEXT_LOG_ENTRY->fields.ofst = NEXT_DATA_OFST;
     NEXT_LOG_ENTRY->fields.hlc_r = mhlc.m_rtc_us;
     NEXT_LOG_ENTRY->fields.hlc_l = mhlc.m_logic;
-    /* No Sync required here.
-    if (msync(ALIGN_TO_PAGE(NEXT_LOG_ENTRY),
-        sizeof(LogEntry) + (((uint64_t)NEXT_LOG_ENTRY) % PAGE_SIZE),MS_SYNC) != 0) {
-      FPL_UNLOCK;
-      throw PERSIST_EXP_MSYNC(errno);
-    }
-    */
+    /* No Sync required here. */
 
     // update meta header
     this->hidx.insert(hlc_index_entry{mhlc, m_currMetaHeader.fields.tail});
     m_currMetaHeader.fields.tail++;
     m_currMetaHeader.fields.ver = ver;
     dbg_trace(m_logger, "{0} append:log entry and meta data are updated.", this->m_sName);
-    /* No sync
-    if (msync(this->m_pMeta,sizeof(MetaHeader),MS_SYNC) != 0) {
-      FPL_UNLOCK;
-      throw PERSIST_EXP_MSYNC(errno);
-    }
-    */
+    /* No sync */
     dbg_debug(m_logger, "{0} append a log ver:{1} hlc:({2},{3})", this->m_sName,
               ver, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_UNLOCK;
@@ -299,7 +289,7 @@ void FilePersistLog::advanceVersion(version_t ver) {
         m_currMetaHeader.fields.ver = ver;
     } else {
         FPL_UNLOCK;
-        throw PERSIST_EXP_INV_VERSION;
+        throw persistent_invalid_version(ver);
     }
     FPL_UNLOCK;
 }
@@ -350,21 +340,21 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
         }
         if(flush_dlen > 0) {
             if(msync(flush_dstart, flush_dlen, MS_SYNC) != 0) {
-                throw PERSIST_EXP_MSYNC(errno);
+                throw persistent_file_error("msync failed.", errno);
             }
         }
         if(flush_llen > 0) {
             if(msync(flush_lstart, flush_llen, MS_SYNC) != 0) {
-                throw PERSIST_EXP_MSYNC(errno);
+                throw persistent_file_error("msync failed.", errno);
             }
         }
         // flush meta data
         this->persistMetaHeaderAtomically(&shadow_header);
-    } catch(uint64_t e) {
+    } catch(std::exception& e) {
         if(!preLocked) {
             FPL_PERS_UNLOCK;
         }
-        throw e;
+        throw;
     }
     dbg_trace(m_logger, "{0} flush data,log,and meta...done.", this->m_sName);
 
@@ -444,7 +434,6 @@ bool FilePersistLog::getSignatureByIndex(int64_t index, uint8_t* signature, vers
     if(m_currMetaHeader.fields.tail <= ridx || ridx < m_currMetaHeader.fields.head) {
         FPL_UNLOCK;
         return false;
-        // throw PERSIST_EXP_INV_ENTRY_IDX(index);
     }
     FPL_UNLOCK;
 
@@ -537,7 +526,7 @@ const void* FilePersistLog::getEntryByIndex(int64_t eidx) {
 
     if(m_currMetaHeader.fields.tail <= ridx || ridx < m_currMetaHeader.fields.head) {
         FPL_UNLOCK;
-        throw PERSIST_EXP_INV_ENTRY_IDX(eidx);
+        throw persistent_invalid_index(eidx);
     }
     FPL_UNLOCK;
 
@@ -717,16 +706,15 @@ void FilePersistLog::trimByIndex(int64_t idx) {
         // This has a widespreading on the design and needs extensive test before replying on
         // it.
         persist(LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver, true);
-    } catch(uint64_t e) {
+    } catch(std::exception& e) {
         FPL_UNLOCK;
         FPL_PERS_UNLOCK;
-        throw e;
+        throw;
     }
     //TODO: remove entry from index...this is tricky because HLC
     // order does not agree with index order.
     FPL_UNLOCK;
     FPL_PERS_UNLOCK;
-    // throw PERSIST_EXP_UNIMPLEMENTED;
     dbg_trace(m_logger, "{0} trim at index: {1}...done", this->m_sName, idx);
 }
 
@@ -746,7 +734,7 @@ void FilePersistLog::trim(const HLC& hlc) {
     //          LOG_ENTRY_AT(idx)->fields.hlc_l);
     //      });
     //TODO: This is hard because HLC order does not agree with index order.
-    throw PERSIST_EXP_UNIMPLEMENTED;
+    throw persistent_not_implemented("trim(const HLC&)");
     dbg_trace(m_logger, "{0} trim at time: {1}.{2}...done", this->m_sName, hlc.m_rtc_us, hlc.m_logic);
 }
 
@@ -757,17 +745,17 @@ void FilePersistLog::persistMetaHeaderAtomically(MetaHeader* pShadowHeader) {
     // STEP 2: write current meta header to swap file
     int fd = open(swpFile.c_str(), O_RDWR | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP | S_IROTH);
     if(fd == -1) {
-        throw PERSIST_EXP_OPEN_FILE(errno);
+        throw persistent_file_error("Failed to open file.", errno);
     }
     ssize_t nWrite = write(fd, pShadowHeader, sizeof(MetaHeader));
     if(nWrite != sizeof(MetaHeader)) {
-        throw PERSIST_EXP_WRITE_FILE(errno);
+        throw persistent_file_error("Failed to write file.", errno);
     }
     close(fd);
 
     // STEP 3: atomically update the meta file
     if(rename(swpFile.c_str(), this->m_sMetaFile.c_str()) != 0) {
-        throw PERSIST_EXP_RENAME_FILE(errno);
+        throw persistent_file_error("Failed to rename file.", errno);
     }
 
     // STEP 4: update the persisted header in memory
@@ -930,11 +918,11 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const uint8_t* ba) {
     // 1) do we have space to merge it?
     if(NUM_FREE_SLOTS == 0) {
         dbg_trace(m_logger, "{0} failed to merge log entry, we don't empty log entry.", __func__);
-        throw PERSIST_EXP_NOSPACE_LOG;
+        throw persistent_log_full("No free log entries");
     }
     if(NUM_FREE_BYTES < cple->fields.sdlen) {
         dbg_trace(m_logger, "{0} failed to merge log entry, we need {1} bytes data space, but we have only {2} bytes.", __func__, cple->fields.sdlen, NUM_FREE_BYTES);
-        throw PERSIST_EXP_NOSPACE_DATA;
+        throw persistent_log_full("Insufficient space for log data");
     }
     // 2) merge it!
     memcpy(NEXT_DATA, (const void*)(ba + sizeof(LogEntry)), cple->fields.sdlen);
@@ -949,49 +937,7 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const uint8_t* ba) {
 //////////////////////////
 // invisible to outside //
 //////////////////////////
-/* -- moved to util.hpp
-  void checkOrCreateDir(const string & dirPath)
-  {
-    struct stat sb;
-    if (stat(dirPath.c_str(),&sb) == 0) {
-      if (! S_ISDIR(sb.st_mode)) {
-        throw PERSIST_EXP_INV_PATH;
-      }
-    } else {
-      // create it
-      if (mkdir(dirPath.c_str(),0700) != 0) {
-        throw PERSIST_EXP_CREATE_PATH(errno);
-      }
-    }
-  }
 
-  bool checkOrCreateFileWithSize(const string & file, uint64_t size)
-  {
-    bool bCreate = false;
-    struct stat sb;
-    int fd;
-
-    if (stat(file.c_str(),&sb) == 0) {
-      if(! S_ISREG(sb.st_mode)) {
-        throw PERSIST_EXP_INV_FILE;
-      }
-    } else {
-      // create it
-      bCreate = true;
-    }
-
-    fd = open(file.c_str(), O_RDWR|O_CREAT,S_IWUSR|S_IRUSR|S_IRGRP|S_IWGRP|S_IROTH);
-    if (fd < 0) {
-      throw PERSIST_EXP_CREATE_FILE(errno);
-    }
-
-    if (ftruncate(fd,size) != 0) {
-      throw PERSIST_EXP_TRUNCATE_FILE(errno);
-    }
-    close(fd);
-    return bCreate;
-  }
-*/
 bool FilePersistLog::checkOrCreateMetaFile() {
     return checkOrCreateFileWithSize(this->m_sMetaFile, META_SIZE);
 }
@@ -1034,10 +980,10 @@ void FilePersistLog::truncate(version_t ver) {
     FPL_PERS_LOCK;
     try {
         persistMetaHeaderAtomically(&m_currMetaHeader);
-    } catch(uint64_t e) {
+    } catch(std::exception& e) {
         FPL_PERS_UNLOCK;
         FPL_UNLOCK;
-        throw e;
+        throw;
     }
     FPL_PERS_UNLOCK;
     FPL_UNLOCK;

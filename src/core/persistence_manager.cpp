@@ -139,9 +139,9 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
                        Vc.gmsSST->persisted_num,
                        subgroup_id);
         last_persisted_version[subgroup_id] = persisted_version;
-    } catch(uint64_t exp) {
-        dbg_debug(persistence_logger, "exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
-        std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
+    } catch(persistent::persistent_exception& exp) {
+        dbg_debug(persistence_logger, "exception on persist():subgroup={},ver={},what={}.", subgroup_id, version, exp.what());
+        std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception message:" << exp.what() << std::endl;
     }
 }
 
