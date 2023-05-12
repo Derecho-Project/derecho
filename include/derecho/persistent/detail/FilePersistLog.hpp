@@ -129,39 +129,39 @@ protected:
     pthread_mutex_t m_perslock;
 
 // lock macro
-#define FPL_WRLOCK                                        \
-    do {                                                  \
-        if(pthread_rwlock_wrlock(&this->m_rwlock) != 0) { \
-            throw PERSIST_EXP_RWLOCK_WRLOCK(errno);       \
-        }                                                 \
+#define FPL_WRLOCK                                                           \
+    do {                                                                     \
+        if(pthread_rwlock_wrlock(&this->m_rwlock) != 0) {                    \
+            throw persistent_lock_error("rwlock_wrlock failed.", errno); \
+        }                                                                    \
     } while(0)
 
-#define FPL_RDLOCK                                        \
-    do {                                                  \
-        if(pthread_rwlock_rdlock(&this->m_rwlock) != 0) { \
-            throw PERSIST_EXP_RWLOCK_WRLOCK(errno);       \
-        }                                                 \
+#define FPL_RDLOCK                                                           \
+    do {                                                                     \
+        if(pthread_rwlock_rdlock(&this->m_rwlock) != 0) {                    \
+            throw persistent_lock_error("rwlock_rdlock failed.", errno); \
+        }                                                                    \
     } while(0)
 
-#define FPL_UNLOCK                                        \
-    do {                                                  \
-        if(pthread_rwlock_unlock(&this->m_rwlock) != 0) { \
-            throw PERSIST_EXP_RWLOCK_UNLOCK(errno);       \
-        }                                                 \
+#define FPL_UNLOCK                                                           \
+    do {                                                                     \
+        if(pthread_rwlock_unlock(&this->m_rwlock) != 0) {                    \
+            throw persistent_lock_error("rwlock_unlock failed.", errno); \
+        }                                                                    \
     } while(0)
 
-#define FPL_PERS_LOCK                                    \
-    do {                                                 \
-        if(pthread_mutex_lock(&this->m_perslock) != 0) { \
-            throw PERSIST_EXP_MUTEX_LOCK(errno);         \
-        }                                                \
+#define FPL_PERS_LOCK                                                     \
+    do {                                                                  \
+        if(pthread_mutex_lock(&this->m_perslock) != 0) {                  \
+            throw persistent_lock_error("mutex_lock failed.", errno); \
+        }                                                                 \
     } while(0)
 
-#define FPL_PERS_UNLOCK                                    \
-    do {                                                   \
-        if(pthread_mutex_unlock(&this->m_perslock) != 0) { \
-            throw PERSIST_EXP_MUTEX_UNLOCK(errno);         \
-        }                                                  \
+#define FPL_PERS_UNLOCK                                                     \
+    do {                                                                    \
+        if(pthread_mutex_unlock(&this->m_perslock) != 0) {                  \
+            throw persistent_lock_error("mutex_unlock failed.", errno); \
+        }                                                                   \
     } while(0)
 
     // load the log from files. This method may through exceptions if read from
@@ -245,7 +245,7 @@ public:
                 // it.
                 version_t ver = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
                 persist(ver, true);
-            } catch(uint64_t e) {
+            } catch(std::exception& e) {
                 FPL_UNLOCK;
                 FPL_PERS_UNLOCK;
                 throw e;
@@ -253,7 +253,6 @@ public:
             FPL_PERS_UNLOCK;
             //TODO:remove delete entries from the index. This is tricky because
             // HLC order and idex order does not agree with each other.
-            // throw PERSIST_EXP_UNIMPLEMENTED;
         } else {
             FPL_UNLOCK;
             return;

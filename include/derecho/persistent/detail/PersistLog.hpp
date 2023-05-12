@@ -24,6 +24,13 @@ enum StorageType {
     ST_3DXP
 };
 
+struct persistent_unknown_storage_type : public persistent_exception {
+    StorageType requested_type;
+    persistent_unknown_storage_type(StorageType requested_type)
+            : persistent_exception("Unknown storage type: " + std::to_string(requested_type)),
+              requested_type(requested_type) {}
+};
+
 constexpr version_t INVALID_VERSION = -1L;
 constexpr int64_t INVALID_INDEX = INT64_MAX;
 

@@ -148,7 +148,7 @@ version_t PersistentRegistry::persist(version_t latest_version) {
     version_t min = INVALID_VERSION;
     for(auto& entry : m_registry) {
         version_t ver = entry.second->persist(latest_version);
-        if (min == INVALID_VERSION || 
+        if (min == INVALID_VERSION ||
             min > ver) {
             min = ver;
         }
@@ -231,7 +231,7 @@ std::string PersistentRegistry::generate_prefix(
         sha256.hash_bytes(subgroup_type_name, strlen(subgroup_type_name), subgroup_type_name_digest);
     } catch(openssl::openssl_error& ex) {
         dbg_default_error("{}:{} Unable to compute SHA256 of subgroup type name. OpenSSL error: {}", __FILE__, __func__, ex.what());
-        throw PERSIST_EXP_SHA256_HASH(errno);
+        throw;
     }
 
     // char prefix[strlen(subgroup_type_name) * 2 + 32];
