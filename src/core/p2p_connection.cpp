@@ -27,7 +27,7 @@ std::ostream& operator<<(std::ostream& os, MESSAGE_TYPE mt) {
 }
 
 P2PConnection::P2PConnection(uint32_t my_node_id, uint32_t remote_id, uint64_t p2p_buf_size, const ConnectionParams& connection_params)
-        : my_node_id(my_node_id), remote_id(remote_id), connection_params(connection_params) {
+        : my_node_id(my_node_id), remote_id(remote_id), connection_params(connection_params), rpc_logger(spdlog::get(LoggerFactory::RPC_LOGGER_NAME)) {
     incoming_p2p_buffer = std::make_unique<volatile uint8_t[]>(p2p_buf_size);
     outgoing_p2p_buffer = std::make_unique<volatile uint8_t[]>(p2p_buf_size);
 
@@ -75,7 +75,7 @@ std::optional<std::pair<uint8_t*, MESSAGE_TYPE>> P2PConnection::probe() {
 }
 
 void P2PConnection::increment_incoming_seq_num(MESSAGE_TYPE type) {
-    dbg_default_trace("P2PConnection updating incoming_seq_num for type {} to {}", type, incoming_seq_nums_map[type] + 1);
+    dbg_trace(rpc_logger, "P2PConnection updating incoming_seq_num for type {} to {}", type, incoming_seq_nums_map[type] + 1);
     incoming_seq_nums_map[type]++;
 }
 
@@ -94,7 +94,7 @@ std::optional<P2PBufferHandle> P2PConnection::get_sendbuffer_ptr(MESSAGE_TYPE ty
                                        + getOffsetBuf(type, cur_seq_num),
                                cur_seq_num};
     }
-    dbg_default_trace("P2PConnection: Send buffer was full: incoming_seq_nums[REPLY] = {}, but outgoing_seq_nums[REQUEST] = {}", incoming_seq_nums_map[MESSAGE_TYPE::P2P_REPLY], outgoing_seq_nums_map[MESSAGE_TYPE::P2P_REQUEST]);
+    dbg_trace(rpc_logger, "P2PConnection: Send buffer was full: incoming_seq_nums[REPLY] = {}, but outgoing_seq_nums[REQUEST] = {}", incoming_seq_nums_map[MESSAGE_TYPE::P2P_REPLY], outgoing_seq_nums_map[MESSAGE_TYPE::P2P_REQUEST]);
     return std::nullopt;
 }
 
@@ -108,11 +108,11 @@ void P2PConnection::send(MESSAGE_TYPE type, uint64_t sequence_num) {
                     const_cast<uint8_t*>(outgoing_p2p_buffer.get()) + getOffsetSeqNum(type, sequence_num),
                     sizeof(uint64_t));
     } else {
-        dbg_default_trace("Sending {} to node {}, about to call post_remote_write. getOffsetBuf() is {}, getOffsetSeqNum() is {}",
+        dbg_trace(rpc_logger, "Sending {} to node {}, about to call post_remote_write. getOffsetBuf() is {}, getOffsetSeqNum() is {}",
                           type, remote_id, getOffsetBuf(type, sequence_num), getOffsetSeqNum(type, sequence_num));
         uint64_t seq_num = ((uint64_t*)(outgoing_p2p_buffer.get() + getOffsetSeqNum(type, sequence_num)))[0];
         long invocation_id = ((long*)(outgoing_p2p_buffer.get() + getOffsetBuf(type, sequence_num) + derecho::rpc::remote_invocation_utilities::header_space() + 1))[0];
-        dbg_default_trace("Sequence number in the OffsetSeqNum position is {}. Invocation ID in the payload is {}", seq_num, invocation_id);
+        dbg_trace(rpc_logger, "Sequence number in the OffsetSeqNum position is {}. Invocation ID in the payload is {}", seq_num, invocation_id);
         res->post_remote_write(getOffsetBuf(type, sequence_num),
                                connection_params.max_msg_sizes[type] - sizeof(uint64_t));
         res->post_remote_write(getOffsetSeqNum(type, sequence_num),

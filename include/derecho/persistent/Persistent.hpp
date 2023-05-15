@@ -10,6 +10,7 @@
 #include "derecho/utils/logger.hpp"
 #include "detail/FilePersistLog.hpp"
 #include "detail/PersistLog.hpp"
+#include "detail/logger.hpp"
 
 #include <functional>
 #include <inttypes.h>
@@ -217,7 +218,7 @@ public:
         if(m_temporalQueryFrontierProvider != nullptr) {
 #ifndef NDEBUG
             const HLC r = m_temporalQueryFrontierProvider->getFrontier();
-            dbg_default_warn("temporal_query_frontier=HLC({},{})", r.m_rtc_us, r.m_logic);
+            dbg_warn(m_logger, "temporal_query_frontier=HLC({},{})", r.m_rtc_us, r.m_logic);
             return r;
 #else
             return m_temporalQueryFrontierProvider->getFrontier();
@@ -275,7 +276,10 @@ protected:
      * this appears in the first part of storage file for persistent<T>
      */
     const std::string m_subgroupPrefix;
-
+    /**
+     * Pointer to the persistence-module logger (created by the PersistLogger class)
+     */
+    std::shared_ptr<spdlog::logger> m_logger;
     /**
      * Pointer to an entity providing TemporalQueryFrontier service.
      */
@@ -1072,6 +1076,8 @@ protected:
     std::unique_ptr<PersistLog> m_pLog;
     // Persistence Registry
     PersistentRegistry* m_pRegistry;
+    // Pointer to the Persistence-module logger
+    std::shared_ptr<spdlog::logger> m_logger;
     // get the static name maker.
     static _NameMaker<ObjectType, storageType>& getNameMaker(const std::string& prefix = std::string(""));
 

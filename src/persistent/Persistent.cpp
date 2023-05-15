@@ -1,5 +1,6 @@
 #include "derecho/persistent/Persistent.hpp"
 
+#include "derecho/persistent/detail/logger.hpp"
 #include "derecho/openssl/hash.hpp"
 #include "derecho/openssl/signature.hpp"
 
@@ -16,6 +17,7 @@ PersistentRegistry::PersistentRegistry(
         const std::type_index& subgroup_type,
         uint32_t subgroup_index,
         uint32_t shard_num) : m_subgroupPrefix(generate_prefix(subgroup_type, subgroup_index, shard_num)),
+                              m_logger(PersistLogger::get()),
                               m_temporalQueryFrontierProvider(tqfp),
                               m_lastSignedVersion(INVALID_VERSION) {
 }
@@ -72,9 +74,9 @@ void PersistentRegistry::initializeLastSignature(version_t version,
 
 void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer) {
     version_t cur_nonempty_version = getMinimumVersionAfter(m_lastSignedVersion);
-    dbg_default_debug("PersistentRegistry: sign() called with lastSignedVersion = {}, latest_version = {}. First version to sign = {}", m_lastSignedVersion, latest_version, cur_nonempty_version);
+    dbg_debug(m_logger, "PersistentRegistry: sign() called with lastSignedVersion = {}, latest_version = {}. First version to sign = {}", m_lastSignedVersion, latest_version, cur_nonempty_version);
     while(cur_nonempty_version != INVALID_VERSION && cur_nonempty_version <= latest_version) {
-        dbg_default_trace("PersistentRegistry: Attempting to sign version {} out of {}", cur_nonempty_version, latest_version);
+        dbg_trace(m_logger, "PersistentRegistry: Attempting to sign version {} out of {}", cur_nonempty_version, latest_version);
         signer.init();
         std::size_t bytes_signed = 0;
         for(auto& field : m_registry) {
@@ -82,7 +84,7 @@ void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer,
         }
         if(bytes_signed == 0) {
             // That version did not exist in any field, so there was nothing to sign. This should not happen with getMinimumVersionAfter().
-            dbg_default_warn("Logic error in PersistentRegistry: Version {} was returned by getMinimumVersionAfter(), but it did not exist in any field", cur_nonempty_version);
+            dbg_warn(m_logger, "Logic error in PersistentRegistry: Version {} was returned by getMinimumVersionAfter(), but it did not exist in any field", cur_nonempty_version);
             cur_nonempty_version = getMinimumVersionAfter(cur_nonempty_version);
             continue;
         }
@@ -90,7 +92,7 @@ void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer,
         signer.finalize(signature_buffer);
         // After computing a signature over all fields of the object, go back and
         // tell each field to add that signature to its log.
-        dbg_default_debug("PersistentRegistry: Adding signature to log in version {}, setting its previous signed version to {}", cur_nonempty_version, m_lastSignedVersion);
+        dbg_debug(m_logger, "PersistentRegistry: Adding signature to log in version {}, setting its previous signed version to {}", cur_nonempty_version, m_lastSignedVersion);
         for(auto& field : m_registry) {
             field.second->addSignature(cur_nonempty_version, signature_buffer, m_lastSignedVersion);
         }
@@ -116,7 +118,7 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     if(m_registry.empty()) {
         return true;
     }
-    dbg_default_debug("PersistentRegistry: Verifying signature on version {}", version);
+    dbg_debug(m_logger, "PersistentRegistry: Verifying signature on version {}", version);
     verifier.init();
     for(auto& field : m_registry) {
         field.second->updateVerifier(version, verifier);
@@ -230,7 +232,7 @@ std::string PersistentRegistry::generate_prefix(
     try {
         sha256.hash_bytes(subgroup_type_name, strlen(subgroup_type_name), subgroup_type_name_digest);
     } catch(openssl::openssl_error& ex) {
-        dbg_default_error("{}:{} Unable to compute SHA256 of subgroup type name. OpenSSL error: {}", __FILE__, __func__, ex.what());
+        dbg_error(PersistLogger::get(), "{}:{} Unable to compute SHA256 of subgroup type name. OpenSSL error: {}", __FILE__, __func__, ex.what());
         throw;
     }
 

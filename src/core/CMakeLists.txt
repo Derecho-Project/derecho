@@ -10,6 +10,7 @@ add_library(core OBJECT
     persistence_manager.cpp
     restart_state.cpp
     rpc_manager.cpp
+    rpc_utils.cpp
     subgroup_functions.cpp
     version_code.cpp
     view.cpp

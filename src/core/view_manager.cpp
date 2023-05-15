@@ -33,7 +33,8 @@ ViewManager::ViewManager(
         std::map<subgroup_id_t, ReplicatedObject*>& object_pointer_map,
         PersistenceManager& persistence_manager,
         std::vector<view_upcall_t> _view_upcalls)
-        : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
+        : vm_logger(LoggerFactory::createIfAbsent(LoggerFactory::VIEWMANAGER_LOGGER_NAME, getConfString(CONF_LOGGER_VIEWMANAGER_LOG_LEVEL))),
+          server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           disable_partitioning_safety(getConfBoolean(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY)),
           view_upcalls(_view_upcalls),
@@ -71,7 +72,7 @@ bool ViewManager::first_init() {
     }
     //The presence of a logged View on disk means this node is restarting after a crash
     if(curr_view) {
-        dbg_default_debug("Found view {} on disk", curr_view->vid);
+        dbg_debug(vm_logger, "Found view {} on disk", curr_view->vid);
         restart_state = std::make_unique<RestartState>();
         restart_state->restart_leader_ips = split_string(getConfString(CONF_DERECHO_RESTART_LEADERS));
         restart_state->restart_leader_ports = [&]() {
@@ -115,7 +116,7 @@ void ViewManager::startup_to_first_view() {
         setup_initial_tcp_connections(*curr_view, my_id);
     } else {
         active_leader = false;
-        dbg_default_info("Non-leader node {} initiating a join request at the leader", my_id);
+        dbg_info(vm_logger, "Non-leader node {} initiating a join request at the leader", my_id);
         leader_connection = std::make_unique<tcp::socket>(getConfString(CONF_DERECHO_LEADER_IP),
                                                           getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT));
         bool success = receive_initial_view();
@@ -139,7 +140,7 @@ bool ViewManager::restart_to_initial_view() {
            && my_gms_port == restart_state->restart_leader_ports[restart_state->num_leader_failures]) {
             in_total_restart = true;
             active_leader = true;
-            dbg_default_info("Logged View {} found on disk. Restarting in recovery mode as the leader.", curr_view->vid);
+            dbg_info(vm_logger, "Logged View {} found on disk. Restarting in recovery mode as the leader.", curr_view->vid);
             //The subgroup_type_order can't be serialized, but it's constant across restarts
             curr_view->subgroup_type_order = subgroup_type_order;
             //Set up restart state and await rejoining nodes as the leader
@@ -179,10 +180,10 @@ bool ViewManager::restart_to_initial_view() {
                         throw derecho_exception("Restart leader crashed before sending the View, and backup restart leaders are disabled.");
                     }
                     restart_state->num_leader_failures++;
-                    dbg_default_debug("Restart leader failed, moving to leader #{}", restart_state->num_leader_failures);
+                    dbg_debug(vm_logger, "Restart leader failed, moving to leader #{}", restart_state->num_leader_failures);
                 }
             } else if(enable_backup_restart_leaders) {
-                dbg_default_warn("Couldn't connect to restart leader at {}", restart_state->restart_leader_ips[restart_state->num_leader_failures]);
+                dbg_warn(vm_logger, "Couldn't connect to restart leader at {}", restart_state->restart_leader_ips[restart_state->num_leader_failures]);
                 restart_state->num_leader_failures++;
                 //If backup_restart_leaders is disabled, keep num_leader_failures at 0 and just keep retrying
             }
@@ -202,7 +203,7 @@ bool ViewManager::receive_initial_view() {
     do {
         leader_redirect = false;
         uint64_t leader_version_hashcode;
-        dbg_default_debug("Socket connected to leader, exchanging version codes.");
+        dbg_debug(vm_logger, "Socket connected to leader, exchanging version codes.");
         try {
             leader_connection->exchange(my_version_hashcode, leader_version_hashcode);
             if(leader_version_hashcode != my_version_hashcode) {
@@ -214,8 +215,8 @@ bool ViewManager::receive_initial_view() {
             return false;
         }
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
-            dbg_default_error("Error! Leader refused connection because ID {} is already in use!", my_id);
-            dbg_default_flush();
+            dbg_error(vm_logger, "Error! Leader refused connection because ID {} is already in use!", my_id);
+            dbg_flush(vm_logger);
             throw derecho_exception("Leader rejected join, ID already in use.");
         }
         if(leader_response.code == JoinResponseCode::LEADER_REDIRECT) {
@@ -227,7 +228,7 @@ bool ViewManager::receive_initial_view() {
             ip_addr_t leader_ip(&buffer[0], &buffer[ip_addr_size]);
             uint16_t leader_gms_port;
             leader_connection->read(leader_gms_port);
-            dbg_default_info("That node was not the leader! Redirecting to {}:{}", leader_ip, leader_gms_port);
+            dbg_info(vm_logger, "That node was not the leader! Redirecting to {}:{}", leader_ip, leader_gms_port);
             //Use move-assignment to reconnect the socket to the given IP address, and try again
             leader_connection = std::make_unique<tcp::socket>(leader_ip, leader_gms_port);
             leader_redirect = true;
@@ -236,8 +237,8 @@ bool ViewManager::receive_initial_view() {
 
     in_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
     if(in_total_restart) {
-        dbg_default_info("Logged state found on disk. Restarting in recovery mode.");
-        dbg_default_debug("Sending view {} to leader", curr_view->vid);
+        dbg_info(vm_logger, "Logged state found on disk. Restarting in recovery mode.");
+        dbg_debug(vm_logger, "Sending view {} to leader", curr_view->vid);
         auto leader_socket_write = [this](const uint8_t* bytes, std::size_t size) {
             leader_connection->write(bytes, size);
         };
@@ -248,7 +249,7 @@ bool ViewManager::receive_initial_view() {
             curr_view->subgroup_type_order = subgroup_type_order;
             //Now that we know we need them, load ragged trims from disk
             restart_state->load_ragged_trim(*curr_view);
-            dbg_default_debug("In restart mode, sending {} ragged trims to leader", restart_state->logged_ragged_trim.size());
+            dbg_debug(vm_logger, "In restart mode, sending {} ragged trims to leader", restart_state->logged_ragged_trim.size());
             /* Protocol: Send the number of RaggedTrim objects, then serialize each RaggedTrim */
             /* Since we know this node is only a member of one shard per subgroup,
              * the size of the outer map (subgroup IDs) is the number of RaggedTrims. */
@@ -277,7 +278,7 @@ bool ViewManager::receive_initial_view() {
         return false;
     }
     if(receive_view_and_leaders()) {
-        dbg_default_debug("Received initial view {} from leader: {}", curr_view->vid, curr_view->debug_string());
+        dbg_debug(vm_logger, "Received initial view {} from leader: {}", curr_view->vid, curr_view->debug_string());
         return true;
     } else {
         return false;
@@ -290,9 +291,9 @@ bool ViewManager::receive_view_and_leaders() {
         //The leader will first send the size of the necessary buffer, then the serialized View
         std::size_t size_of_view;
         leader_connection->read(size_of_view);
-        dbg_default_trace("Read size_of_view = {} from leader over joiner socket", size_of_view);
+        dbg_trace(vm_logger, "Read size_of_view = {} from leader over joiner socket", size_of_view);
         uint8_t buffer[size_of_view];
-        dbg_default_trace("Receiving initial view over joiner socket");
+        dbg_trace(vm_logger, "Receiving initial view over joiner socket");
         leader_connection->read(buffer, size_of_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
         if(in_total_restart) {
@@ -300,7 +301,7 @@ bool ViewManager::receive_view_and_leaders() {
             restart_state->logged_ragged_trim.clear();
             std::size_t num_of_ragged_trims;
             leader_connection->read(num_of_ragged_trims);
-            dbg_default_debug("In restart mode, receiving {} ragged trims from leader", num_of_ragged_trims);
+            dbg_debug(vm_logger, "In restart mode, receiving {} ragged trims from leader", num_of_ragged_trims);
             for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
                 std::size_t size_of_ragged_trim;
                 leader_connection->read(size_of_ragged_trim);
@@ -336,7 +337,7 @@ void ViewManager::check_view_committed(bool& view_confirmed, bool& leader_failed
     try {
         leader_connection->read(commit_message);
         if(commit_message == CommitMessage::PREPARE) {
-            dbg_default_debug("Leader sent PREPARE");
+            dbg_debug(vm_logger, "Leader sent PREPARE");
             leader_connection->write(CommitMessage::ACK);
             //After a successful Prepare, replace commit_message with the second message,
             //which is either Commit or Abort
@@ -344,7 +345,7 @@ void ViewManager::check_view_committed(bool& view_confirmed, bool& leader_failed
         }
         //This checks if either the first or the second message was Abort
         if(commit_message == CommitMessage::ABORT) {
-            dbg_default_debug("Leader sent ABORT");
+            dbg_debug(vm_logger, "Leader sent ABORT");
             const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
             //Wait for a new initial view and ragged trim to be sent,
             //so that when this method returns we can try state transfer again
@@ -375,7 +376,7 @@ void ViewManager::truncate_logs() {
                                    ragged_trim_filename(subgroup_and_map.first, shard_and_trim.first).c_str());
         }
     }
-    dbg_default_debug("Truncating persistent logs to conform to leader's ragged trim");
+    dbg_debug(vm_logger, "Truncating persistent logs to conform to leader's ragged trim");
 
     const node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
@@ -402,8 +403,8 @@ void ViewManager::truncate_logs() {
         const auto& my_shard_ragged_trim = id_to_shard_map.second.at(my_shard_id);
         persistent::version_t max_delivered_version = RestartState::ragged_trim_to_latest_version(
                 my_shard_ragged_trim->vid, my_shard_ragged_trim->max_received_by_sender);
-        dbg_default_trace("Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version);
-        dbg_default_flush();
+        dbg_trace(vm_logger, "Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version);
+        dbg_flush(vm_logger);
         subgroup_objects.at(subgroup_id)->truncate(max_delivered_version);
     }
 }
@@ -416,7 +417,7 @@ void ViewManager::initialize_multicast_groups(const UserMessageCallbacks& callba
     uint32_t num_received_size = std::get<0>(sizes);
     uint32_t slot_size = std::get<1>(sizes);
     int32_t index_field_size = std::get<2>(sizes);
-    dbg_default_trace("Initial view is: {}", curr_view->debug_string());
+    dbg_trace(vm_logger, "Initial view is: {}", curr_view->debug_string());
     if(any_persistent_objects) {
         //Persist the initial View to disk as soon as possible, which is after my_subgroups has been initialized
         persistent::saveObject(*curr_view);
@@ -427,7 +428,7 @@ void ViewManager::initialize_multicast_groups(const UserMessageCallbacks& callba
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
                 subgroup_objects.at(subgroup_id)->post_next_version(ver, msg_ts);
             };
-    dbg_default_debug("Initializing SST and RDMC for the first time.");
+    dbg_debug(vm_logger, "Initializing SST and RDMC for the first time.");
     construct_multicast_group(callbacks, internal_callbacks, subgroup_settings_map, num_received_size, slot_size, index_field_size);
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
 }
@@ -447,19 +448,19 @@ void ViewManager::finish_setup() {
     last_suspected = std::vector<bool>(curr_view->members.size());
     curr_view->gmsSST->push_row_except_slots();
     curr_view->gmsSST->sync_with_members();
-    dbg_default_debug("Done setting up initial SST and RDMC");
+    dbg_debug(vm_logger, "Done setting up initial SST and RDMC");
 
     if(curr_view->vid != 0 && curr_view->my_rank != curr_view->find_rank_of_leader()) {
         // If this node is joining an existing group with a non-initial view, copy the leader's num_changes, num_acked, and num_committed
         // Otherwise, you'll immediately think that there's a new proposed view change because gmsSST.num_changes[leader] > num_acked[my_rank]
         curr_view->gmsSST->init_local_change_proposals(curr_view->find_rank_of_leader());
         curr_view->gmsSST->push_row_except_slots();
-        dbg_default_debug("Joining node initialized its SST row from the leader");
+        dbg_debug(vm_logger, "Joining node initialized its SST row from the leader");
     }
 
     // Handle any external-client requests that were waiting for the group to start
     for(auto& external_socket : startup_pending_external_sockets) {
-        dbg_default_info("Processing join request from external client {} at address {}", external_socket.first, external_socket.second.get_remote_ip());
+        dbg_info(vm_logger, "Processing join request from external client {} at address {}", external_socket.first, external_socket.second.get_remote_ip());
         external_join_handler(external_socket.second, external_socket.first);
     }
     startup_pending_external_sockets.clear();
@@ -483,7 +484,7 @@ void ViewManager::send_logs() {
     for(subgroup_id_t subgroup_id = 0; subgroup_id < prior_view_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < prior_view_shard_leaders[subgroup_id].size(); ++shard) {
             if(my_id == prior_view_shard_leaders[subgroup_id][shard]) {
-                dbg_default_debug("This node is the restart leader for subgroup {}, shard {}. Sending object data to shard members.", subgroup_id, shard);
+                dbg_debug(vm_logger, "This node is the restart leader for subgroup {}, shard {}. Sending object data to shard members.", subgroup_id, shard);
                 //Send object data to all shard members, since they will all be in receive_objects()
                 for(node_id_t shard_member : restart_view.subgroup_shard_views[subgroup_id][shard].members) {
                     if(shard_member != my_id) {
@@ -502,11 +503,11 @@ void ViewManager::setup_initial_tcp_connections(const View& initial_view, const 
             if(tcp_sockets.add_node(initial_view.members[i],
                                     {initial_view.member_ips_and_ports[i].ip_address,
                                      initial_view.member_ips_and_ports[i].state_transfer_port})) {
-                dbg_default_debug("Established a state-transfer TCP connection to node {}", initial_view.members[i]);
+                dbg_debug(vm_logger, "Established a state-transfer TCP connection to node {}", initial_view.members[i]);
             } else {
                 // This should rarely happen, and it's not clear how to recover from it,
                 // but at least print a readable error message before the inevitable crash
-                dbg_default_error("Failed to establish an initial TCP connection to node {}!", initial_view.members[i]);
+                dbg_error(vm_logger, "Failed to establish an initial TCP connection to node {}!", initial_view.members[i]);
             }
         }
     }
@@ -522,9 +523,9 @@ void ViewManager::reinit_tcp_connections(const View& initial_view, const node_id
             if(tcp_sockets.add_node(initial_view.members[i],
                                     {initial_view.member_ips_and_ports[i].ip_address,
                                      initial_view.member_ips_and_ports[i].state_transfer_port})) {
-                dbg_default_debug("Established a state-transfer TCP connection to node {}", initial_view.members[i]);
+                dbg_debug(vm_logger, "Established a state-transfer TCP connection to node {}", initial_view.members[i]);
             } else {
-                dbg_default_warn("Failed to establish a state-transfer TCP connection to node {}", initial_view.members[i]);
+                dbg_warn(vm_logger, "Failed to establish a state-transfer TCP connection to node {}", initial_view.members[i]);
             }
         }
     }
@@ -540,12 +541,12 @@ bool ViewManager::is_starting_leader() const {
 }
 
 void ViewManager::start() {
-    dbg_default_debug("Starting predicate evaluation");
+    dbg_debug(vm_logger, "Starting predicate evaluation");
     curr_view->gmsSST->start_predicate_evaluation();
 }
 
 void ViewManager::await_first_view() {
-    dbg_default_info("Group leader waiting for an initial adequate view");
+    dbg_info(vm_logger, "Group leader waiting for an initial adequate view");
     const node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
     std::set<node_id_t> members_sent_view;
@@ -570,7 +571,7 @@ void ViewManager::await_first_view() {
                 JoinRequest join_request;
                 client_socket.read(join_request);
                 if(join_request.is_external) {
-                    dbg_default_debug("Delaying an external-client request from {} until the initial view is formed", client_socket.get_remote_ip());
+                    dbg_debug(vm_logger, "Delaying an external-client request from {} until the initial view is formed", client_socket.get_remote_ip());
                     startup_pending_external_sockets.emplace_back(join_request.joiner_id, std::move(client_socket));
                     continue;
                 }
@@ -586,8 +587,8 @@ void ViewManager::await_first_view() {
                 client_socket.read(joiner_rdmc_port);
                 client_socket.read(joiner_external_port);
             } catch(tcp::socket_error& ex) {
-                dbg_default_info("TCP connection to {} failed during join-request handshake. Ignoring request.", client_socket.get_remote_ip());
-                dbg_default_debug("Error description: {}", ex.what());
+                dbg_info(vm_logger, "TCP connection to {} failed during join-request handshake. Ignoring request.", client_socket.get_remote_ip());
+                dbg_debug(vm_logger, "Error description: {}", ex.what());
                 continue;
             }
             const ip_addr_t& joiner_ip = client_socket.get_remote_ip();
@@ -604,7 +605,7 @@ void ViewManager::await_first_view() {
                                                subgroup_type_order);
             make_subgroup_maps(subgroup_info, std::unique_ptr<View>(), *curr_view);
             waiting_join_sockets.emplace(joiner_id, std::move(client_socket));
-            dbg_default_debug("Node {} connected from IP address {} and GMS port {}", joiner_id, joiner_ip, joiner_gms_port);
+            dbg_debug(vm_logger, "Node {} connected from IP address {} and GMS port {}", joiner_id, joiner_ip, joiner_gms_port);
         }
         joiner_failed = false;
         for(auto waiting_sockets_iter = waiting_join_sockets.begin();
@@ -623,7 +624,7 @@ void ViewManager::await_first_view() {
             } catch(tcp::socket_error& e) {
                 //If any socket operation failed, assume the joining node failed
                 node_id_t failed_joiner_id = waiting_sockets_iter->first;
-                dbg_default_warn("Node {} failed after contacting the leader! Removing it from the initial view.", failed_joiner_id);
+                dbg_warn(vm_logger, "Node {} failed after contacting the leader! Removing it from the initial view.", failed_joiner_id);
                 //Remove the failed client and recompute the view
                 std::vector<node_id_t> filtered_members(curr_view->members.size() - 1);
                 std::vector<IpAndPorts> filtered_ips_and_ports(curr_view->member_ips_and_ports.size() - 1);
@@ -651,20 +652,20 @@ void ViewManager::await_first_view() {
 
         if(joiner_failed) {
             for(const node_id_t& member_sent_view : members_sent_view) {
-                dbg_default_debug("Sending view abort message to node {}", member_sent_view);
+                dbg_debug(vm_logger, "Sending view abort message to node {}", member_sent_view);
                 waiting_join_sockets.at(member_sent_view).write(CommitMessage::ABORT);
             }
             members_sent_view.clear();
         }
     } while(joiner_failed);
 
-    dbg_default_trace("Decided on initial view: {}", curr_view->debug_string());
+    dbg_trace(vm_logger, "Decided on initial view: {}", curr_view->debug_string());
     //At this point, we have successfully sent an initial view to all joining nodes, so we can commit it
     //There's no state-transfer step to do, so we don't have to wait for state transfer to complete
     //before committing this view, and the Group constructor's state-transfer methods will do nothing
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
-        dbg_default_debug("Sending prepare and commit messages to node {}", waiting_sockets_iter->first);
+        dbg_debug(vm_logger, "Sending prepare and commit messages to node {}", waiting_sockets_iter->first);
         waiting_sockets_iter->second.write(CommitMessage::PREPARE);
         waiting_sockets_iter->second.write(CommitMessage::COMMIT);
         waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
@@ -675,7 +676,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id) {
     bool quorum_achieved = false;
     while(!quorum_achieved) {
         restart_leader_state_machine->await_quorum(server_socket);
-        dbg_default_debug("Reached a quorum of nodes from view {}, created view {}", restart_leader_state_machine->get_curr_view().vid, restart_leader_state_machine->get_restart_view().vid);
+        dbg_debug(vm_logger, "Reached a quorum of nodes from view {}, created view {}", restart_leader_state_machine->get_curr_view().vid, restart_leader_state_machine->get_restart_view().vid);
         quorum_achieved = true;
         //Compute a final ragged trim
         //Actually, I don't think there's anything to "compute" because
@@ -692,11 +693,11 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id) {
         int64_t failed_node_id = restart_leader_state_machine->send_restart_view();
         //If a node failed while waiting for the quorum, abort this restart view and try again
         if(failed_node_id != -1) {
-            dbg_default_warn("Node {} failed while waiting for restart leader to reach a quorum!", failed_node_id);
+            dbg_warn(vm_logger, "Node {} failed while waiting for restart leader to reach a quorum!", failed_node_id);
             quorum_achieved = restart_leader_state_machine->resend_view_until_quorum_lost();
         }
     }
-    dbg_default_debug("Successfully sent restart view {} to all restarted nodes", restart_leader_state_machine->get_restart_view().vid);
+    dbg_debug(vm_logger, "Successfully sent restart view {} to all restarted nodes", restart_leader_state_machine->get_restart_view().vid);
     prior_view_shard_leaders = restart_state->restart_shard_leaders;
     //Now control will return to Group to do state transfer before confirming this view
 }
@@ -704,10 +705,10 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id) {
 void ViewManager::leader_prepare_initial_view(bool& view_confirmed, bool& leader_has_quorum) {
     view_confirmed = true;
     assert(restart_leader_state_machine);
-    dbg_default_trace("Sending prepare messages for restart View");
+    dbg_trace(vm_logger, "Sending prepare messages for restart View");
     int64_t failed_node_id = restart_leader_state_machine->send_prepare();
     if(failed_node_id != -1) {
-        dbg_default_warn("Node {} failed when sending Prepare messages for the restart view!", failed_node_id);
+        dbg_warn(vm_logger, "Node {} failed when sending Prepare messages for the restart view!", failed_node_id);
         restart_leader_state_machine->send_abort();
         leader_has_quorum = restart_leader_state_machine->resend_view_until_quorum_lost();
         //If there was at least one failure, we (may) need to do state transfer again, so set view to unconfirmed
@@ -718,7 +719,7 @@ void ViewManager::leader_prepare_initial_view(bool& view_confirmed, bool& leader
 
 void ViewManager::leader_commit_initial_view() {
     if(restart_leader_state_machine) {
-        dbg_default_trace("Decided on restart view: {}", restart_leader_state_machine->get_restart_view().debug_string());
+        dbg_trace(vm_logger, "Decided on restart view: {}", restart_leader_state_machine->get_restart_view().debug_string());
         //Commit the restart view at all joining clients
         restart_leader_state_machine->send_commit();
         curr_view = restart_leader_state_machine->take_restart_view();
@@ -728,7 +729,7 @@ void ViewManager::leader_commit_initial_view() {
 }
 
 void ViewManager::initialize_rdmc_sst() {
-    dbg_default_debug("Starting global initialization of RDMC and SST, including internal TCP connection setup");
+    dbg_debug(vm_logger, "Starting global initialization of RDMC and SST, including internal TCP connection setup");
     // construct member_ips
     auto member_ips_and_rdmc_ports_map = make_member_ips_and_ports_map(*curr_view, PortType::RDMC);
     if(!rdmc::initialize(member_ips_and_rdmc_ports_map,
@@ -759,7 +760,7 @@ void ViewManager::create_threads() {
         pthread_setname_np(pthread_self(), "client_thread");
         while(!thread_shutdown) {
             tcp::socket client_socket = server_socket.accept();
-            dbg_default_debug("Background thread got a client connection from {}", client_socket.get_remote_ip());
+            dbg_debug(vm_logger, "Background thread got a client connection from {}", client_socket.get_remote_ip());
             pending_new_sockets.locked().access.emplace_back(std::move(client_socket));
         }
     }};
@@ -881,7 +882,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
         return;
     }
 
-    dbg_default_debug("Suspected[] changed");
+    dbg_debug(vm_logger, "Suspected[] changed");
     const int my_rank = curr_view->my_rank;
     //Cache this before changing failed[], so we can see if the leader changed
     const int old_leader_rank = curr_view->find_rank_of_leader();
@@ -890,7 +891,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
 
     //Determine if the detected failures made me the new leader, and register the takeover predicate if so
     if(my_rank == curr_view->find_rank_of_leader() && my_rank != old_leader_rank) {
-        dbg_default_debug("The current leader failed, so this node will take over as leader");
+        dbg_debug(vm_logger, "The current leader failed, so this node will take over as leader");
         auto leader_change_finished = [this](const DerechoSST& sst) {
             return curr_view->i_am_leader() && previous_leaders_suspected(sst, *curr_view);
         };
@@ -927,7 +928,7 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
                 gmssst::set(gmsSST.changes[my_rank][next_change_index],
                             make_change_proposal(curr_view->members[my_rank], curr_view->members[failed_rank]));  // Reports the failure
                 gmssst::increment(gmsSST.num_changes[my_rank]);
-                dbg_default_debug("Leader proposed change #{} to remove failed node {}. Num_installed is currently {}", gmsSST.num_changes[my_rank], curr_view->members[failed_rank], gmsSST.num_installed[my_rank]);
+                dbg_debug(vm_logger, "Leader proposed change #{} to remove failed node {}. Num_installed is currently {}", gmsSST.num_changes[my_rank], curr_view->members[failed_rank], gmsSST.num_installed[my_rank]);
                 //Note: The proposed change has not actually been pushed yet
             }
             //If the next view has already been proposed, update it with the new failures
@@ -940,10 +941,10 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
 
         //Second, check for joins
         while(!done_with_joins) {
-            dbg_default_debug("Leader handling a new member connection");
+            dbg_debug(vm_logger, "Leader handling a new member connection");
             if((gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_committed[curr_view->my_rank])
                == static_cast<int>(curr_view->members.size())) {
-                dbg_default_debug("Delaying handling the new member, there are already {} pending changes", curr_view->members.size());
+                dbg_debug(vm_logger, "Delaying handling the new member, there are already {} pending changes", curr_view->members.size());
                 done_with_joins = true;
                 continue;
             }
@@ -969,11 +970,11 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
                                   - gmsSST.num_installed[my_rank] - 1;
     gmssst::set(gmsSST.changes[my_rank][last_change_index].end_of_view, true);
     next_view = make_next_view(curr_view, gmsSST);
-    dbg_default_debug("Checking provisioning of view {}", next_view->vid);
+    dbg_debug(vm_logger, "Checking provisioning of view {}", next_view->vid);
     make_subgroup_maps(subgroup_info, curr_view, *next_view);
     if(!next_view->is_adequately_provisioned) {
         //Don't push the proposed changes yet; the view will stay wedged but view-change won't start
-        dbg_default_debug("Next view would not be adequately provisioned, waiting for more joins.");
+        dbg_debug(vm_logger, "Next view would not be adequately provisioned, waiting for more joins.");
         gmssst::set(gmsSST.changes[my_rank][last_change_index].end_of_view, false);
     } else {
         //Push all the proposed changes, including joiner information if any joins were proposed
@@ -1002,7 +1003,7 @@ void ViewManager::redirect_join_attempt(tcp::socket& client_socket) {
         client_socket.write(curr_view->member_ips_and_ports[rank_of_leader].gms_port);
     } catch(tcp::socket_error& ex) {
         // Log the error, but otherwise ignore it, since we no longer care about this client anyway
-        dbg_default_debug("TCP connection to client at {} failed while attempting to send it a leader-redirect message. Description: {}", client_socket.get_remote_ip(), ex.what());
+        dbg_debug(vm_logger, "TCP connection to client at {} failed while attempting to send it a leader-redirect message. Description: {}", client_socket.get_remote_ip(), ex.what());
     }
 }
 
@@ -1025,12 +1026,12 @@ void ViewManager::process_new_sockets() {
         }
         client_socket.read(join_request);
     } catch(tcp::socket_error& ex) {
-        dbg_default_warn("TCP connection to {} failed before it could send a join request. Ignoring request.", client_socket.get_remote_ip());
-        dbg_default_debug("Error description: {}", ex.what());
+        dbg_warn(vm_logger, "TCP connection to {} failed before it could send a join request. Ignoring request.", client_socket.get_remote_ip());
+        dbg_debug(vm_logger, "Error description: {}", ex.what());
         return;
     }
     if(join_request.is_external) {
-        dbg_default_info("Received an external join request from client {} at address {}.", join_request.joiner_id, client_socket.get_remote_ip());
+        dbg_info(vm_logger, "Received an external join request from client {} at address {}.", join_request.joiner_id, client_socket.get_remote_ip());
         external_join_handler(client_socket, join_request.joiner_id);
     } else {
         if(active_leader) {
@@ -1051,24 +1052,24 @@ void ViewManager::external_join_handler(tcp::socket& client_socket, const node_i
         client_socket.write(JoinResponse{JoinResponseCode::OK, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
         client_socket.read(request);
     } catch(tcp::socket_error& ex) {
-        dbg_default_warn("TCP connection to external client {} failed before it could send a request. Ignoring request.", joiner_id);
-        dbg_default_debug("Socket error description: {}", ex.what());
+        dbg_warn(vm_logger, "TCP connection to external client {} failed before it could send a request. Ignoring request.", joiner_id);
+        dbg_debug(vm_logger, "Socket error description: {}", ex.what());
         return;
     }
     if(request == ExternalClientRequest::GET_VIEW) {
         try {
             send_view(*curr_view, client_socket);
         } catch(tcp::socket_error& ex) {
-            dbg_default_warn("External client {} failed while attempting to send it the view.", joiner_id);
-            dbg_default_debug("Socket error description: {}", ex.what());
+            dbg_warn(vm_logger, "External client {} failed while attempting to send it the view.", joiner_id);
+            dbg_debug(vm_logger, "Socket error description: {}", ex.what());
         }
     } else if(request == ExternalClientRequest::ESTABLISH_P2P) {
         uint16_t external_client_external_port = 0;
         try {
             client_socket.read(external_client_external_port);
         } catch(tcp::socket_error& ex) {
-            dbg_default_warn("TCP connection to external client {} failed while attempting to establish a P2P connection", joiner_id);
-            dbg_default_debug("Socket error description: {}", ex.what());
+            dbg_warn(vm_logger, "TCP connection to external client {} failed while attempting to establish a P2P connection", joiner_id);
+            dbg_debug(vm_logger, "Socket error description: {}", ex.what());
             return;
         }
         sst::add_external_node(joiner_id, {client_socket.get_remote_ip(),
@@ -1079,7 +1080,7 @@ void ViewManager::external_join_handler(tcp::socket& client_socket, const node_i
 
 void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
     bool prior_changes_found = copy_prior_leader_proposals(gmsSST);
-    dbg_default_debug("Taking over as the new leader; everyone suspects prior leaders.");
+    dbg_debug(vm_logger, "Taking over as the new leader; everyone suspects prior leaders.");
     const unsigned int my_rank = gmsSST.get_local_index();
     const node_id_t my_id = curr_view->members[my_rank];
     //For any changes proposed by a previous leader but after the last end-of-view,
@@ -1108,7 +1109,7 @@ void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
             gmssst::set(gmsSST.changes[my_rank][next_change_index],
                         make_change_proposal(my_id, curr_view->members[rank]));
             gmssst::increment(gmsSST.num_changes[my_rank]);
-            dbg_default_debug("Leader proposed a change to remove failed node {}", curr_view->members[rank]);
+            dbg_debug(vm_logger, "Leader proposed a change to remove failed node {}", curr_view->members[rank]);
             new_changes_proposed = true;
         }
     }
@@ -1143,17 +1144,17 @@ void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
 }
 
 void ViewManager::leader_commit_change(DerechoSST& gmsSST) {
-    dbg_default_debug("min_acked was {}, and leader's num_committed was {}", min_acked(gmsSST, curr_view->failed), gmsSST.num_committed[curr_view->my_rank]);
+    dbg_debug(vm_logger, "min_acked was {}, and leader's num_committed was {}", min_acked(gmsSST, curr_view->failed), gmsSST.num_committed[curr_view->my_rank]);
     gmssst::set(gmsSST.num_committed[gmsSST.get_local_index()],
                 min_acked(gmsSST, curr_view->failed));  // Leader commits a new request
-    dbg_default_debug("Leader committing change proposal #{}", gmsSST.num_committed[gmsSST.get_local_index()]);
+    dbg_debug(vm_logger, "Leader committing change proposal #{}", gmsSST.num_committed[gmsSST.get_local_index()]);
     gmsSST.put(gmsSST.num_committed);
 }
 
 void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
     const int myRank = gmsSST.get_local_index();
     const int leader = curr_view->find_rank_of_leader();
-    dbg_default_debug("Detected that leader proposed change #{}. Acknowledging.", gmsSST.num_changes[leader]);
+    dbg_debug(vm_logger, "Detected that leader proposed change #{}. Acknowledging.", gmsSST.num_changes[leader]);
     if(myRank != leader) {
         // Echo the count
         gmssst::set(gmsSST.num_changes[myRank], gmsSST.num_changes[leader]);
@@ -1193,13 +1194,13 @@ void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
         gmsSST.put(gmsSST.num_committed);
     }
     gmsSST.put(gmsSST.num_acked);
-    dbg_default_debug("Wedging current view.");
+    dbg_debug(vm_logger, "Wedging current view.");
     curr_view->wedge();
-    dbg_default_debug("Done wedging current view.");
+    dbg_debug(vm_logger, "Done wedging current view.");
 }
 
 void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
-    dbg_default_debug("Meta-wedging view {} because leader num_committed is {} and local num_installed is {}", curr_view->vid, gmsSST.num_committed[curr_view->find_rank_of_leader()], gmsSST.num_installed[curr_view->my_rank]);
+    dbg_debug(vm_logger, "Meta-wedging view {} because leader num_committed is {} and local num_installed is {}", curr_view->vid, gmsSST.num_committed[curr_view->find_rank_of_leader()], gmsSST.num_installed[curr_view->my_rank]);
     // Disable all the other SST predicates, except suspected_changed and the
     // one I'm about to register
     gmsSST.predicates.remove(start_join_handle);
@@ -1230,7 +1231,7 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
 }
 
 void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
-    dbg_default_debug("MetaWedged is true; continuing epoch termination");
+    dbg_debug(vm_logger, "MetaWedged is true; continuing epoch termination");
 
     // go through all subgroups first and acknowledge all messages received through SST
     for(const auto& shard_settings_pair :
@@ -1248,7 +1249,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
             }
         }
         // wait for all pending sst sends to finish
-        dbg_default_debug("Waiting for pending SST sends to finish");
+        dbg_debug(vm_logger, "Waiting for pending SST sends to finish");
         curr_view->multicast_group->sst_send_trigger(subgroup_id, curr_subgroup_settings, num_shard_members, gmsSST);
         gmsSST.put_with_completion();
         gmsSST.sync_with_members(curr_view->multicast_group->get_shard_sst_indices(subgroup_id));
@@ -1270,7 +1271,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
     }
 
     gmsSST.put_with_completion();
-    dbg_default_debug("Doing an SST sync_with_members");
+    dbg_debug(vm_logger, "Doing an SST sync_with_members");
     gmsSST.sync_with_members();
 
     // For subgroups in which I'm the shard leader, do RaggedEdgeCleanup for the leader
@@ -1324,7 +1325,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
 void ViewManager::echo_ragged_trim(
         std::shared_ptr<std::map<subgroup_id_t, uint32_t>> follower_subgroups_and_shards,
         DerechoSST& gmsSST) {
-    dbg_default_debug("GlobalMins are ready for all {} subgroup leaders this node is waiting on", follower_subgroups_and_shards->size());
+    dbg_debug(vm_logger, "GlobalMins are ready for all {} subgroup leaders this node is waiting on", follower_subgroups_and_shards->size());
     // Call RaggedEdgeCleanup for subgroups in which I'm not the leader
     for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
         const subgroup_id_t subgroup_id = subgroup_shard_pair.first;
@@ -1370,7 +1371,7 @@ void ViewManager::echo_ragged_trim(
 }
 
 void ViewManager::deliver_ragged_trim(DerechoSST& gmsSST) {
-    dbg_default_debug("GlobalMin has been echoed by everyone for all {} subgroups this node is in", curr_view->my_subgroups.size());
+    dbg_debug(vm_logger, "GlobalMin has been echoed by everyone for all {} subgroups this node is in", curr_view->my_subgroups.size());
     for(const auto& subgroup_shard_pair : curr_view->my_subgroups) {
         const subgroup_id_t subgroup_id = subgroup_shard_pair.first;
         const uint32_t shard_num = subgroup_shard_pair.second;
@@ -1409,7 +1410,7 @@ void ViewManager::deliver_ragged_trim(DerechoSST& gmsSST) {
                               gmsSST.persisted_num[member_row][subgroup_id])
                                       .second
                               < last_delivered_seq_num) {
-                    dbg_default_debug("Waiting for node {} to finish persisting update {}", shard_member, last_delivered_seq_num);
+                    dbg_debug(vm_logger, "Waiting for node {} to finish persisting update {}", shard_member, last_delivered_seq_num);
                     return false;
                 }
             }
@@ -1426,7 +1427,7 @@ void ViewManager::deliver_ragged_trim(DerechoSST& gmsSST) {
 }
 
 void ViewManager::finish_view_change(DerechoSST& gmsSST) {
-    dbg_default_debug("Ragged trim messages are persisted, finishing view change");
+    dbg_debug(vm_logger, "Ragged trim messages are persisted, finishing view change");
     std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
 
     // Disable all the other SST predicates, except suspected_changed
@@ -1443,7 +1444,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
             if(i != curr_view->my_rank && !curr_view->failed[i]) {
                 LockedReference<std::unique_lock<std::mutex>, tcp::socket> member_socket
                         = tcp_sockets.get_socket(curr_view->members[i]);
-                dbg_default_debug("Sending node at {} the new view over the state-transfer socket", member_socket.get().get_remote_ip());
+                dbg_debug(vm_logger, "Sending node at {} the new view over the state-transfer socket", member_socket.get().get_remote_ip());
                 send_view(*next_view, member_socket.get());
             }
         }
@@ -1452,7 +1453,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         const node_id_t leader_id = curr_view->members[curr_view->find_rank_of_leader()];
         std::size_t size_of_view;
         tcp_sockets.read(leader_id, reinterpret_cast<uint8_t*>(&size_of_view), sizeof(size_of_view));
-        dbg_default_debug("Read size of view: {}. Receiving view from leader.", size_of_view);
+        dbg_debug(vm_logger, "Read size of view: {}. Receiving view from leader.", size_of_view);
         uint8_t buffer[size_of_view];
         tcp_sockets.read(leader_id, buffer, size_of_view);
         next_view = mutils::from_bytes<View>(nullptr, buffer);
@@ -1466,7 +1467,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     uint32_t new_slot_size = std::get<1>(sizes);
     uint32_t new_index_field_size = std::get<2>(sizes);
 
-    dbg_default_debug("Ready to transition to the next View: {}", next_view->debug_string());
+    dbg_debug(vm_logger, "Ready to transition to the next View: {}", next_view->debug_string());
     // Determine the shard leaders in the old view and re-index them by new subgroup IDs
     vector_int64_2d old_shard_leaders_by_id = old_shard_leaders_by_new_ids(
             *curr_view, *next_view);
@@ -1477,10 +1478,10 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         // proposed_join_sockets and send them the new View and old shard
         // leaders list
         for(std::size_t c = 0; c < next_view->joined.size(); ++c) {
-            dbg_default_debug("Sending joining node {} the new view over the joiner socket", proposed_join_sockets.front().first);
+            dbg_debug(vm_logger, "Sending joining node {} the new view over the joiner socket", proposed_join_sockets.front().first);
             send_view(*next_view, proposed_join_sockets.front().second);
             std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
-            dbg_default_debug("Sending node {} the old shard leaders vector on the joiner socket. size_of_vector is {}", proposed_join_sockets.front().first, size_of_vector);
+            dbg_debug(vm_logger, "Sending node {} the old shard leaders vector on the joiner socket. size_of_vector is {}", proposed_join_sockets.front().first, size_of_vector);
             proposed_join_sockets.front().second.write(size_of_vector);
             mutils::post_object([this](const uint8_t* bytes, std::size_t size) {
                 proposed_join_sockets.front().second.write(bytes, size);
@@ -1499,18 +1500,18 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 
     // Re-initialize this node's RPC objects, which includes receiving them
     // from shard leaders if it is newly a member of a subgroup
-    dbg_default_debug("Receiving state for local Replicated Objects");
+    dbg_debug(vm_logger, "Receiving state for local Replicated Objects");
     initialize_subgroup_objects(my_id, *next_view, old_shard_leaders_by_id);
 
     // Once state transfer completes, we can tell joining clients to commit the view
     if(active_leader) {
         for(auto& joiner_socket : joiner_sockets) {
             //Eventually, we could check for success here and abort the view if a node failed
-            dbg_default_debug("Sending node at {} a PREPARE message on the joiner socket", joiner_socket.get_remote_ip());
+            dbg_debug(vm_logger, "Sending node at {} a PREPARE message on the joiner socket", joiner_socket.get_remote_ip());
             joiner_socket.write(CommitMessage::PREPARE);
         }
         for(auto& joiner_socket : joiner_sockets) {
-            dbg_default_debug("Sending node at {} a COMMIT message, then closing the joiner socket", joiner_socket.get_remote_ip());
+            dbg_debug(vm_logger, "Sending node at {} a COMMIT message, then closing the joiner socket", joiner_socket.get_remote_ip());
             joiner_socket.write(CommitMessage::COMMIT);
         }
         joiner_sockets.clear();
@@ -1521,9 +1522,9 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     gmsSST.predicates.remove(leader_suspicion_handle);
     gmsSST.predicates.remove(follower_suspicion_handle);
 
-    dbg_default_debug("Starting creation of new SST and DerechoGroup for view {}", next_view->vid);
+    dbg_debug(vm_logger, "Starting creation of new SST and DerechoGroup for view {}", next_view->vid);
     for(const node_id_t failed_node_id : next_view->departed) {
-        dbg_default_debug("Removing global TCP connections for failed node {} from RDMC and SST", failed_node_id);
+        dbg_debug(vm_logger, "Removing global TCP connections for failed node {} from RDMC and SST", failed_node_id);
 #ifdef USE_VERBS_API
         rdma::impl::verbs_remove_connection(failed_node_id);
 #else
@@ -1535,7 +1536,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         // The new members will be the last joined.size() elements of the members lists
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
-        dbg_default_debug("Adding global TCP connections to node {}, at IP {} and port {}", next_view->members[joiner_rank], next_view->member_ips_and_ports[joiner_rank].ip_address, next_view->member_ips_and_ports[joiner_rank].rdmc_port);
+        dbg_debug(vm_logger, "Adding global TCP connections to node {}, at IP {} and port {}", next_view->members[joiner_rank], next_view->member_ips_and_ports[joiner_rank].ip_address, next_view->member_ips_and_ports[joiner_rank].rdmc_port);
 
 #ifdef USE_VERBS_API
         rdma::impl::verbs_add_connection(
@@ -1547,7 +1548,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
                    next_view->members[joiner_rank],
                    {next_view->member_ips_and_ports[joiner_rank].ip_address,
                     next_view->member_ips_and_ports[joiner_rank].rdmc_port})) {
-            dbg_default_warn("Failed to add an RDMC TCP connection to new node {}", next_view->members[joiner_rank]);
+            dbg_warn(vm_logger, "Failed to add an RDMC TCP connection to new node {}", next_view->members[joiner_rank]);
         }
 #endif
     }
@@ -1556,13 +1557,13 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         if(!sst::add_node(next_view->members[joiner_rank],
                           {next_view->member_ips_and_ports[joiner_rank].ip_address,
                            next_view->member_ips_and_ports[joiner_rank].sst_port})) {
-            dbg_default_warn("Failed to add an SST TCP connection to new node {}", next_view->members[joiner_rank]);
+            dbg_warn(vm_logger, "Failed to add an SST TCP connection to new node {}", next_view->members[joiner_rank]);
         }
     }
 
     // This will block until everyone responds to SST/RDMC initial handshakes
     transition_multicast_group(next_subgroup_settings, new_num_received_size, new_slot_size, new_index_field_size);
-    dbg_default_debug("Done setting up SST and MulticastGroup for view {}; about to do a sync_with_members()", next_view->vid);
+    dbg_debug(vm_logger, "Done setting up SST and MulticastGroup for view {}; about to do a sync_with_members()", next_view->vid);
 
     // New members can now proceed to view_manager.finish_setup(), which will call put() and sync()
     next_view->gmsSST->push_row_except_slots();
@@ -1592,7 +1593,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         curr_view->wedge();
     }
 
-    dbg_default_debug("Delivering new-view upcalls for view {}", curr_view->vid);
+    dbg_debug(vm_logger, "Delivering new-view upcalls for view {}", curr_view->vid);
     // Announce the new view to the application
     for(auto& view_upcall : view_upcalls) {
         view_upcall(*curr_view);
@@ -1600,7 +1601,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 
     curr_view->gmsSST->start_predicate_evaluation();
     view_change_cv.notify_all();
-    dbg_default_debug("Done with view change to view {}", curr_view->vid);
+    dbg_debug(vm_logger, "Done with view change to view {}", curr_view->vid);
 }
 
 /* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
@@ -1651,7 +1652,7 @@ void ViewManager::transition_multicast_group(
 
     // Initialize this node's row in the new SST
     int changes_installed = next_view->joined.size() + next_view->departed.size();
-    dbg_default_debug("Initializing local SST row for view {}, with {} changes installed", next_view->vid, changes_installed);
+    dbg_debug(vm_logger, "Initializing local SST row for view {}, with {} changes installed", next_view->vid, changes_installed);
     next_view->gmsSST->init_local_row_from_previous(
             (*curr_view->gmsSST), curr_view->my_rank, changes_installed);
     gmssst::set(next_view->gmsSST->vid[next_view->my_rank], next_view->vid);
@@ -1669,7 +1670,7 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tc
     uint16_t joiner_external_port = 0;
     try {
         if(curr_view->rank_of(joiner_id) != -1) {
-            dbg_default_warn("Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joiner_id);
+            dbg_warn(vm_logger, "Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joiner_id);
             client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
             return false;
         }
@@ -1681,12 +1682,12 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tc
         client_socket.read(joiner_rdmc_port);
         client_socket.read(joiner_external_port);
     } catch(tcp::socket_error& ex) {
-        dbg_default_warn("TCP connection to node {} at IP {} failed during join-request handshake. Ignoring request.", joiner_id, client_socket.get_remote_ip());
-        dbg_default_debug("Socket error description: {}", ex.what());
+        dbg_warn(vm_logger, "TCP connection to node {} at IP {} failed during join-request handshake. Ignoring request.", joiner_id, client_socket.get_remote_ip());
+        dbg_debug(vm_logger, "Socket error description: {}", ex.what());
         return false;
     }
 
-    dbg_default_debug("Proposing change #{} to add node {}. Num_installed is currently {}", gmsSST.num_changes[curr_view->my_rank] + 1, joiner_id, gmsSST.num_installed[curr_view->my_rank]);
+    dbg_debug(vm_logger, "Proposing change #{} to add node {}. Num_installed is currently {}", gmsSST.num_changes[curr_view->my_rank] + 1, joiner_id, gmsSST.num_installed[curr_view->my_rank]);
     size_t next_change_index = gmsSST.num_changes[curr_view->my_rank]
                                - gmsSST.num_installed[curr_view->my_rank];
     if(next_change_index == gmsSST.changes.size()) {
@@ -1714,7 +1715,7 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tc
     //Don't actually push the proposed join yet, because we don't know if it's the last change in the batch
 
     if(!curr_view->is_wedged()) {
-        dbg_default_debug("Wedging view {}", curr_view->vid);
+        dbg_debug(vm_logger, "Wedging view {}", curr_view->vid);
         curr_view->wedge();
     }
     return true;
@@ -1740,20 +1741,20 @@ std::vector<int> ViewManager::process_suspicions(DerechoSST& gmsSST) {
         if(gmsSST.suspected[my_rank][curr_rank] && !last_suspected[curr_rank]) {
             // This is safer than copy_suspected, since suspected[] might change during this loop
             last_suspected[curr_rank] = gmsSST.suspected[my_rank][curr_rank];
-            dbg_default_debug("Marking {} failed", curr_view->members[curr_rank]);
+            dbg_debug(vm_logger, "Marking {} failed", curr_view->members[curr_rank]);
             failed_ranks.emplace_back(curr_rank);
 
             if(!gmsSST.rip[my_rank] && curr_view->num_failed != 0
                && (curr_view->num_failed - num_departed >= (curr_view->num_members - num_departed + 1) / 2)) {
                 if(disable_partitioning_safety) {
-                    dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. num_failed - num_departed = {} but num_members - num_departed + 1 = {}",
-                                     curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
+                    dbg_warn(vm_logger, "Potential partitioning event, but partitioning safety is disabled. num_failed - num_departed = {} but num_members - num_departed + 1 = {}",
+                             curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 } else {
                     throw derecho_partitioning_exception(curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 }
             }
 
-            dbg_default_debug("GMS telling SST to freeze row {}", curr_rank);
+            dbg_debug(vm_logger, "GMS telling SST to freeze row {}", curr_rank);
             gmsSST.freeze(curr_rank);
             //These two lines are the same as Vc.wedge()
             curr_view->multicast_group->wedge();
@@ -1765,8 +1766,8 @@ std::vector<int> ViewManager::process_suspicions(DerechoSST& gmsSST) {
             if(!gmsSST.rip[my_rank] && curr_view->num_failed != 0
                && (curr_view->num_failed - num_departed >= (curr_view->num_members - num_departed + 1) / 2)) {
                 if(disable_partitioning_safety) {
-                    dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. num_failed - num_left = {} but num_members - num_departed + 1 = {}",
-                                     curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
+                    dbg_warn(vm_logger, "Potential partitioning event, but partitioning safety is disabled. num_failed - num_left = {} but num_members - num_departed + 1 = {}",
+                             curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 } else {
                     throw derecho_partitioning_exception(curr_view->num_failed - num_departed, curr_view->num_members - num_departed + 1);
                 }
@@ -1786,9 +1787,9 @@ void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
         client_socket.write(bytes, size);
     };
     std::size_t size_of_view = mutils::bytes_size(new_view);
-    dbg_default_trace("Sending node at {} the new view. View size is {} bytes", client_socket.get_remote_ip(), size_of_view);
+    dbg_trace(vm_logger, "Sending node at {} the new view. View size is {} bytes", client_socket.get_remote_ip(), size_of_view);
     client_socket.write(size_of_view);
-    dbg_default_trace("send_view starting to send view");
+    dbg_trace(vm_logger, "send_view starting to send view");
     mutils::post_object(bind_socket_write, new_view);
 }
 
@@ -1824,25 +1825,25 @@ void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_
         persistent::version_t persistent_log_length = 0;
         joiner_socket.get().read(persistent_log_length);
         persistent::PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
-        dbg_default_debug("Got log tail length {} from {}", persistent_log_length, joiner_socket.get().get_remote_ip());
+        dbg_debug(vm_logger, "Got log tail length {} from {}", persistent_log_length, joiner_socket.get().get_remote_ip());
     }
-    dbg_default_debug("Sending Replicated Object state for subgroup {} to node {} over the state-transfer socket", subgroup_id, new_node_id);
+    dbg_debug(vm_logger, "Sending Replicated Object state for subgroup {} to node {} over the state-transfer socket", subgroup_id, new_node_id);
     subgroup_object->send_object(joiner_socket.get());
 }
 
 void ViewManager::update_tcp_connections() {
     for(const node_id_t& removed_id : next_view->departed) {
-        dbg_default_debug("Removing TCP connection for failed node {}", removed_id);
+        dbg_debug(vm_logger, "Removing TCP connection for failed node {}", removed_id);
         tcp_sockets.delete_node(removed_id);
     }
     for(const node_id_t& joiner_id : next_view->joined) {
         if(tcp_sockets.add_node(joiner_id,
                                 {next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].ip_address,
                                  next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].state_transfer_port})) {
-            dbg_default_debug("Established a state-transfer TCP connection to node {}", joiner_id);
+            dbg_debug(vm_logger, "Established a state-transfer TCP connection to node {}", joiner_id);
         } else {
             // This should be handled better: Mark the joining node as failed and immediately start another view change
-            dbg_default_warn("Failed to establish a TCP connection to joining node {}", joiner_id);
+            dbg_warn(vm_logger, "Failed to establish a TCP connection to joining node {}", joiner_id);
         }
     }
 }
@@ -2018,6 +2019,10 @@ ViewManager::make_member_ips_and_ports_map(const View& view, const PortType port
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
                                                   const DerechoSST& gmsSST) {
+    // Get a static copy of the logger pointer local to this function
+    // Since the function is only called after ViewManager is constructed,
+    // the logger will exist by the time this static variable is initialized
+    static std::shared_ptr<spdlog::logger> static_vm_logger = spdlog::get(LoggerFactory::VIEWMANAGER_LOGGER_NAME);
     const int32_t my_rank = curr_view->my_rank;
     const int32_t leader_rank = curr_view->find_rank_of_leader();
     std::set<int> leave_ranks;
@@ -2071,7 +2076,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
                                                  gmsSST.joiner_sst_ports[my_rank][join_index],
                                                  gmsSST.joiner_rdmc_ports[my_rank][join_index],
                                                  gmsSST.joiner_external_ports[my_rank][join_index]};
-        dbg_default_debug("Next view will add new member with ID {}", joiner_id);
+        dbg_debug(static_vm_logger, "Next view will add new member with ID {}", joiner_id);
     }
     for(const auto& leaver_rank : leave_ranks) {
         departed.emplace_back(curr_view->members[leaver_rank]);
@@ -2081,7 +2086,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
             next_unassigned_rank--;
         }
     }
-    dbg_default_debug("Next view will exclude {} failed members. Also, {} members have already failed in the next view", leave_ranks.size(), next_leave_ranks.size());
+    dbg_debug(static_vm_logger, "Next view will exclude {} failed members. Also, {} members have already failed in the next view", leave_ranks.size(), next_leave_ranks.size());
 
     // Copy member information, excluding the members that have been removed
     int new_rank = 0;
@@ -2238,6 +2243,7 @@ bool ViewManager::previous_leaders_suspected(const DerechoSST& gmsSST, const Vie
  * partially finishes before the leader crashes.
  */
 bool ViewManager::copy_prior_leader_proposals(DerechoSST& gmsSST) {
+    static std::shared_ptr<spdlog::logger> static_vm_logger = spdlog::get(LoggerFactory::VIEWMANAGER_LOGGER_NAME);
     const int my_rank = gmsSST.get_local_index();
     const int my_changes_length = gmsSST.num_changes[my_rank] - gmsSST.num_installed[my_rank];
     bool prior_changes_found = false;
@@ -2258,14 +2264,14 @@ bool ViewManager::copy_prior_leader_proposals(DerechoSST& gmsSST) {
                        && gmsSST.changes[check_rank][i].leader_id >= prior_leader_rank))) {
                 first_prior_change_found = true;
                 prior_leader_rank = gmsSST.changes[check_rank][i].leader_id;
-                dbg_default_debug("Found changes in row {} proposed by leader {}", check_rank, prior_leader_rank);
+                dbg_debug(static_vm_logger, "Found changes in row {} proposed by leader {}", check_rank, prior_leader_rank);
             }
             if(first_prior_change_found && !end_of_view_found
                && gmsSST.changes[check_rank][i].end_of_view) {
                 end_of_view_found = true;
                 //We found an entire batch of changes proposed by the previous leader, so we can use this row
                 prior_changes_found = true;
-                dbg_default_debug("Found end-of-view marker in row {}. Setting longest_changes_rank = {}, longest_changes_length = {}", check_rank, check_rank, changes_length);
+                dbg_debug(static_vm_logger, "Found end-of-view marker in row {}. Setting longest_changes_rank = {}, longest_changes_length = {}", check_rank, check_rank, changes_length);
                 longest_changes_rank = check_rank;
                 longest_changes_length = changes_length;
             } else if(first_prior_change_found && end_of_view_found
@@ -2279,7 +2285,7 @@ bool ViewManager::copy_prior_leader_proposals(DerechoSST& gmsSST) {
     if(prior_changes_found) {
         //Note that this function is called before proposing any changes as the new leader
         //so it's OK to clobber the entire local changes vector
-        dbg_default_debug("Re-proposing changes from prior leader at rank {}, found in row {}. Num_changes is now {}", prior_leader_rank, longest_changes_rank, gmsSST.num_changes[prior_leader_rank]);
+        dbg_debug(static_vm_logger, "Re-proposing changes from prior leader at rank {}, found in row {}. Num_changes is now {}", prior_leader_rank, longest_changes_rank, gmsSST.num_changes[prior_leader_rank]);
         gmssst::set(gmsSST.changes[my_rank], gmsSST.changes[longest_changes_rank],
                     gmsSST.changes.size());
         gmssst::set(gmsSST.num_changes[my_rank], gmsSST.num_changes[longest_changes_rank]);
@@ -2303,7 +2309,7 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
                                              const uint32_t num_received_offset,
                                              const std::vector<node_id_t>& shard_members,
                                              uint num_shard_senders) {
-    dbg_default_debug("Running leader RaggedEdgeCleanup for subgroup {}", subgroup_num);
+    dbg_debug(vm_logger, "Running leader RaggedEdgeCleanup for subgroup {}", subgroup_num);
     View& Vc = *curr_view;
     int myRank = Vc.my_rank;
     bool found = false;
@@ -2335,7 +2341,7 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
         }
     }
 
-    dbg_default_debug("Shard leader for subgroup {} finished computing global_min", subgroup_num);
+    dbg_debug(vm_logger, "Shard leader for subgroup {} finished computing global_min", subgroup_num);
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
     Vc.gmsSST->put(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
@@ -2355,7 +2361,7 @@ void ViewManager::follower_ragged_edge_cleanup(
         uint num_shard_senders) {
     const View& Vc = *curr_view;
     int myRank = Vc.my_rank;
-    dbg_default_debug("Running follower RaggedEdgeCleanup for subgroup {}", subgroup_num);
+    dbg_debug(vm_logger, "Running follower RaggedEdgeCleanup for subgroup {}", subgroup_num);
     // Learn the leader's ragged trim, log it, and echo it before acting upon it
     if(any_persistent_objects) {
         log_ragged_trim(shard_leader_rank, subgroup_num, num_received_offset, num_shard_senders);
@@ -2396,7 +2402,7 @@ void ViewManager::deliver_in_order(const int shard_leader_rank,
         max_received_indices[sender_rank]
                 = Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + sender_rank];
     }
-    dbg_default_debug("Delivering ragged-edge messages in order: {}", delivery_order.str());
+    dbg_debug(vm_logger, "Delivering ragged-edge messages in order: {}", delivery_order.str());
     Vc.multicast_group->deliver_messages_upto(max_received_indices, subgroup_num, num_shard_senders);
 }
 
@@ -2415,7 +2421,7 @@ void ViewManager::log_ragged_trim(const int shard_leader_rank,
                         static_cast<int32_t>(curr_view->members[curr_view->find_rank_of_leader()]),
                         max_received_indices};
     persistent::saveObject(trim_log, ragged_trim_filename(subgroup_num, shard_num).c_str());
-    dbg_default_debug("Done logging ragged trim to disk for subgroup {}", subgroup_num);
+    dbg_debug(vm_logger, "Done logging ragged trim to disk for subgroup {}", subgroup_num);
 }
 
 /* ------------- 4. Public-Interface methods of ViewManager ------------- */
@@ -2426,7 +2432,7 @@ void ViewManager::report_failure(const node_id_t who) {
         return;
     }
     const int failed_rank = curr_view->rank_of(who);
-    dbg_default_debug("Node ID {} failure reported; marking suspected[{}]", who, failed_rank);
+    dbg_debug(vm_logger, "Node ID {} failure reported; marking suspected[{}]", who, failed_rank);
     if(failed_rank == -1) {
         //Belated failure report of a node that has already been removed
         return;
@@ -2445,8 +2451,8 @@ void ViewManager::report_failure(const node_id_t who) {
     if(!curr_view->gmsSST->rip[curr_view->my_rank]
        && failed_cnt != 0 && (failed_cnt >= (curr_view->num_members - rip_cnt + 1) / 2)) {
         if(disable_partitioning_safety) {
-            dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. failed_cnt = {} but num_members - rip_cnt + 1 = {}",
-                             failed_cnt, curr_view->num_members - rip_cnt + 1);
+            dbg_warn(vm_logger, "Potential partitioning event, but partitioning safety is disabled. failed_cnt = {} but num_members - rip_cnt + 1 = {}",
+                     failed_cnt, curr_view->num_members - rip_cnt + 1);
         } else {
             throw derecho_partitioning_exception(failed_cnt, curr_view->num_members - rip_cnt + 1);
         }
@@ -2460,7 +2466,7 @@ void ViewManager::silence() {
 
 void ViewManager::leave() {
     shared_lock_t lock(view_mutex);
-    dbg_default_debug("Cleanly leaving the group.");
+    dbg_debug(vm_logger, "Cleanly leaving the group.");
     curr_view->multicast_group->wedge();
     curr_view->gmsSST->predicates.clear();
     gmssst::set(curr_view->gmsSST->suspected[curr_view->my_rank][curr_view->my_rank], true);

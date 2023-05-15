@@ -77,6 +77,8 @@ class RPCManager {
     static_assert(std::is_trivially_copyable<Opcode>::value, "Oh no! Opcode is not trivially copyable!");
     /** The ID of the node this RPCManager is running on. */
     const node_id_t nid;
+    /** A pointer to the logger for the RPC module, which lives in a global static registry. */
+    std::shared_ptr<spdlog::logger> rpc_logger;
     /** A map from FunctionIDs to RPC functions, either the "server" stubs that receive
      * remote calls to invoke functions, or the "client" stubs that receive responses
      * from the targets of an earlier remote call.
@@ -250,16 +252,7 @@ class RPCManager {
 
 public:
     RPCManager(ViewManager& group_view_manager,
-               const std::vector<DeserializationContext*>& deserialization_context)
-            : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
-              receivers(new std::decay_t<decltype(*receivers)>()),
-              view_manager(group_view_manager),
-              busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
-        for(const auto& deserialization_context_ptr : deserialization_context) {
-            rdv.push_back(deserialization_context_ptr);
-        }
-        rpc_listener_thread = std::thread(&RPCManager::p2p_receive_loop, this);
-    }
+               const std::vector<DeserializationContext*>& deserialization_context);
 
     ~RPCManager();
 
@@ -415,7 +408,7 @@ public:
     static node_id_t get_rpc_caller_id();
     /**
      * write to remote OOB memory
-     * @param remote_node       remote node id 
+     * @param remote_node       remote node id
      * @param iov               gather of local memory regions
      * @param iovcnt
      * @param remote_dest_addr  the address of the remote memory region
@@ -432,7 +425,7 @@ public:
      * @param remote_src_addr   the address of the remote memory region
      * @param rkey              the access key for remote memory
      * @param size              the size of the remote memory region
-     * @throw                   derecho::derecho_exception on error 
+     * @throw                   derecho::derecho_exception on error
      */
     void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size);
 };

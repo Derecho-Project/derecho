@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <string>
 
-#include "derecho/utils/logger.hpp"
+#include "detail/logger.hpp"
 
 #if __GNUC__ > 7
 #include <filesystem>

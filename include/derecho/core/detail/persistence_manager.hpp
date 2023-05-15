@@ -41,6 +41,8 @@ public:
     };
 
 private:
+    /** Pointer to the persistence-module logger */
+    std::shared_ptr<spdlog::logger> persistence_logger;
     /** Thread handle */
     std::thread persist_thread;
     /**
