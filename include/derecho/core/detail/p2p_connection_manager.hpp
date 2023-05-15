@@ -6,6 +6,7 @@
 #else
 #include "derecho/sst/detail/lf.hpp"
 #endif
+#include "derecho/utils/logger.hpp"
 
 #include <atomic>
 #include <functional>
@@ -40,7 +41,8 @@ struct MessagePointer {
 
 class P2PConnectionManager {
     const node_id_t my_node_id;
-
+    /** A pointer to the RPC-module logger (since these P2P connections are used for Derecho RPC) */
+    std::shared_ptr<spdlog::logger> rpc_logger;
     ConnectionParams request_params;
     /**
      * Contains one entry per possible Node ID; the vector index is the node ID.
