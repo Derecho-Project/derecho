@@ -151,6 +151,7 @@ ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient()
           // ExternalGroupClient needs to create the RPC logger since P2PConnectionManager uses it (but there is no RPCManager to create it)
           rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(CONF_LOGGER_RPC_LOG_LEVEL))),
           busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
+    RpcLoggerPtr::initialize();
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
                           std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
@@ -185,6 +186,7 @@ ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(
 #endif
           rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(CONF_LOGGER_RPC_LOG_LEVEL))),
           busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
+    RpcLoggerPtr::initialize();
     for(auto dc : deserialization_contexts) {
         rdv.push_back(dc);
     }
