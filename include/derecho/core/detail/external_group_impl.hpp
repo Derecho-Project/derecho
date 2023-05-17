@@ -63,29 +63,32 @@ void ExternalClientCaller<T, ExternalGroupType>::add_p2p_connection(node_id_t de
     tcp::socket sock(group_client.curr_view->member_ips_and_ports[rank].ip_address,
                      group_client.curr_view->member_ips_and_ports[rank].gms_port);
 
-    JoinResponse leader_response;
-    uint64_t leader_version_hashcode;
+    JoinResponse response;
+    uint64_t node_version_hashcode;
     try {
-        sock.exchange(my_version_hashcode, leader_version_hashcode);
-        if(leader_version_hashcode != my_version_hashcode) {
-            throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+        sock.exchange(my_version_hashcode, node_version_hashcode);
+        if(node_version_hashcode != my_version_hashcode) {
+            throw derecho_exception("Unable to connect to Derecho member because the node is running on an incompatible platform or used an incompatible compiler.");
         }
         sock.write(JoinRequest{node_id, true});
-        sock.read(leader_response);
-        if(leader_response.code == JoinResponseCode::ID_IN_USE) {
-            dbg_default_error("Error! Leader refused connection because ID {} is already in use!", group_client.my_id);
+        sock.read(response);
+        if(response.code == JoinResponseCode::ID_IN_USE) {
+            dbg_default_error("Error! Derecho member refused connection because ID {} is already in use!", group_client.my_id);
             dbg_default_flush();
             throw derecho_exception("Leader rejected join, ID already in use.");
         }
         sock.write(ExternalClientRequest::ESTABLISH_P2P);
         sock.write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
     } catch(tcp::socket_error&) {
-        throw derecho_exception("Failed to establish P2P connection.");
+        throw derecho_exception("Failed to establish P2P connection: socket error while sending join request.");
     }
 
     assert(dest_node != node_id);
-    sst::add_external_node(dest_node, {group_client.curr_view->member_ips_and_ports[rank].ip_address,
-                                       group_client.curr_view->member_ips_and_ports[rank].external_port});
+    if(!sst::add_external_node(dest_node, {group_client.curr_view->member_ips_and_ports[rank].ip_address,
+                                           group_client.curr_view->member_ips_and_ports[rank].external_port})) {
+        dbg_default_error("Failed to set up a TCP connection to {} on {}:{}", dest_node, group_client.curr_view->member_ips_and_ports[rank].ip_address, group_client.curr_view->member_ips_and_ports[rank].external_port);
+        throw derecho_exception("Failed to establish P2P connection: sst::add_external_node failed");
+    }
     group_client.p2p_connections->add_connections({dest_node});
 }
 
