@@ -667,7 +667,7 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip
     default_context();
     // load_configuration();
 
-    dbg_default_debug(fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
+    dbg_default_trace("lf_initialize hints: {}", fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
     /** Initialize the fabric, domain and completion queue */
     fail_if_nonzero_retry_on_eagain(
             "fi_getinfo() failed", CRASH_ON_FAILURE,
