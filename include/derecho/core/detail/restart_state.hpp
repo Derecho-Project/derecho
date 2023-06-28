@@ -100,6 +100,8 @@ struct RestartState {
 
 class RestartLeaderState {
 private:
+    /** Pointer to the ViewManager logger, which is created by ViewManager */
+    std::shared_ptr<spdlog::logger> vm_logger;
     /** Takes ownership of ViewManager's curr_view pointer, because
      * await_quroum() might replace curr_view with a newer view discovered
      * on a restarting node. */

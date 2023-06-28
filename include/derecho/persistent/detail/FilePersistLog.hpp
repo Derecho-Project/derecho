@@ -3,7 +3,7 @@
 
 #include "PersistLog.hpp"
 #include "util.hpp"
-#include <derecho/utils/logger.hpp>
+#include "derecho/utils/logger.hpp"
 #include <pthread.h>
 #include <string>
 
@@ -113,6 +113,8 @@ protected:
     const uint64_t m_iMaxLogEntry;
     // max data size
     const uint64_t m_iMaxDataSize;
+    // pointer to the Persistence-module logger
+    std::shared_ptr<spdlog::logger> m_logger;
 
     // the log file descriptor
     int m_iLogFileDesc;
@@ -129,39 +131,39 @@ protected:
     pthread_mutex_t m_perslock;
 
 // lock macro
-#define FPL_WRLOCK                                        \
-    do {                                                  \
-        if(pthread_rwlock_wrlock(&this->m_rwlock) != 0) { \
-            throw PERSIST_EXP_RWLOCK_WRLOCK(errno);       \
-        }                                                 \
+#define FPL_WRLOCK                                                           \
+    do {                                                                     \
+        if(pthread_rwlock_wrlock(&this->m_rwlock) != 0) {                    \
+            throw persistent_lock_error("rwlock_wrlock failed.", errno); \
+        }                                                                    \
     } while(0)
 
-#define FPL_RDLOCK                                        \
-    do {                                                  \
-        if(pthread_rwlock_rdlock(&this->m_rwlock) != 0) { \
-            throw PERSIST_EXP_RWLOCK_WRLOCK(errno);       \
-        }                                                 \
+#define FPL_RDLOCK                                                           \
+    do {                                                                     \
+        if(pthread_rwlock_rdlock(&this->m_rwlock) != 0) {                    \
+            throw persistent_lock_error("rwlock_rdlock failed.", errno); \
+        }                                                                    \
     } while(0)
 
-#define FPL_UNLOCK                                        \
-    do {                                                  \
-        if(pthread_rwlock_unlock(&this->m_rwlock) != 0) { \
-            throw PERSIST_EXP_RWLOCK_UNLOCK(errno);       \
-        }                                                 \
+#define FPL_UNLOCK                                                           \
+    do {                                                                     \
+        if(pthread_rwlock_unlock(&this->m_rwlock) != 0) {                    \
+            throw persistent_lock_error("rwlock_unlock failed.", errno); \
+        }                                                                    \
     } while(0)
 
-#define FPL_PERS_LOCK                                    \
-    do {                                                 \
-        if(pthread_mutex_lock(&this->m_perslock) != 0) { \
-            throw PERSIST_EXP_MUTEX_LOCK(errno);         \
-        }                                                \
+#define FPL_PERS_LOCK                                                     \
+    do {                                                                  \
+        if(pthread_mutex_lock(&this->m_perslock) != 0) {                  \
+            throw persistent_lock_error("mutex_lock failed.", errno); \
+        }                                                                 \
     } while(0)
 
-#define FPL_PERS_UNLOCK                                    \
-    do {                                                   \
-        if(pthread_mutex_unlock(&this->m_perslock) != 0) { \
-            throw PERSIST_EXP_MUTEX_UNLOCK(errno);         \
-        }                                                  \
+#define FPL_PERS_UNLOCK                                                     \
+    do {                                                                    \
+        if(pthread_mutex_unlock(&this->m_perslock) != 0) {                  \
+            throw persistent_lock_error("mutex_unlock failed.", errno); \
+        }                                                                   \
     } while(0)
 
     // load the log from files. This method may through exceptions if read from
@@ -245,7 +247,7 @@ public:
                 // it.
                 version_t ver = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
                 persist(ver, true);
-            } catch(uint64_t e) {
+            } catch(std::exception& e) {
                 FPL_UNLOCK;
                 FPL_PERS_UNLOCK;
                 throw e;
@@ -253,7 +255,6 @@ public:
             FPL_PERS_UNLOCK;
             //TODO:remove delete entries from the index. This is tricky because
             // HLC order and idex order does not agree with each other.
-            // throw PERSIST_EXP_UNIMPLEMENTED;
         } else {
             FPL_UNLOCK;
             return;
@@ -332,14 +333,14 @@ private:
     int64_t binarySearch(const KeyGetter& keyGetter, const TKey& key,
                          const int64_t& logHead, const int64_t& logTail) {
         if(logTail <= logHead) {
-            dbg_default_trace("binary Search failed...EMPTY LOG");
+            dbg_trace(m_logger, "binary Search failed...EMPTY LOG");
             return INVALID_INDEX;
         }
         int64_t head = logHead, tail = logTail - 1;
         int64_t pivot = 0;
         while(head <= tail) {
             pivot = (head + tail) / 2;
-            dbg_default_trace("Search range: {0}->[{1},{2}]", pivot, head, tail);
+            dbg_trace(m_logger, "Search range: {0}->[{1},{2}]", pivot, head, tail);
             const TKey p_key = keyGetter(LOG_ENTRY_AT(pivot));
             if(p_key == key) {
                 break;  // found
@@ -354,7 +355,7 @@ private:
             } else {  // search left
                 tail = pivot - 1;
                 if(head > tail) {
-                    dbg_default_trace("binary Search failed...Object does not exist.");
+                    dbg_trace(m_logger, "binary Search failed...Object does not exist.");
                     return INVALID_INDEX;
                 }
             }
@@ -373,10 +374,10 @@ private:
 #ifndef NDEBUG
     //dbg functions
     void dbgDumpMeta() {
-        dbg_default_trace("m_pData={0},m_pLog={1}", (void*)this->m_pData, (void*)this->m_pLog);
-        dbg_default_trace("META_HEADER:head={0},tail={1}", (int64_t)m_currMetaHeader.fields.head, (int64_t)m_currMetaHeader.fields.tail);
-        dbg_default_trace("META_HEADER_PERS:head={0},tail={1}", (int64_t)m_persMetaHeader.fields.head, (int64_t)m_persMetaHeader.fields.tail);
-        dbg_default_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)NEXT_LOG_ENTRY, (void*)NEXT_LOG_ENTRY_PERS);
+        dbg_trace(m_logger, "m_pData={0},m_pLog={1}", (void*)this->m_pData, (void*)this->m_pLog);
+        dbg_trace(m_logger, "META_HEADER:head={0},tail={1}", (int64_t)m_currMetaHeader.fields.head, (int64_t)m_currMetaHeader.fields.tail);
+        dbg_trace(m_logger, "META_HEADER_PERS:head={0},tail={1}", (int64_t)m_persMetaHeader.fields.head, (int64_t)m_persMetaHeader.fields.tail);
+        dbg_trace(m_logger, "NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)NEXT_LOG_ENTRY, (void*)NEXT_LOG_ENTRY_PERS);
     }
 #endif  // NDEBUG
 };

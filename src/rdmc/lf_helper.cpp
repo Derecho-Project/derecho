@@ -652,14 +652,22 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip
     // connection_listener =
     // make_unique<tcp::connection_listener>(derecho::rdmc_tcp_port);
 
-    /** Initialize the tcp connections, also connects all the nodes together */
-    rdmc_connections = new tcp::tcp_connections(node_rank, ip_addrs_and_ports);
+    /** Initialize the tcp connections and connect all the nodes together */
+    uint16_t my_port = ip_addrs_and_ports.at(node_rank).second;
+    rdmc_connections = new tcp::tcp_connections(node_rank, my_port);
+    for(const auto& node_entry : ip_addrs_and_ports) {
+        if(node_entry.first != node_rank
+           && !rdmc_connections->add_node(node_entry.first, node_entry.second)) {
+            dbg_default_error("lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
+            return false;
+        }
+    }
 
     /** Set the context to defaults to start with */
     default_context();
     // load_configuration();
 
-    dbg_default_debug(fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
+    dbg_default_trace("lf_initialize hints: {}", fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
     /** Initialize the fabric, domain and completion queue */
     fail_if_nonzero_retry_on_eagain(
             "fi_getinfo() failed", CRASH_ON_FAILURE,

@@ -26,17 +26,17 @@ void saveNoLogObjectInFile(
     // 3 - write to tmp file
     int fd = open(tmpfilepath, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP | S_IROTH);
     if(fd == -1) {
-        throw PERSIST_EXP_OPEN_FILE(errno);
+        throw persistent_file_error("Failed to open file.", errno);
     }
     ssize_t nWrite = write(fd, buf, size);
     delete[] buf;
     if(nWrite != (ssize_t)size) {
-        throw PERSIST_EXP_WRITE_FILE(errno);
+        throw persistent_file_error("Failed to write to file.", errno);
     }
     close(fd);
     // 4 - atomically rename
     if(rename(tmpfilepath, filepath) != 0) {
-        throw PERSIST_EXP_RENAME_FILE(errno);
+        throw persistent_file_error("Failed to rename file.", errno);
     }
 }
 
@@ -53,8 +53,8 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
     if(derecho::getConfBoolean(CONF_PERS_RESET)) {
         if(fs::exists(filepath)) {
             if(!fs::remove(filepath)) {
-                dbg_default_error("{} loadNoLogObjectFromFile failed to remove file {}.", _NOLOG_OBJECT_NAME_, filepath);
-                throw PERSIST_EXP_REMOVE_FILE(errno);
+                dbg_error(PersistLogger::get(), "{} loadNoLogObjectFromFile failed to remove file {}.", _NOLOG_OBJECT_NAME_, filepath);
+                throw persistent_file_error("Failed to remove file.", errno);
             }
         }
     }
@@ -67,17 +67,17 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
     int fd = open(filepath, O_RDONLY);
     struct stat stat_buf;
     if(fd == -1 || (fstat(fd, &stat_buf) != 0)) {
-        throw PERSIST_EXP_READ_FILE(errno);
+        throw persistent_file_error("Failed to read file.", errno);
     }
 
     uint8_t* buf = new uint8_t[stat_buf.st_size];
     if(!buf) {
         close(fd);
-        throw PERSIST_EXP_OOM(errno);
+        throw persistent_file_error("Failed to allocate memory for reading file.", errno);
     }
     if(read(fd, buf, stat_buf.st_size) != stat_buf.st_size) {
         close(fd);
-        throw PERSIST_EXP_READ_FILE(errno);
+        throw persistent_file_error("Failed to read file.", errno);
     }
     close(fd);
 

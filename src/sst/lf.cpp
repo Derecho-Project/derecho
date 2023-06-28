@@ -88,6 +88,8 @@ public:
     // configuration resources
     struct fi_eq_attr eq_attr;  // event queue attributes
     struct fi_cq_attr cq_attr;  // completion queue attributes
+    // logger pointer
+    std::shared_ptr<spdlog::logger> sst_logger;
     virtual ~lf_ctxt() {
         lf_destroy();
     }
@@ -130,14 +132,16 @@ static void default_context() {
     g_ctxt.cq_attr.wait_obj = FI_WAIT_UNSPEC;
 
     g_ctxt.pep_addr_len = max_lf_addr_size;
+
+    g_ctxt.sst_logger = spdlog::get(LoggerFactory::SST_LOGGER_NAME);
 }
 
 /** load RDMA device configurations from file */
 static void load_configuration() {
     if(!g_ctxt.hints) {
-        dbg_default_error("lf.cpp: load_configuration error: hints is not initialized.");
+        dbg_error(g_ctxt.sst_logger, "lf.cpp: load_configuration error: hints is not initialized.");
         std::cerr << "lf.cpp: load_configuration error: hints is not initialized." << std::endl;
-        dbg_default_flush();
+        dbg_flush(g_ctxt.sst_logger) ;
         exit(-1);
     }
 
@@ -188,12 +192,12 @@ int _resources::init_endpoint(struct fi_info* fi) {
                                           fi_endpoint, g_ctxt.domain, fi, &(this->ep), nullptr);
 
     if(ret) return ret;
-    dbg_default_debug("{}:{} init_endpoint:ep->fid={}", __FILE__, __func__, (void*)&this->ep->fid);
+    dbg_debug(sst_logger, "{}:{} init_endpoint:ep->fid={}", __FILE__, __func__, (void*)&this->ep->fid);
 
     // 2.5 - open an event queue.
     fail_if_nonzero_retry_on_eagain("open the event queue for rdma transmission.", CRASH_ON_FAILURE,
                                     fi_eq_open, g_ctxt.fabric, &g_ctxt.eq_attr, &this->eq, nullptr);
-    dbg_default_debug("{}:{} event_queue opened={}", __FILE__, __func__, (void*)&this->eq->fid);
+    dbg_debug(sst_logger, "{}:{} event_queue opened={}", __FILE__, __func__, (void*)&this->eq->fid);
 
     // 3 - bind them and global event queue together
     ret = fail_if_nonzero_retry_on_eagain("bind endpoint and event queue", REPORT_ON_FAILURE,
@@ -208,11 +212,11 @@ int _resources::init_endpoint(struct fi_info* fi) {
 }
 
 void _resources::connect_endpoint(bool is_lf_server) {
-    dbg_default_trace("preparing connection to remote node(id={})...\n", this->remote_id);
+    dbg_trace(sst_logger, "preparing connection to remote node(id={})...\n", this->remote_id);
     struct cm_con_data_t local_cm_data, remote_cm_data;
 
     // STEP 1 exchange CM info
-    dbg_default_trace("Exchanging connection management info.");
+    dbg_trace(sst_logger, "Exchanging connection management info.");
     local_cm_data.pep_addr_len = (uint32_t)htonl((uint32_t)g_ctxt.pep_addr_len);
     memcpy((void*)&local_cm_data.pep_addr, &g_ctxt.pep_addr, g_ctxt.pep_addr_len);
     local_cm_data.mr_key = (uint64_t)htonll(this->mr_lwkey);
@@ -221,32 +225,35 @@ void _resources::connect_endpoint(bool is_lf_server) {
     try {
         if(sst_connections->contains_node(this->remote_id)) {
             sst_connections->exchange(this->remote_id, local_cm_data, remote_cm_data);
-        } else {
+        } else if(external_client_connections->contains_node(this->remote_id)) {
             external_client_connections->exchange(this->remote_id, local_cm_data, remote_cm_data);
+        } else {
+            dbg_error(sst_logger, "No TCP connection exists with node {}, cannot exchange connection info", this->remote_id);
+            crash_with_message("No TCP connection exists with node %d, cannot exchange connection info\n", this->remote_id);
         }
     } catch(tcp::socket_error&) {
-        dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
+        dbg_error(sst_logger, "Failed to exchange connection management info with node {}", this->remote_id);
         crash_with_message("Failed to exchange connection management info with node %d\n", this->remote_id);
     }
 
     remote_cm_data.pep_addr_len = (uint32_t)ntohl(remote_cm_data.pep_addr_len);
     this->mr_rwkey = (uint64_t)ntohll(remote_cm_data.mr_key);
     this->remote_fi_addr = (fi_addr_t)ntohll(remote_cm_data.vaddr);
-    dbg_default_trace("Exchanging connection management info succeeds.");
+    dbg_trace(sst_logger, "Exchanging connection management info succeeds.");
 
     // STEP 2 connect to remote
-    dbg_default_trace("connect to remote node.");
+    dbg_trace(sst_logger, "connect to remote node.");
     ssize_t nRead;
     struct fi_eq_cm_entry entry;
     uint32_t event;
 
     if(is_lf_server) {
-        dbg_default_trace("connecting as a server.");
-        dbg_default_trace("waiting for connection.");
+        dbg_trace(sst_logger, "connecting as a server.");
+        dbg_trace(sst_logger, "waiting for connection.");
 
         nRead = fi_eq_sread(g_ctxt.peq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
-            dbg_default_error("failed to get connection from remote.");
+            dbg_error(sst_logger, "failed to get connection from remote.");
             crash_with_message("failed to get connection from remote. nRead=%ld\n", nRead);
         }
         if(init_endpoint(entry.info)) {
@@ -261,10 +268,10 @@ void _resources::connect_endpoint(bool is_lf_server) {
         }
         nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
-            dbg_default_error("server failed to connect remote.");
+            dbg_error(sst_logger, "server failed to connect remote.");
             crash_with_message("server failed to connect remote. nRead=%ld.\n", nRead);
         }
-        dbg_default_debug("{}:{} entry.fid={},this->ep->fid={}", __FILE__, __func__, (void*)entry.fid, (void*)&(this->ep->fid));
+        dbg_debug(sst_logger, "{}:{} entry.fid={},this->ep->fid={}", __FILE__, __func__, (void*)entry.fid, (void*)&(this->ep->fid));
         if(event != FI_CONNECTED || entry.fid != &(this->ep->fid)) {
             fi_freeinfo(entry.info);
             crash_with_message("SST: Unexpected CM event: %d.\n", event);
@@ -273,8 +280,8 @@ void _resources::connect_endpoint(bool is_lf_server) {
         fi_freeinfo(entry.info);
     } else {
         // libfabric connection client
-        dbg_default_trace("connecting as a client.\n");
-        dbg_default_trace("initiating a connection.\n");
+        dbg_trace(sst_logger, "connecting as a client.\n");
+        dbg_trace(sst_logger, "initiating a connection.\n");
 
         struct fi_info* client_hints = fi_dupinfo(g_ctxt.hints);
         struct fi_info* client_info = NULL;
@@ -296,14 +303,14 @@ void _resources::connect_endpoint(bool is_lf_server) {
 
         nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
-            dbg_default_error("failed to connect remote.");
+            dbg_error(sst_logger, "failed to connect remote.");
             crash_with_message("failed to connect remote. nRead=%ld.\n", nRead);
         }
-        dbg_default_debug("{}:{} entry.fid={},this->ep->fid={}", __FILE__, __func__, (void*)entry.fid, (void*)&(this->ep->fid));
+        dbg_debug(sst_logger, "{}:{} entry.fid={},this->ep->fid={}", __FILE__, __func__, (void*)entry.fid, (void*)&(this->ep->fid));
         if(event != FI_CONNECTED || entry.fid != &(this->ep->fid)) {
             fi_freeinfo(client_hints);
             fi_freeinfo(client_info);
-            dbg_default_flush();
+            dbg_flush(sst_logger) ;
             crash_with_message("SST: Unexpected CM event: %d.\n", event);
         }
 
@@ -323,18 +330,19 @@ _resources::_resources(
         int size_w,
         int size_r,
         int is_lf_server)
-        : remote_failed(false),
+        : sst_logger(spdlog::get(LoggerFactory::SST_LOGGER_NAME)),
+          remote_failed(false),
           remote_id(r_id),
           write_buf(write_addr),
           read_buf(read_addr) {
-    dbg_default_trace("resources constructor: this={}", (void*)this);
+    dbg_trace(sst_logger, "resources constructor: this={}", (void*)this);
 
     if(!write_addr) {
-        dbg_default_warn("{}:{} called with NULL write_addr!", __FILE__, __func__);
+        dbg_warn(sst_logger, "{}:{} called with NULL write_addr!", __FILE__, __func__);
     }
 
     if(!read_addr) {
-        dbg_default_warn("{}:{} called with NULL read_addr!", __FILE__, __func__);
+        dbg_warn(sst_logger, "{}:{} called with NULL read_addr!", __FILE__, __func__);
     }
 
 #define LF_RMR_KEY(rid) (((uint64_t)0xf0000000) << 32 | (uint64_t)(rid))
@@ -344,20 +352,20 @@ _resources::_resources(
                                     fi_mr_reg, g_ctxt.domain, write_buf, size_w,
                                     FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
                                     0, 0, 0, &this->write_mr, nullptr);
-    dbg_default_trace("{}:{} registered memory for remote write: {}:{}", __FILE__, __func__, (void*)write_addr, size_w);
+    dbg_trace(sst_logger, "{}:{} registered memory for remote write: {}:{}", __FILE__, __func__, (void*)write_addr, size_w);
     // register the read buffer
     fail_if_nonzero_retry_on_eagain("register memory buffer for read", CRASH_ON_FAILURE,
                                     fi_mr_reg, g_ctxt.domain, read_buf, size_r,
                                     FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
                                     0, 0, 0, &this->read_mr, nullptr);
-    dbg_default_trace("{}:{} registered memory for remote read: {}:{}", __FILE__, __func__, (void*)read_addr, size_r);
+    dbg_trace(sst_logger, "{}:{} registered memory for remote read: {}:{}", __FILE__, __func__, (void*)read_addr, size_r);
 
     this->mr_lrkey = fi_mr_key(this->read_mr);
     if(this->mr_lrkey == FI_KEY_NOTAVAIL) {
         crash_with_message("fail to get read memory key.");
     }
     this->mr_lwkey = fi_mr_key(this->write_mr);
-    dbg_default_trace("{}:{} local write key:{}, local read key:{}", __FILE__, __func__, (uint64_t)this->mr_lwkey, (uint64_t)this->mr_lrkey);
+    dbg_trace(sst_logger, "{}:{} local write key:{}, local read key:{}", __FILE__, __func__, (uint64_t)this->mr_lwkey, (uint64_t)this->mr_lrkey);
     if(this->mr_lwkey == FI_KEY_NOTAVAIL) {
         crash_with_message("fail to get write memory key.");
     }
@@ -366,7 +374,7 @@ _resources::_resources(
 }
 
 _resources::~_resources() {
-    dbg_default_trace("resources destructor:this={}", (void*)this);
+    dbg_trace(sst_logger, "resources destructor:this={}", (void*)this);
     if(this->ep) {
         fail_if_nonzero_retry_on_eagain("close endpoint", REPORT_ON_FAILURE,
                                         fi_close, &this->ep->fid);
@@ -389,15 +397,15 @@ int _resources::post_remote_send(
         const long long int size,
         const int op,
         const bool completion) {
-    // dbg_default_trace("resources::post_remote_send(),this={}",(void*)this);
+    // dbg_trace(sst_logger, "resources::post_remote_send(),this={}",(void*)this);
     // #ifdef !NDEBUG
     // printf(YEL "resources::post_remote_send(),this=%p\n" RESET, this);
     // fflush(stdout);
     // #endif
-    // dbg_default_trace("resources::post_remote_send(ctxt=({},{}),offset={},size={},op={},completion={})",ctxt?ctxt->ce_idx:0,ctxt?ctxt->remote_id:0,offset,size,op,completion);
+    // dbg_trace(sst_logger, "resources::post_remote_send(ctxt=({},{}),offset={},size={},op={},completion={})",ctxt?ctxt->ce_idx:0,ctxt?ctxt->remote_id:0,offset,size,op,completion);
 
     if(remote_failed) {
-        dbg_default_warn("lf.cpp: remote has failed, post_remote_send() does nothing.");
+        dbg_warn(sst_logger, "lf.cpp: remote has failed, post_remote_send() does nothing.");
         return -EFAULT;
     }
     int ret = 0;
@@ -446,10 +454,10 @@ int _resources::post_remote_send(
         msg.context = (void*)ctxt;
         msg.data = 0l;  // not used
 
-        // dbg_default_trace("{}:{} calling fi_writemsg/fi_readmsg with",__FILE__,__func__);
-        // dbg_default_trace("remote addr = {} len = {} key = {}",(void*)rma_iov.addr,rma_iov.len,(uint64_t)this->mr_rwkey);
-        // dbg_default_trace("local addr = {} len = {} key = {}",(void*)msg_iov.iov_base,msg_iov.iov_len,(uint64_t)this->mr_lrkey);
-        // dbg_default_flush();
+        // dbg_trace(sst_logger, "{}:{} calling fi_writemsg/fi_readmsg with",__FILE__,__func__);
+        // dbg_trace(sst_logger, "remote addr = {} len = {} key = {}",(void*)rma_iov.addr,rma_iov.len,(uint64_t)this->mr_rwkey);
+        // dbg_trace(sst_logger, "local addr = {} len = {} key = {}",(void*)msg_iov.iov_base,msg_iov.iov_len,(uint64_t)this->mr_lrkey);
+        // dbg_flush(sst_logger) ;
 
         auto remote_has_failed = [this]() { return remote_failed.load(); };
         if(op == 1) {  //write
@@ -460,8 +468,8 @@ int _resources::post_remote_send(
                                          fi_readmsg, this->ep, &msg, (completion) ? FI_COMPLETION : 0);
         }
     }
-    // dbg_default_trace("post_remote_send return with ret={}",ret);
-    // dbg_default_flush();
+    // dbg_trace(sst_logger, "post_remote_send return with ret={}",ret);
+    // dbg_flush(sst_logger) ;
     // #ifdef !NDEBUG
     // printf(YEL "resources::post_remote_send return with ret=%d\n" RESET, ret);
     // fflush(stdout);
@@ -472,7 +480,7 @@ int _resources::post_remote_send(
 void _resources::register_oob_memory(void* addr, size_t size) {
     // register it with the domain
     struct fid_mr* oob_mr;
-    int ret = 
+    int ret =
     fail_if_nonzero_retry_on_eagain("register memory buffer for write", REPORT_ON_FAILURE,
                                     fi_mr_reg, g_ctxt.domain, addr, size,
                                     FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
@@ -490,11 +498,11 @@ void _resources::register_oob_memory(void* addr, size_t size) {
     oob_mrs.emplace(reinterpret_cast<uint64_t>(addr),mr);
 
     dbg_default_warn("OOB memory registered with \n"
-                      "\taddr = {:p}\n"
-                      "\tsize = {:x}\n"
-                      "\tdesc = {:x}\n"
-                      "\trkey = {:x}\n",
-                      addr,size,reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)),fi_mr_key(oob_mr));
+                     "\taddr = {:p}\n"
+                     "\tsize = {:x}\n"
+                     "\tdesc = {:x}\n"
+                     "\trkey = {:x}\n",
+                     addr, size, reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)), fi_mr_key(oob_mr));
 }
 
 void _resources::unregister_oob_memory(void* addr) {
@@ -514,7 +522,7 @@ void _resources::unregister_oob_memory(void* addr) {
 void* _resources::get_oob_mr_desc(const struct iovec& iov) {
     for (const auto& oob_mr:oob_mrs) {
         if (reinterpret_cast<uint64_t>(iov.iov_base) >= oob_mr.first &&
-            (reinterpret_cast<uint64_t>(iov.iov_base) + static_cast<uint64_t>(iov.iov_len)) <= 
+            (reinterpret_cast<uint64_t>(iov.iov_base) + static_cast<uint64_t>(iov.iov_len)) <=
             (reinterpret_cast<uint64_t>(oob_mr.second.addr) + static_cast<uint64_t>(oob_mr.second.size))) {
             return fi_mr_desc(oob_mr.second.mr);
         }
@@ -572,7 +580,7 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     msg.rma_iov = &rma_iov;
     msg.rma_iov_count = 1;
     msg.data = 0l; // not used
-    
+
     // set up completion entry.
     const auto tid = std::this_thread::get_id();
     uint32_t ce_idx = util::polling_data.get_index(tid);
@@ -581,30 +589,28 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     sctxt.set_remote_id(remote_id);
     sctxt.set_ce_idx(ce_idx);
     msg.context = (void*)&sctxt;
-    dbg_default_trace("{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
+    dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
 
-    dbg_default_warn("{}: op = {:d}, msg.context = {:p}\n"
-                     "\tmsg.msg_iov.iov_base     = {:p}\n"
-                     "\tmsg.msg_iov.iov_len      = {:x}\n"
-                     "\tmsg.iov_count            = {}\n"
-                     "\tmsg.desc[0]              = {:x}\n"
-                     "\tmsg.rma_iov->addr        = {:x}\n"
-                     "\tmsg.rma_iov->len         = {:x}\n"
-                     "\tmsg.rma_iov->key         = {:x}\n"
-                     "\tmsg.rma_iov_count        = {}\n"
-                     "\tmsg.data                 = {}\n"
-                     ,
-                     __func__,op,static_cast<void*>(&sctxt),
-                     msg.msg_iov->iov_base,
-                     msg.msg_iov->iov_len,
-                     msg.iov_count,
-                     reinterpret_cast<uint64_t>(msg.desc[0]),
-                     msg.rma_iov->addr,
-                     msg.rma_iov->len,
-                     msg.rma_iov->key,
-                     msg.rma_iov_count,
-                     msg.data
-            );
+    dbg_warn(sst_logger, "{}: op = {:d}, msg.context = {:p}\n"
+                         "\tmsg.msg_iov.iov_base     = {:p}\n"
+                         "\tmsg.msg_iov.iov_len      = {:x}\n"
+                         "\tmsg.iov_count            = {}\n"
+                         "\tmsg.desc[0]              = {:x}\n"
+                         "\tmsg.rma_iov->addr        = {:x}\n"
+                         "\tmsg.rma_iov->len         = {:x}\n"
+                         "\tmsg.rma_iov->key         = {:x}\n"
+                         "\tmsg.rma_iov_count        = {}\n"
+                         "\tmsg.data                 = {}\n",
+             __func__, op, static_cast<void*>(&sctxt),
+             msg.msg_iov->iov_base,
+             msg.msg_iov->iov_len,
+             msg.iov_count,
+             reinterpret_cast<uint64_t>(msg.desc[0]),
+             msg.rma_iov->addr,
+             msg.rma_iov->len,
+             msg.rma_iov->key,
+             msg.rma_iov_count,
+             msg.data);
 
     int ret = -1;
     if (op == OOB_OP_WRITE) {
@@ -693,7 +699,7 @@ void resources::report_failure() {
 void resources::post_remote_read(const long long int size) {
     int return_code = post_remote_send(NULL, 0, size, 0, false);
     if(return_code != 0) {
-        dbg_default_error("post_remote_read(1) failed with return code {}", return_code);
+        dbg_error(sst_logger, "post_remote_read(1) failed with return code {}", return_code);
         std::cerr << "post_remote_read(1) failed with return code " << return_code << std::endl;
     }
 }
@@ -701,7 +707,7 @@ void resources::post_remote_read(const long long int size) {
 void resources::post_remote_read(const long long int offset, const long long int size) {
     int return_code = post_remote_send(NULL, offset, size, 0, false);
     if(return_code != 0) {
-        dbg_default_error("post_remote_read(2) failed with return code {}", return_code);
+        dbg_error(sst_logger, "post_remote_read(2) failed with return code {}", return_code);
         std::cerr << "post_remote_read(2) failed with return code " << return_code << std::endl;
     }
 }
@@ -709,7 +715,7 @@ void resources::post_remote_read(const long long int offset, const long long int
 void resources::post_remote_write(const long long int size) {
     int return_code = post_remote_send(NULL, 0, size, 1, false);
     if(return_code != 0) {
-        dbg_default_error("post_remote_write(1) failed with return code {}", return_code);
+        dbg_error(sst_logger, "post_remote_write(1) failed with return code {}", return_code);
         std::cerr << "post_remote_write(1) failed with return code " << return_code << std::endl;
     }
 }
@@ -717,7 +723,7 @@ void resources::post_remote_write(const long long int size) {
 void resources::post_remote_write(const long long int offset, long long int size) {
     int return_code = post_remote_send(NULL, offset, size, 1, false);
     if(return_code != 0) {
-        dbg_default_error("post_remote_write(2) failed with return code {}", return_code);
+        dbg_error(sst_logger, "post_remote_write(2) failed with return code {}", return_code);
         std::cerr << "post_remote_write(2) failed with return code " << return_code << std::endl;
     }
 }
@@ -725,7 +731,7 @@ void resources::post_remote_write(const long long int offset, long long int size
 void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size) {
     int return_code = post_remote_send(ctxt, 0, size, 1, true);
     if(return_code != 0) {
-        dbg_default_error("post_remote_write(3) failed with return code {}", return_code);
+        dbg_error(sst_logger, "post_remote_write(3) failed with return code {}", return_code);
         std::cerr << "post_remote_write(3) failed with return code " << return_code << std::endl;
     }
 }
@@ -733,7 +739,7 @@ void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const lo
 void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int return_code = post_remote_send(ctxt, offset, size, 1, true);
     if(return_code != 0) {
-        dbg_default_error("post_remote_write(4) failed with return code {}", return_code);
+        dbg_error(sst_logger, "post_remote_write(4) failed with return code {}", return_code);
         std::cerr << "post_remote_write(4) failed with return code " << return_code << std::endl;
     }
 }
@@ -836,8 +842,10 @@ bool sync(uint32_t r_id) {
     try {
         if(sst_connections->contains_node(r_id)) {
             sst_connections->exchange(r_id, s, t);
-        } else {
+        } else if(external_client_connections->contains_node(r_id)) {
             external_client_connections->exchange(r_id, s, t);
+        } else {
+            return false;
         }
     } catch(tcp::socket_error&) {
         return false;
@@ -851,7 +859,8 @@ void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
 
 void polling_loop() {
     pthread_setname_np(pthread_self(), "sst_poll");
-    dbg_default_trace("Polling thread starting.");
+    auto sst_logger = spdlog::get(LoggerFactory::SST_LOGGER_NAME);
+    dbg_trace(sst_logger, "Polling thread starting.");
 
     struct timespec last_time, cur_time;
     clock_gettime(CLOCK_REALTIME, &last_time);
@@ -877,7 +886,7 @@ void polling_loop() {
             }
         }
     }
-    dbg_default_trace("Polling thread ending.");
+    dbg_trace(sst_logger, "Polling thread ending.");
 }
 
 /**
@@ -924,14 +933,14 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         struct fi_cq_err_entry eentry;
         fi_cq_readerr(g_ctxt.cq, &eentry, 0);
 
-        dbg_default_error("fi_cq_readerr() read the following error entry:");
+        dbg_error(g_ctxt.sst_logger, "fi_cq_readerr() read the following error entry:");
         if(eentry.op_context == NULL) {
-            dbg_default_error("\top_context:NULL");
+            dbg_error(g_ctxt.sst_logger, "\top_context:NULL");
         } else {
 #ifndef NOLOG
             lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
 #endif
-            dbg_default_error("\top_context:ce_idx={},remote_id={}", sctxt->ce_idx(), sctxt->remote_id());
+            dbg_error(g_ctxt.sst_logger, "\top_context:ce_idx={},remote_id={}", sctxt->ce_idx(), sctxt->remote_id());
         }
 #ifdef DEBUG_FOR_RELEASE
         printf("\tflags=%x\n", eentry.flags);
@@ -942,24 +951,24 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         printf("\tolen=0x%x\n", eentry.olen);
         printf("\terr=0x%x\n", eentry.err);
 #endif  //DEBUG_FOR_RELEASE
-        dbg_default_error("\tflags={}", eentry.flags);
-        dbg_default_error("\tlen={}", eentry.len);
-        dbg_default_error("\tbuf={}", eentry.buf);
-        dbg_default_error("\tdata={}", eentry.data);
-        dbg_default_error("\ttag={}", eentry.tag);
-        dbg_default_error("\tolen={}", eentry.olen);
-        dbg_default_error("\terr={}", eentry.err);
+        dbg_error(g_ctxt.sst_logger, "\tflags={}", eentry.flags);
+        dbg_error(g_ctxt.sst_logger, "\tlen={}", eentry.len);
+        dbg_error(g_ctxt.sst_logger, "\tbuf={}", eentry.buf);
+        dbg_error(g_ctxt.sst_logger, "\tdata={}", eentry.data);
+        dbg_error(g_ctxt.sst_logger, "\ttag={}", eentry.tag);
+        dbg_error(g_ctxt.sst_logger, "\tolen={}", eentry.olen);
+        dbg_error(g_ctxt.sst_logger, "\terr={}", eentry.err);
 #ifndef NOLOG
         char errbuf[1024];
 #endif
-        dbg_default_error("\tprov_errno={}:{}", eentry.prov_errno,
+        dbg_error(g_ctxt.sst_logger, "\tprov_errno={}:{}", eentry.prov_errno,
                           fi_cq_strerror(g_ctxt.cq, eentry.prov_errno, eentry.err_data, errbuf, 1024));
 #ifdef DEBUG_FOR_RELEASE
         printf("\tproverr=0x%x,%s\n", eentry.prov_errno,
                fi_cq_strerror(g_ctxt.cq, eentry.prov_errno, eentry.err_data, errbuf, 1024));
 #endif  //DEBUG_FOR_RELEASE
-        dbg_default_error("\terr_data={}", eentry.err_data);
-        dbg_default_error("\terr_data_size={}", eentry.err_data_size);
+        dbg_error(g_ctxt.sst_logger, "\terr_data={}", eentry.err_data);
+        dbg_error(g_ctxt.sst_logger, "\terr_data_size={}", eentry.err_data_size);
 #ifdef DEBUG_FOR_RELEASE
         printf("\terr_data_size=%d\n", eentry.err_data_size);
 #endif  //DEBUG_FOR_RELEASE
@@ -969,20 +978,20 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
             return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
         } else {
-            dbg_default_error("\tFailed polling the completion queue");
+            dbg_error(g_ctxt.sst_logger, "\tFailed polling the completion queue");
             fprintf(stderr, "Failed polling the completion queue");
             return {(uint32_t)0xFFFFFFFF, {0, -1}};  // we don't know who sent the message.
         }*/
-        dbg_default_error("\tFailed polling the completion queue");
+        dbg_error(g_ctxt.sst_logger, "\tFailed polling the completion queue");
         return {(uint32_t)0xFFFFFFFF, {0, -1}};  // we don't know who sent the message.
     }
     if(!shutdown) {
         lf_sender_ctxt* sctxt = (lf_sender_ctxt*)entry.op_context;
         if(sctxt == NULL) {
-            dbg_default_debug("WEIRD: we get an entry with op_context = NULL.");
+            dbg_debug(g_ctxt.sst_logger, "WEIRD: we get an entry with op_context = NULL.");
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!
         } else {
-            //dbg_default_trace("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
+            //dbg_trace(g_ctxt.sst_logger, "Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
             return {sctxt->ce_idx(), {sctxt->remote_id(), 1}};
         }
     } else {  // shutdown return a bad entry
@@ -993,10 +1002,39 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& internal_ip_addrs_and_ports,
                    const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports,
                    uint32_t node_id) {
-    // initialize derecho connection manager: This is derived from Sagar's code.
-    // May there be a better desgin?
-    sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
-    external_client_connections = new tcp::tcp_connections(node_id, external_ip_addrs_and_ports);
+    // Create SST logger, which must be done exactly once before any SST functions are called
+    auto logger = LoggerFactory::createLogger(LoggerFactory::SST_LOGGER_NAME,
+                                              derecho::getConfString(CONF_LOGGER_SST_LOG_LEVEL));
+
+    // initialize derecho connection manager
+    // May there be a better design?
+    if(internal_ip_addrs_and_ports.empty()) {
+        sst_connections = new tcp::tcp_connections(node_id);
+    } else {
+        uint16_t my_port = internal_ip_addrs_and_ports.at(node_id).second;
+        sst_connections = new tcp::tcp_connections(node_id, my_port);
+        for(const auto& node_entry : internal_ip_addrs_and_ports) {
+            if(node_entry.first != node_id
+               && !sst_connections->add_node(node_entry.first, node_entry.second)) {
+                // Following the rest of lf_initialize, crash immediately on an error instead of reporting it
+                dbg_error(logger, "lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
+                crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+            }
+        }
+    }
+    if(external_ip_addrs_and_ports.empty()) {
+        external_client_connections = new tcp::tcp_connections(node_id);
+    } else {
+        uint16_t my_external_port = external_ip_addrs_and_ports.at(node_id).second;
+        external_client_connections = new tcp::tcp_connections(node_id, my_external_port);
+        for(const auto& node_entry : external_ip_addrs_and_ports) {
+            if(node_entry.first != node_id
+               && !external_client_connections->add_node(node_entry.first, node_entry.second)) {
+                dbg_error(logger, "lf_initialize could not establish a TCP connection to node {} at {}:{}", node_entry.first, node_entry.second.first, node_entry.second.second);
+                crash_with_message("Failure in LibFabric setup! Could not establish a TCP connection to %s:%u\n", node_entry.second.first.c_str(), node_entry.second.second);
+            }
+        }
+    }
 
     // initialize global resources:
     // STEP 1: initialize with configuration.
@@ -1007,7 +1045,7 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& in
     // STEP 2: initialize fabric, domain, and completion queue
     fail_if_nonzero_retry_on_eagain("fi_getinfo()", CRASH_ON_FAILURE,
                                     fi_getinfo, LF_VERSION, nullptr, nullptr, 0, g_ctxt.hints, &(g_ctxt.fi));
-    dbg_default_trace("going to use virtual address?{}", LF_USE_VADDR);
+    dbg_trace(logger, "going to use virtual address?{}", LF_USE_VADDR);
     fail_if_nonzero_retry_on_eagain("fi_fabric()", CRASH_ON_FAILURE,
                                     fi_fabric, g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), nullptr);
     fail_if_nonzero_retry_on_eagain("fi_domain()", CRASH_ON_FAILURE,
@@ -1052,6 +1090,9 @@ void shutdown_polling_thread() {
 
 void lf_destroy() {
     shutdown_polling_thread();
+
+    delete sst_connections;
+    delete external_client_connections;
 
     // TODO: make sure all resources are destroyed first.
     _resources::global_release();

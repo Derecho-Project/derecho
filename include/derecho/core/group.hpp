@@ -1,15 +1,15 @@
 #pragma once
 
+#include "derecho/conf/conf.hpp"
 #include "derecho/tcp/tcp.hpp"
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/persistence_manager.hpp"
 #include "detail/rpc_manager.hpp"
 #include "detail/view_manager.hpp"
+#include "notification.hpp"
 #include "replicated.hpp"
 #include "subgroup_info.hpp"
-#include "notification.hpp"
-#include "derecho/conf/conf.hpp"
 
 #include <mutils-containers/KindMap.hpp>
 #include <mutils-containers/TypeMap2.hpp>
@@ -66,6 +66,12 @@ using contains = std::integral_constant<bool, (std::is_same<TargetType, TypePack
 template <typename T>
 using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
+/**
+ * Type-erased base class for Group that provides the public API functions
+ * (get_subgroup, get_nonmember_subgroup, etc.). Each method is implemented
+ * by dynamically casting "this" to a GroupProjection of the correct subgroup
+ * type and then forwarding the call to GroupProjection.
+ */
 class _Group {
 private:
 protected:
@@ -92,11 +98,22 @@ public:
     template <typename SubgroupType>
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
 
+    template <typename SubgroupType>
+    std::vector<std::vector<IpAndPorts>> get_subgroup_member_addresses(uint32_t subgroup_index = 0);
+
     virtual node_id_t get_my_id() = 0;
 
     virtual node_id_t get_rpc_caller_id() = 0;
 };
 
+/**
+ * A base class for Group that provides the subgroup-related API functions
+ * for only a single subgroup type; thus it is a projection of the
+ * Group<ReplicatedTypes...> onto a single ReplicatedType. Group will inherit
+ * from one copy of this class for each ReplicatedType in its parameter pack.
+ *
+ * @tparam ReplicatedType The subgroup type that this GroupProjection can operate on
+ */
 template <typename ReplicatedType>
 class GroupProjection : public virtual _Group {
 protected:
@@ -110,12 +127,20 @@ public:
     PeerCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
     ExternalClientCallback<ReplicatedType>& get_client_callback(uint32_t subgroup_index = 0);
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
+    std::vector<std::vector<IpAndPorts>> get_subgroup_member_addresses(uint32_t subgroup_index = 0);
     std::size_t get_number_of_shards(uint32_t subgroup_index = 0);
     uint32_t get_num_subgroups();
 };
 
+/**
+ * A base class that user-defined replicated object types (i.e. the T in
+ * Replicated<T>) can inherit from to get access to a type-erased pointer to
+ * the Group object that manages them. This pointer can be used to call some of
+ * Group's public API methods, such as get_subgroup() and get_subgroup_members().
+ */
 class GroupReference {
 public:
+    /** A pointer to the Group that contains the replicated object */
     _Group* group;
     uint32_t subgroup_index;
     void set_group_pointers(_Group* group, uint32_t subgroup_index) {
@@ -222,6 +247,28 @@ private:
      * subgroups that need to have their state initialized from the leader.
      */
     void receive_objects(const std::set<std::pair<subgroup_id_t, node_id_t>>& subgroups_and_leaders);
+
+    /** Base case for new_view_callback_per_type with an empty parameter pack, does nothing */
+    template <typename... Empty>
+    std::enable_if_t<0 == sizeof...(Empty)> new_view_callback_per_type(const View&){};
+
+    /**
+     * A helper method for new_view_callback that unpacks the Group's template
+     * parameter pack and uses each type to access replicated_objects. This is
+     * the only way to iterate through the KindMap.
+     */
+    template <typename FirstType, typename... RestTypes>
+    void new_view_callback_per_type(const View& new_view);
+
+    /**
+     * A method that matches ViewManager's view_upcall_t interface, to be called
+     * by ViewManager after a new view has finished being installed. Forwards
+     * the new-view notification to each Replicated<T>, in case the user-provided
+     * object (T) wants to receive it.
+     *
+     * @param new_view The new View
+     */
+    void new_view_callback(const View& new_view);
 
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();
@@ -375,6 +422,16 @@ public:
     std::vector<node_id_t> get_members();
 
     /**
+     * Returns a vector listing the IP addresses (and Derecho ports) of nodes that
+     * are currently members of the group, in the same order as the node ID list
+     * returned by get_members(). Although the list includes the set of Derecho ports
+     * for each member, note that Derecho has already made connections to the other
+     * nodes on each of these ports, so they should not be used by the caller to
+     * initiate a new connection.
+     */
+    std::vector<IpAndPorts> get_member_addresses();
+
+    /**
      * Returns the number of subgroups of the specified type. This information
      * is also in the configuration file or SubgroupInfo function, but this method
      * is provided for convenience.
@@ -396,6 +453,19 @@ public:
      */
     template <typename SubgroupType>
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
+
+    /**
+     * Gets a list of IP addresses of nodes currently assigned to the subgroup
+     * of the specified type and index, organized by shard. This has the same
+     * structure as the vector returned by get_subgroup_members() but with IP
+     * address-and-port structures in place of node IDs.
+     * @tparam SubgroupType the subgroup type
+     * @param subgroup_index The index of the subgroup (of the same type)
+     * @return A vector of vectors, where the outer index represents a shard
+     * number, and the inner index counts individual nodes in that shard.
+     */
+    template <typename SubgroupType>
+    std::vector<std::vector<IpAndPorts>> get_subgroup_member_addresses(uint32_t subgroup_index = 0);
 
     /** @returns the order of this node in the sequence of members of the group */
     std::int32_t get_my_rank();
@@ -424,7 +494,7 @@ public:
      * @return a vector of subgroup indexes, or an empty vector if this node
      * is not a member of any subgroup of type SubgroupType
      */
-    template<typename SubgroupType>
+    template <typename SubgroupType>
     std::vector<uint32_t> get_my_subgroup_indexes();
 
     /** Reports to the GMS that the given node has failed. */

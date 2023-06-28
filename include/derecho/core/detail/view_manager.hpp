@@ -107,6 +107,7 @@ enum class ExternalClientRequest {
 template <typename T>
 using SharedLockedReference = LockedReference<std::shared_lock<std::shared_timed_mutex>, T>;
 
+/** Type of a function that can be called by ViewManager to notify another component that a new view was installed */
 using view_upcall_t = std::function<void(const View&)>;
 
 /** Type of a 2-dimensional vector used to store potential node IDs, or -1 */
@@ -121,7 +122,8 @@ private:
     //Allow Replicated to access view_mutex and view_change_cv directly
     template <typename T>
     friend class Replicated;
-
+    /** The logger for the ViewManager module */
+    std::shared_ptr<spdlog::logger> vm_logger;
     /**
      * Mutex to protect the curr_view pointer. Non-SST-predicate threads that
      * access the current View through the pointer should acquire a shared_lock;
@@ -828,12 +830,22 @@ public:
     /** Returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
 
+    /**
+     * Returns a vector listing the IP addresses and ports of nodes that are currently
+     * members of the group, in the same order as the node ID list returned by get_members().
+     */
+    std::vector<IpAndPorts> get_member_addresses();
+
     /** Returns the order of this node in the sequence of members of the group */
     int32_t get_my_rank();
 
     /** Returns a vector of vectors listing the members of a single subgroup
      * (identified by type and index), organized by shard number. */
     std::vector<std::vector<node_id_t>> get_subgroup_members(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
+
+    /** Returns a vector of vectors listing the IP addresses and ports of a
+     * single subgroup (identified by type and index), organized by shard number. */
+    std::vector<std::vector<IpAndPorts>> get_subgroup_member_addresses(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
 
     /** Returns the number of shards in a subgroup, identified by its type and index. */
     std::size_t get_number_of_shards_in_subgroup(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);

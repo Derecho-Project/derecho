@@ -23,6 +23,20 @@ thread_local bool _in_rpc_handler = false;
 
 thread_local node_id_t RPCManager::rpc_caller_id;
 
+RPCManager::RPCManager(ViewManager& group_view_manager,
+                       const std::vector<DeserializationContext*>& deserialization_context)
+        : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
+          rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(CONF_LOGGER_RPC_LOG_LEVEL))),
+          receivers(new std::decay_t<decltype(*receivers)>()),
+          view_manager(group_view_manager),
+          busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
+    RpcLoggerPtr::initialize();
+    for(const auto& deserialization_context_ptr : deserialization_context) {
+        rdv.push_back(deserialization_context_ptr);
+    }
+    rpc_listener_thread = std::thread(&RPCManager::p2p_receive_loop, this);
+}
+
 RPCManager::~RPCManager() {
     thread_shutdown = true;
     if(rpc_listener_thread.joinable()) {
@@ -34,7 +48,7 @@ void RPCManager::report_failure(const node_id_t who) {
     //Simultaneously test if the ID is in external_client_ids and, if so, erase it
     if(external_client_ids.erase(who) != 0) {
         // external client
-        dbg_default_debug("External client with id {} failed, doing cleanup", who);
+        dbg_debug(rpc_logger, "External client with id {} failed, doing cleanup", who);
         connections->remove_connections({who});
         sst::remove_node(who);
     } else {
@@ -99,8 +113,8 @@ std::exception_ptr RPCManager::receive_message(
     assert(payload_size);
     auto receiver_function_entry = receivers->find(indx);
     if(receiver_function_entry == receivers->end()) {
-        dbg_default_error("Received an RPC message with an invalid RPC opcode! Opcode was ({}, {}, {}, {}).",
-                          indx.class_id, indx.subgroup_id, indx.function_id, indx.is_reply);
+        dbg_error(rpc_logger, "Received an RPC message with an invalid RPC opcode! Opcode was ({}, {}, {}, {}).",
+                  indx.class_id, indx.subgroup_id, indx.function_id, indx.is_reply);
         //TODO: We should reply with some kind of "no such method" error in this case
         return std::exception_ptr{};
     }
@@ -166,7 +180,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         const uint32_t my_shard = view_manager.unsafe_get_current_view().my_subgroups.at(subgroup_id);
         {
             whenlog(int32_t msg_seq_num = persistent::unpack_version<int32_t>(version).second);
-            dbg_default_trace("RPCManager got a self-receive for message {}", msg_seq_num);
+            dbg_trace(rpc_logger, "RPCManager got a self-receive for message {}", msg_seq_num);
             std::unique_lock<std::mutex> lock(pending_results_mutex);
             // because of a race condition, pending_results_to_fulfill can genuinely be empty
             // so before accessing it we should sleep on a condition variable and let the main
@@ -188,7 +202,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                     completed_pending_results[subgroup_id].emplace_back(pending_results_to_fulfill[subgroup_id].front());
                 }
             } else {
-                dbg_default_debug("Did not fulfill the PendingResults for message {} because it was already gone", msg_seq_num);
+                dbg_debug(rpc_logger, "Did not fulfill the PendingResults for message {} because it was already gone", msg_seq_num);
             }
             //Regardless of whether the weak_ptr was valid, delete the entry because we're done with it
             pending_results_to_fulfill[subgroup_id].pop();
@@ -220,8 +234,8 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, uint8_t* msg_buf) {
     node_id_t received_from;
     uint32_t flags;
     retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
-    dbg_default_trace("Handling a P2P message: function_id = {}, is_reply = {}, received_from = {}, payload_size = {}, invocation_id = {}",
-                      indx.function_id, indx.is_reply, received_from, payload_size, ((long*)(msg_buf + header_size))[0]);
+    dbg_trace(rpc_logger, "Handling a P2P message: function_id = {}, is_reply = {}, received_from = {}, payload_size = {}, invocation_id = {}",
+              indx.function_id, indx.is_reply, received_from, payload_size, ((long*)(msg_buf + header_size))[0]);
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
@@ -245,7 +259,7 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, uint8_t* msg_buf) {
 void RPCManager::new_view_callback(const View& new_view) {
     connections->remove_connections(new_view.departed);
     connections->add_connections(new_view.members);
-    dbg_default_debug("Created new connections among the new view members");
+    dbg_debug(rpc_logger, "Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& fulfilled_pending_results_pair : results_awaiting_local_persistence) {
         const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
@@ -262,7 +276,7 @@ void RPCManager::new_view_callback(const View& new_view) {
                         for(auto removed_id : new_view.subgroup_shard_views[subgroup_id][shard_num].departed) {
                             //This will do nothing if removed_id was never in the
                             //shard this PendingResult corresponds to
-                            dbg_default_debug("Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
+                            dbg_debug(rpc_logger, "Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
                             live_pending_results->set_exception_for_removed_node(removed_id);
                         }
                     }
@@ -271,7 +285,7 @@ void RPCManager::new_view_callback(const View& new_view) {
                     //If so, we need to delete RemoteInvoker's heap-allocated shared_ptr here,
                     //since RemoteInvoker won't get any more replies and won't get a chance to delete it
                     if(live_pending_results->all_responded()) {
-                        dbg_default_trace("In new_view_callback, calling delete_self_ptr on PendingResults for version {}", pending_results_iter->first);
+                        dbg_trace(rpc_logger, "In new_view_callback, calling delete_self_ptr on PendingResults for version {}", pending_results_iter->first);
                         live_pending_results->delete_self_ptr();
                     }
                 }
@@ -294,12 +308,12 @@ void RPCManager::new_view_callback(const View& new_view) {
                         shard_num < new_view.subgroup_shard_views[subgroup_id].size();
                         ++shard_num) {
                         for(auto removed_id : new_view.subgroup_shard_views[subgroup_id][shard_num].departed) {
-                            dbg_default_debug("Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
+                            dbg_debug(rpc_logger, "Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
                             live_pending_results->set_exception_for_removed_node(removed_id);
                         }
                     }
                     if(live_pending_results->all_responded()) {
-                        dbg_default_trace("In new_view_callback, calling delete_self_ptr on PendingResults for version {}", pending_results_iter->first);
+                        dbg_trace(rpc_logger, "In new_view_callback, calling delete_self_ptr on PendingResults for version {}", pending_results_iter->first);
                         live_pending_results->delete_self_ptr();
                     }
                 }
@@ -326,12 +340,12 @@ void RPCManager::new_view_callback(const View& new_view) {
                     for(auto removed_id : new_view.subgroup_shard_views[subgroup_id][shard_num].departed) {
                         //This will do nothing if removed_id was never in the
                         //shard this PendingResult corresponds to
-                        dbg_default_debug("Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
+                        dbg_debug(rpc_logger, "Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
                         live_pending_results->set_exception_for_removed_node(removed_id);
                     }
                 }
                 if(live_pending_results->all_responded()) {
-                    dbg_default_trace("In new_view_callback, calling delete_self_ptr on a completed PendingResults for subgroup {}", subgroup_id);
+                    dbg_trace(rpc_logger, "In new_view_callback, calling delete_self_ptr on a completed PendingResults for subgroup {}", subgroup_id);
                     live_pending_results->delete_self_ptr();
                 }
                 pending_results_iter++;
@@ -344,13 +358,13 @@ void RPCManager::new_view_callback(const View& new_view) {
 }
 
 void RPCManager::notify_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version) {
-    dbg_default_trace("RPCManager: Got a local persistence callback for version {}", version);
+    dbg_trace(rpc_logger, "RPCManager: Got a local persistence callback for version {}", version);
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     //PendingResults in each per-subgroup map are ordered by version number, so all entries before
     //the argument version number have been persisted and need to be notified
     for(auto pending_results_iter = results_awaiting_local_persistence[subgroup_id].begin();
         pending_results_iter != results_awaiting_local_persistence[subgroup_id].upper_bound(version);) {
-        dbg_default_trace("RPCManager: Setting local persistence on version {}", pending_results_iter->first);
+        dbg_trace(rpc_logger, "RPCManager: Setting local persistence on version {}", pending_results_iter->first);
         std::shared_ptr<AbstractPendingResults> live_pending_results = pending_results_iter->second.lock();
         if(live_pending_results) {
             live_pending_results->set_local_persistence();
@@ -362,13 +376,13 @@ void RPCManager::notify_persistence_finished(subgroup_id_t subgroup_id, persiste
 }
 
 void RPCManager::notify_global_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version) {
-    dbg_default_trace("RPCManager: Got a global persistence callback for version {}", version);
+    dbg_trace(rpc_logger, "RPCManager: Got a global persistence callback for version {}", version);
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     //PendingResults in each per-subgroup map are ordered by version number, so all entries before
     //the argument version number have been persisted and need to be notified
     for(auto pending_results_iter = results_awaiting_global_persistence[subgroup_id].begin();
         pending_results_iter != results_awaiting_global_persistence[subgroup_id].upper_bound(version);) {
-        dbg_default_trace("RPCManager: Setting global persistence on version {}", pending_results_iter->first);
+        dbg_trace(rpc_logger, "RPCManager: Setting global persistence on version {}", pending_results_iter->first);
         std::shared_ptr<AbstractPendingResults> live_pending_results = pending_results_iter->second.lock();
         if(live_pending_results) {
             live_pending_results->set_global_persistence();
@@ -384,11 +398,11 @@ void RPCManager::notify_global_persistence_finished(subgroup_id_t subgroup_id, p
 }
 
 void RPCManager::notify_verification_finished(subgroup_id_t subgroup_id, persistent::version_t version) {
-    dbg_default_trace("RPCManager: Got a global verification callback for version {}", version);
+    dbg_trace(rpc_logger, "RPCManager: Got a global verification callback for version {}", version);
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto pending_results_iter = results_awaiting_signature[subgroup_id].begin();
         pending_results_iter != results_awaiting_signature[subgroup_id].upper_bound(version);) {
-        dbg_default_trace("RPCManager: Setting signature verification on version {}", pending_results_iter->first);
+        dbg_trace(rpc_logger, "RPCManager: Setting signature verification on version {}", pending_results_iter->first);
         std::shared_ptr<AbstractPendingResults> live_pending_results = pending_results_iter->second.lock();
         if(live_pending_results) {
             live_pending_results->set_signature_verified();
@@ -475,8 +489,8 @@ void RPCManager::p2p_request_worker() {
         }
         retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
         if(indx.is_reply || RPC_HEADER_FLAG_TST(flags, CASCADE)) {
-            dbg_default_error("Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
-                              indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
+            dbg_error(rpc_logger, "Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
+                      indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
             throw derecho::derecho_exception("invalid rpc message in fifo queue...crash.");
         }
         reply_size = 0;
@@ -497,14 +511,14 @@ void RPCManager::p2p_request_worker() {
                             }
                         });
         if(reply_size > 0) {
-            dbg_default_trace("Sending a P2P reply to node {} for invocation ID {} of function {}",
-                              request.sender_id, ((long*)(request.msg_buf + header_size))[0], indx.function_id);
+            dbg_trace(rpc_logger, "Sending a P2P reply to node {} for invocation ID {} of function {}",
+                      request.sender_id, ((long*)(request.msg_buf + header_size))[0], indx.function_id);
             connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY, reply_seq_num);
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
             auto buffer_handle = connections->get_sendbuffer_ptr(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
             if(buffer_handle) {
-                dbg_default_trace("Sending a null reply to node {} for a void P2P call", request.sender_id);
+                dbg_trace(rpc_logger, "Sending a null reply to node {} for a void P2P call", request.sender_id);
                 reinterpret_cast<size_t*>(buffer_handle->buf_ptr)[0] = 0;
                 connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY, buffer_handle->seq_num);
             }
@@ -522,7 +536,7 @@ void RPCManager::p2p_receive_loop() {
         std::unique_lock<std::mutex> lock(thread_start_mutex);
         thread_start_cv.wait(lock, [this]() { return thread_start; });
     }
-    dbg_default_debug("P2P listening thread started");
+    dbg_debug(rpc_logger, "P2P listening thread started");
     // start the fifo worker thread
     request_worker_thread = std::thread(&RPCManager::p2p_request_worker, this);
 
@@ -543,7 +557,7 @@ void RPCManager::p2p_receive_loop() {
                 auto message_handle = optional_message.value();
                 // Invalid ID means the message was empty (a null reply)
                 if(message_handle.sender_id != INVALID_NODE_ID) {
-                    dbg_default_trace("P2P thread detected a message from {}", message_handle.sender_id);
+                    dbg_trace(rpc_logger, "P2P thread detected a message from {}", message_handle.sender_id);
                     p2p_message_handler(message_handle.sender_id, message_handle.buf);
                     connections->increment_incoming_seq_num(message_handle.sender_id, message_handle.type);
                 }
@@ -574,11 +588,11 @@ node_id_t RPCManager::get_rpc_caller_id() {
 }
 
 void RPCManager::oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, uint64_t rkey, size_t size) {
-    connections->oob_remote_write(remote_node,iov,iovcnt,remote_dest_addr,rkey,size);
+    connections->oob_remote_write(remote_node, iov, iovcnt, remote_dest_addr, rkey, size);
 }
 
 void RPCManager::oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size) {
-    connections->oob_remote_read(remote_node,iov,iovcnt,remote_src_addr,rkey,size);
+    connections->oob_remote_read(remote_node, iov, iovcnt, remote_src_addr, rkey, size);
 }
 bool in_rpc_handler() {
     return _in_rpc_handler;

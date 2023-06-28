@@ -136,7 +136,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             assert_always(check_size == size);
         }
 
-        dbg_default_trace("Ready to send an RPC call message with invocation ID {}", fmt::ptr(results_heap_ptr));
+        dbg_trace(RpcLoggerPtr::get(), "Ready to send an RPC call message with invocation ID {}", fmt::ptr(results_heap_ptr));
         //The return struct can get a new weak_ptr, different from the one stored on the heap,
         //since it will only be used by RPCManager (not the response message)
         return send_return{size, serialized_args, std::move(query_results),
@@ -158,17 +158,17 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         bool is_exception = response[0];
         std::shared_ptr<PendingResults<Ret>>* results_heap_ptr;
         std::memcpy(&results_heap_ptr, (response + 1), sizeof(results_heap_ptr));
-        dbg_default_trace("Received an RPC response from node {} with invocation ID {}", nid, fmt::ptr(results_heap_ptr));
+        dbg_trace(RpcLoggerPtr::get(), "Received an RPC response from node {} with invocation ID {}", nid, fmt::ptr(results_heap_ptr));
         //Hold this lock while calling set_value and all_responded to ensure that
         //only one thread will get all_responded = true and delete the pointer.
         std::unique_lock<std::mutex> results_object_lock((*results_heap_ptr)->object_mutex());
         if(is_exception) {
             auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(results_heap_ptr));
-            dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, fmt::ptr(results_heap_ptr));
+            dbg_trace(RpcLoggerPtr::get(), "Received an exception from node {} in response to invocation ID {}", nid, fmt::ptr(results_heap_ptr));
             rls_default_error("Received an exception from node {}. Exception message: {}", nid, exception_info->exception_what);
             (*results_heap_ptr)->set_exception(nid, std::make_exception_ptr(remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
         } else {
-            dbg_default_trace("Received an RPC response for invocation ID {} from node {}", fmt::ptr(results_heap_ptr), nid);
+            dbg_trace(RpcLoggerPtr::get(), "Received an RPC response for invocation ID {} from node {}", fmt::ptr(results_heap_ptr), nid);
             (*results_heap_ptr)->set_value(nid, *mutils::from_bytes<Ret>(dsm, response + 1 + sizeof(results_heap_ptr)));
         }
         //If this was the last RPC reponse, RemoteInvoker no longer needs the PendingResults,
@@ -177,7 +177,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         if((*results_heap_ptr)->all_responded()) {
             results_object_lock.unlock();
             //Note that delete_self_ptr() deletes results_heap_ptr
-            dbg_default_trace("Calling delete_self_ptr on {}", fmt::ptr(results_heap_ptr));
+            dbg_trace(RpcLoggerPtr::get(), "Calling delete_self_ptr on {}", fmt::ptr(results_heap_ptr));
             (*results_heap_ptr)->delete_self_ptr();
         }
 
@@ -278,7 +278,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         void* invocation_id;
         std::memcpy(&invocation_id, _recv_buf, sizeof(void*));
         auto recv_buf = _recv_buf + sizeof(invocation_id);
-        dbg_default_trace("Received an RPC call with invocation ID {} from node {}", fmt::ptr(invocation_id), caller);
+        dbg_trace(RpcLoggerPtr::get(), "Received an RPC call with invocation ID {} from node {}", fmt::ptr(invocation_id), caller);
         /*
          * Response message format:
          * --------------------------------------------------------------------------------------
@@ -293,7 +293,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             out[0] = false;
             std::memcpy(out + 1, &invocation_id, sizeof(invocation_id));
             mutils::to_bytes(result, out + sizeof(invocation_id) + 1);
-            dbg_default_trace("Ready to send an RPC reply for invocation ID {} to node {}", fmt::ptr(invocation_id), caller);
+            dbg_trace(RpcLoggerPtr::get(), "Ready to send an RPC reply for invocation ID {} to node {}", fmt::ptr(invocation_id), caller);
             return recv_ret{reply_opcode, result_size, out, nullptr};
         } catch(std::exception& ex) {
             rls_default_error("An exception occurred while attempting to execute an RPC function. Exception message: {}", ex.what());
@@ -311,7 +311,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             out[0] = true;
             std::memcpy(out + 1, &invocation_id, sizeof(invocation_id));
             mutils::to_bytes(exception_info, out + sizeof(invocation_id) + 1);
-            dbg_default_trace("Ready to send remote exception info for invocation ID {} to node {}. Exception info is: ({}, {}), with size ", fmt::ptr(invocation_id), caller, exception_info.exception_name, exception_info.exception_what, result_size);
+            dbg_trace(RpcLoggerPtr::get(), "Ready to send remote exception info for invocation ID {} to node {}. Exception info is: ({}, {}), with size ", fmt::ptr(invocation_id), caller, exception_info.exception_name, exception_info.exception_what, result_size);
             return recv_ret{reply_opcode, result_size, out,
                             std::make_exception_ptr(ex)};
         } catch(...) {
@@ -378,11 +378,11 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         receivers.emplace(invoke_opcode, [this](auto... a) {
             return this->receive_call(a...);
         });
-        dbg_default_trace("Emplace invoke_opcode:({},{},{},{})",
-                invoke_opcode.class_id,
-                invoke_opcode.subgroup_id,
-                invoke_opcode.function_id,
-                invoke_opcode.is_reply);
+        dbg_trace(RpcLoggerPtr::get(), "Emplace invoke_opcode:({},{},{},{})",
+                  invoke_opcode.class_id,
+                  invoke_opcode.subgroup_id,
+                  invoke_opcode.function_id,
+                  invoke_opcode.is_reply);
     }
 };
 
@@ -846,7 +846,7 @@ public:
         uint32_t flags = 0;
         if(in_rpc_handler()) {
             RPC_HEADER_FLAG_SET(flags, CASCADE);
-            dbg_default_info("sending cascading RPC.");
+            dbg_info(RpcLoggerPtr::get(), "sending cascading RPC.");
         }
         populate_header(buf, payload_size, invoker.invoke_opcode, nid, flags);
 

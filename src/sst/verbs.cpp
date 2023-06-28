@@ -720,7 +720,7 @@ bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& ne
 bool remove_node(uint32_t node_id) {
     if(sst_connections->contains_node(node_id)) {
         return sst_connections->delete_node(node_id);
-    } else {
+    } else if {
         return external_client_connections->delete_node(node_id);
     }
 }
@@ -730,8 +730,10 @@ bool sync(uint32_t r_index) {
     try {
         if(sst_connections->contains_node(r_index)) {
             sst_connections->exchange(r_index, s, t);
-        } else {
+        } else if(external_client_connections->contains_node(r_index)) {
             external_client_connections->exchange(r_index, s, t);
+        } else {
+            return false;
         }
     } catch(tcp::socket_error&) {
         return false;
@@ -750,8 +752,29 @@ void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
 void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_sst_ports,
                       const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_external_ports,
                       uint32_t node_id) {
-    sst_connections = new tcp::tcp_connections(node_id, ip_addrs_and_sst_ports);
-    external_client_connections = new tcp::tcp_connections(node_id, ip_addrs_and_external_ports);
+    if(ip_addrs_and_sst_ports.empty()) {
+        sst_connections = new tcp::tcp_connections(node_id);
+    } else {
+        uint16_t my_port = ip_addrs_and_sst_ports.at(node_id).second;
+        sst_connections = new tcp::tcp_connections(node_id, my_port);
+        for(const auto& node_entry : ip_addrs_and_sst_ports) {
+            if(!sst_connections->add_node(node_entry.first, node_entry.second)) {
+                // resources_create has no error reporting other than printing to cerr, so I guess that's what we'll do here
+                cerr << "Failure in verbs_initialize! Could not establish a TCP connection to " << node_entry.second.first << ":" << node_entry.second.second << endl;
+            }
+        }
+    }
+    if(ip_addrs_and_external_ports.empty()) {
+        external_client_connections = new tcp::tcp_connections(node_id);
+    } else {
+        uint16_t my_external_port = ip_addrs_and_external_ports.at(node_id).second;
+        external_client_connections = new tcp::tcp_connections(node_id, my_external_port);
+        for(const auto& node_entry : ip_addrs_and_external_ports) {
+            if(!external_client_connections->add_node(node_entry.first, node_entry.second)) {
+                cerr << "Failure in verbs_initialize! Could not establish a TCP connection to " << node_entry.second.first << ":" << node_entry.second.second << endl;
+            }
+        }
+    }
 
     // init all of the resources, so cleanup will be easy
     resources_init();
@@ -792,6 +815,7 @@ void verbs_destroy() {
     //     }
     // }
     delete sst_connections;
+    delete external_client_connections;
     cout << "SST Verbs shutting down" << endl;
 }
 

@@ -4,13 +4,16 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 project (mutils-serialization)
 
 add_library(mutils-serialization OBJECT SerializationSupport.cpp)
-target_include_directories(mutils-serialization PRIVATE 
+target_include_directories(mutils-serialization PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 
-add_custom_target(format_mutils-serialization clang-format-3.8 -i *.cpp *.hpp)
+add_executable(test serialization-test.cpp SerializationSupport.cpp)
+target_include_directories(test PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 
-add_executable(test test_new_deserialization.cpp SerializationSupport.cpp)
-target_include_directories(test PRIVATE 
+add_executable(deserialization_test test_new_deserialization.cpp SerializationSupport.cpp)
+target_include_directories(deserialization_test PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)

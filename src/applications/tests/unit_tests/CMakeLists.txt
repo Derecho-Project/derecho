@@ -21,6 +21,9 @@ target_link_libraries(subgroup_function_tester derecho)
 add_executable(log_restart_test log_restart_test.cpp)
 target_link_libraries(log_restart_test derecho)
 
+add_executable(mixed_persistence_test mixed_persistence_test.cpp)
+target_link_libraries(mixed_persistence_test derecho)
+
 add_executable(signed_log_test signed_log_test.cpp)
 target_link_libraries(signed_log_test derecho)
 
@@ -44,3 +47,6 @@ target_link_libraries(persistence_notification_test derecho)
 
 add_executable(deserialize_and_run_test deserialize_and_run_test.cpp)
 target_link_libraries(deserialize_and_run_test derecho)
+
+add_executable(subgroup_view_callbacks subgroup_view_callbacks.cpp)
+target_link_libraries(subgroup_view_callbacks derecho)

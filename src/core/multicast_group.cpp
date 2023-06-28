@@ -643,6 +643,7 @@ void MulticastGroup::deliver_messages_upto(
         gmssst::set(sst->delivered_num[member_index][subgroup_num], max_seq_num);
         if(non_null_msgs_delivered) {
             //Call the persistence_manager_post_persist_func
+            dbg_default_debug("MulticastGroup: Posting persistence request for subgroup {}, version {}", subgroup_num, assigned_version);
             persistence_manager.post_persist_request(subgroup_num, assigned_version);
         }
     }
@@ -893,6 +894,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
         if(update_sst) {
             // post persistence request for ordered mode.
             if(non_null_msgs_delivered) {
+                dbg_default_debug("MulticastGroup: Posting persistence request for subgroup {}, version {}", subgroup_num, assigned_version);
                 persistence_manager.post_persist_request(subgroup_num, assigned_version);
             }
         }

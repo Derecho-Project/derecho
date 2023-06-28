@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
                     struct timespec at;
                     std::unique_ptr<Bytes> bs = (*handle.user_object_ptr)->pers_bytes.get(tqhlc);
                     clock_gettime(CLOCK_REALTIME, &at);
-                    PayLoad *pl = (PayLoad *)(bs->bytes);
+                    PayLoad *pl = (PayLoad *)(bs->get());
 
                     // uint32_t next_seqno = (pl->node_rank < node_rank)?(pl->msg_seqno-1):pl->msg_seqno; // roundrobin
                     // if(msg_seqno_seen != next_seqno){
@@ -169,19 +169,16 @@ int main(int argc, char *argv[]) {
                         bQuit = true;
                     }
                     break;
-                } catch(unsigned long long exp) {
-                    dbg_default_debug("query thread return:{0:x}", exp);
-                    // query time is too late or too early:
-                    if(exp == PERSIST_EXP_BEYOND_GSF) {
-                        usleep(10);  // sleep for 10 microseconds.
-                    } else if(exp == PERSIST_EXP_INV_HLC) {
-                        usleep(10);
-                        pthread_yield();
-                        dbg_default_trace("give up query with hlc({},{}) because it is too early.", tqhlc.m_rtc_us, tqhlc.m_logic);
-                        break;
-                    } else {
-                        dbg_default_warn("unexpected exception({:x})", exp);
-                    }
+                } catch(persistent_version_not_stable& exp) {
+                    // query time is too late
+                    usleep(10);  // sleep for 10 microseconds.
+                } catch(persistent_invalid_hlc& exp) {
+                    usleep(10);
+                    pthread_yield();
+                    dbg_default_trace("give up query with hlc({},{}) because it is too early.", tqhlc.m_rtc_us, tqhlc.m_logic);
+                    break;
+                } catch(persistent_exception& exp) {
+                     dbg_default_warn("unexpected exception({:x})", typeid(exp).name());
                 }
             }
         }
@@ -217,8 +214,8 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-        } catch(uint64_t exp) {
-            std::cout << "Exception caught:0x" << std::hex << exp << std::endl;
+        } catch(std::exception& exp) {
+            std::cout << "Exception caught: " << typeid(exp).name() << ": " << exp.what() << std::endl;
             return -1;
         }
     }

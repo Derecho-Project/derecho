@@ -6,6 +6,7 @@ endif()
 target_include_directories(rdmc PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
 )
+target_link_libraries(rdmc spdlog::spdlog)
 
 #find_library(SLURM_FOUND slurm)
 #if (SLURM_FOUND)
@@ -15,5 +16,3 @@ target_include_directories(rdmc PRIVATE
 
 #ADD_EXECUTABLE(verbs-mcast experiment.cpp)
 #TARGET_LINK_LIBRARIES(verbs-mcast rdmc)
-
-add_custom_target(format_rdmc clang-format -i *.cpp *.h)

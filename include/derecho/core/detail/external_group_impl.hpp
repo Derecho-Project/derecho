@@ -63,29 +63,32 @@ void ExternalClientCaller<T, ExternalGroupType>::add_p2p_connection(node_id_t de
     tcp::socket sock(group_client.curr_view->member_ips_and_ports[rank].ip_address,
                      group_client.curr_view->member_ips_and_ports[rank].gms_port);
 
-    JoinResponse leader_response;
-    uint64_t leader_version_hashcode;
+    JoinResponse response;
+    uint64_t node_version_hashcode;
     try {
-        sock.exchange(my_version_hashcode, leader_version_hashcode);
-        if(leader_version_hashcode != my_version_hashcode) {
-            throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+        sock.exchange(my_version_hashcode, node_version_hashcode);
+        if(node_version_hashcode != my_version_hashcode) {
+            throw derecho_exception("Unable to connect to Derecho member because the node is running on an incompatible platform or used an incompatible compiler.");
         }
         sock.write(JoinRequest{node_id, true});
-        sock.read(leader_response);
-        if(leader_response.code == JoinResponseCode::ID_IN_USE) {
-            dbg_default_error("Error! Leader refused connection because ID {} is already in use!", group_client.my_id);
+        sock.read(response);
+        if(response.code == JoinResponseCode::ID_IN_USE) {
+            dbg_default_error("Error! Derecho member refused connection because ID {} is already in use!", group_client.my_id);
             dbg_default_flush();
             throw derecho_exception("Leader rejected join, ID already in use.");
         }
         sock.write(ExternalClientRequest::ESTABLISH_P2P);
         sock.write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
     } catch(tcp::socket_error&) {
-        throw derecho_exception("Failed to establish P2P connection.");
+        throw derecho_exception("Failed to establish P2P connection: socket error while sending join request.");
     }
 
     assert(dest_node != node_id);
-    sst::add_external_node(dest_node, {group_client.curr_view->member_ips_and_ports[rank].ip_address,
-                                       group_client.curr_view->member_ips_and_ports[rank].external_port});
+    if(!sst::add_external_node(dest_node, {group_client.curr_view->member_ips_and_ports[rank].ip_address,
+                                           group_client.curr_view->member_ips_and_ports[rank].external_port})) {
+        dbg_default_error("Failed to set up a TCP connection to {} on {}:{}", dest_node, group_client.curr_view->member_ips_and_ports[rank].ip_address, group_client.curr_view->member_ips_and_ports[rank].external_port);
+        throw derecho_exception("Failed to establish P2P connection: sst::add_external_node failed");
+    }
     group_client.p2p_connections->add_connections({dest_node});
 }
 
@@ -148,7 +151,10 @@ template <typename... ReplicatedTypes>
 ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient()
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           receivers(new std::decay_t<decltype(*receivers)>()),
+          // ExternalGroupClient needs to create the RPC logger since P2PConnectionManager uses it (but there is no RPCManager to create it)
+          rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(CONF_LOGGER_RPC_LOG_LEVEL))),
           busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
+    RpcLoggerPtr::initialize();
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
                           std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
@@ -181,7 +187,9 @@ ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(
 #else
           factories(make_kind_map<NoArgFactory>(factories...)),
 #endif
+          rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(CONF_LOGGER_RPC_LOG_LEVEL))),
           busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
+    RpcLoggerPtr::initialize();
     for(auto dc : deserialization_contexts) {
         rdv.push_back(dc);
     }
@@ -277,7 +285,7 @@ void ExternalGroupClient<ReplicatedTypes...>::clean_up() {
                     for(auto removed_id : curr_view->subgroup_shard_views[subgroup_id][shard_num].departed) {
                         // This will do nothing if removed_id was never in the
                         // shard this PendingResult corresponds to
-                        dbg_default_debug("Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
+                        dbg_debug(rpc_logger, "Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
                         live_pending_results->set_exception_for_removed_node(removed_id);
                     }
                 }
@@ -368,8 +376,8 @@ std::exception_ptr ExternalGroupClient<ReplicatedTypes...>::receive_message(
     assert(payload_size);
     auto receiver_function_entry = receivers->find(indx);
     if(receiver_function_entry == receivers->end()) {
-        dbg_default_error("In External Group, Received an RPC message with an invalid RPC opcode! Opcode was ({}, {}, {}, {}).",
-                          indx.class_id, indx.subgroup_id, indx.function_id, indx.is_reply);
+        dbg_error(rpc_logger, "In External Group, Received an RPC message with an invalid RPC opcode! Opcode was ({}, {}, {}, {}).",
+                  indx.class_id, indx.subgroup_id, indx.function_id, indx.is_reply);
         // TODO: We should reply with some kind of "no such method" error in this case
         return std::exception_ptr{};
     }
@@ -441,8 +449,8 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
         }
         retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
         if(indx.is_reply || RPC_HEADER_FLAG_TST(flags, CASCADE)) {
-            dbg_default_error("Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
-                              indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
+            dbg_error(rpc_logger, "Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
+                      indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
             throw derecho::derecho_exception("invalid rpc message in fifo queue...crash.");
         }
         // Note: In practice, ExternalGroupClient should never receive a P2P message that produces
@@ -469,7 +477,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
             auto buffer_handle = p2p_connections->get_sendbuffer_ptr(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY);
             assert(buffer_handle);
-            dbg_default_trace("Sending a null reply to node {} for a void P2P call", request.sender_id);
+            dbg_trace(rpc_logger, "Sending a null reply to node {} for a void P2P call", request.sender_id);
             reinterpret_cast<size_t*>(buffer_handle->buf_ptr)[0] = 0;
             p2p_connections->send(request.sender_id, sst::MESSAGE_TYPE::P2P_REPLY, buffer_handle->seq_num);
         }

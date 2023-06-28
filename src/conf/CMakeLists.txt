@@ -12,5 +12,3 @@ target_link_libraries(conftst pthread)
 
 install(FILES derecho-sample.cfg
     DESTINATION share/derecho/)
-
-add_custom_target(format_conf clang-format -i *.cpp *.hpp)

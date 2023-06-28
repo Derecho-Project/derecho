@@ -1,6 +1,7 @@
 #pragma once
 
 #include "derecho/conf/conf.hpp"
+#include "derecho/utils/logger.hpp"
 #include "predicates.hpp"
 
 #ifdef USE_VERBS_API

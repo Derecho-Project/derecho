@@ -66,30 +66,13 @@ bool tcp_connections::add_connection(const node_id_t other_id,
     return false;
 }
 
-void tcp_connections::establish_node_connections(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports) {
-    for(auto it = ip_addrs_and_ports.begin(); it != ip_addrs_and_ports.end(); it++) {
-        //Check that there isn't already a connection to this ID,
-        //since an earlier add_connection could have connected to it by "mistake"
-        if(it->first != my_id && sockets.count(it->first) == 0) {
-            if(!add_connection(it->first, it->second)) {
-                std::cerr << "WARNING: failed to connect to node " << it->first
-                          << " at " << it->second.first
-                          << ":" << it->second.second << std::endl;
-            }
-        }
-    }
+tcp_connections::tcp_connections(node_id_t my_id, uint16_t my_port)
+        : my_id(my_id),
+          conn_listener(std::make_unique<connection_listener>(my_port)) {
 }
 
-tcp_connections::tcp_connections(node_id_t my_id,
-                                 const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports)
-        : my_id(my_id) {
-    // empty for external clients
-    if(!ip_addrs_and_ports.empty()) {
-        assert(ip_addrs_and_ports.count(my_id) > 0);
-        conn_listener = std::make_unique<connection_listener>(ip_addrs_and_ports.at(my_id).second);
-        establish_node_connections(ip_addrs_and_ports);
-    }
-}
+tcp_connections::tcp_connections(node_id_t my_id)
+        : my_id(my_id) {}
 
 void tcp_connections::destroy() {
     std::lock_guard<std::mutex> lock(sockets_mutex);

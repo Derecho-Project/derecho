@@ -58,6 +58,8 @@ private:
     int init_endpoint(struct fi_info* fi);
 
 protected:
+    /** Pointer to the SST-module logger, which lives in a global static registry */
+    std::shared_ptr<spdlog::logger> sst_logger;
     std::atomic<bool> remote_failed;
     /**
      * post read/write request
@@ -142,7 +144,7 @@ public:
      * @throw   derecho::derecho_exception if not found.
      */
     static uint64_t get_oob_mr_key(void* addr);
-    
+
     /**
      * Register oob memory
      * @param addr  the address of the OOB memory
@@ -328,7 +330,7 @@ void filter_external_to(const std::vector<node_id_t>& live_nodes_list);
 void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& internal_ip_addrs_and_ports,
                    const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports,
                    uint32_t node_id);
-/** Polls for completion of a single posted remote write. 
+/** Polls for completion of a single posted remote write.
  * @return a pair: <completion_entry_index,<remote_id,result(1/0)>>
  */
 std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion();

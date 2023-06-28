@@ -7,6 +7,7 @@
 
 #include "derecho/core/detail/view_manager.hpp"
 #include "derecho/openssl/signature.hpp"
+#include "derecho/persistent/detail/logger.hpp"
 
 #include <map>
 #include <string>
@@ -18,7 +19,8 @@ PersistenceManager::PersistenceManager(
         std::map<subgroup_id_t, ReplicatedObject*>& objects_map,
         bool any_signed_objects,
         const persistence_callback_t& user_persistence_callback)
-        : thread_shutdown(false),
+        : persistence_logger(persistent::PersistLogger::get()),
+          thread_shutdown(false),
           signature_size(0),
           persistence_callbacks{user_persistence_callback},
           objects_by_subgroup_id(objects_map) {
@@ -56,7 +58,7 @@ void PersistenceManager::start() {
     //Start the thread
     this->persist_thread = std::thread{[this]() {
         pthread_setname_np(pthread_self(), "persist");
-        dbg_default_debug("PersistenceManager thread started");
+        dbg_debug(persistence_logger, "PersistenceManager thread started");
         do {
             // wait for semaphore
             sem_wait(&persistence_request_sem);
@@ -93,7 +95,7 @@ void PersistenceManager::start() {
 }
 
 void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persistent::version_t version) {
-    dbg_default_debug("PersistenceManager: handling persist request for subgroup {} version {}", subgroup_id, version);
+    dbg_debug(persistence_logger, "PersistenceManager: handling persist request for subgroup {} version {}", subgroup_id, version);
     //If a previous request already persisted a later version (due to batching), don't do anything
     if(last_persisted_version[subgroup_id] >= version) {
         return;
@@ -122,7 +124,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
         }
         // read lock the view
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
-        dbg_default_debug("PersistenceManager: updating subgroup {} persisted_num to {}", subgroup_id, persisted_version);
+        dbg_debug(persistence_logger, "PersistenceManager: updating subgroup {} persisted_num to {}", subgroup_id, persisted_version);
         // update the signature and persisted_num in SST
         View& Vc = view_and_lock.get();
         if(object_has_signature) {
@@ -137,14 +139,14 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
                        Vc.gmsSST->persisted_num,
                        subgroup_id);
         last_persisted_version[subgroup_id] = persisted_version;
-    } catch(uint64_t exp) {
-        dbg_default_debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
-        std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
+    } catch(persistent::persistent_exception& exp) {
+        dbg_debug(persistence_logger, "exception on persist():subgroup={},ver={},what={}.", subgroup_id, version, exp.what());
+        std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception message:" << exp.what() << std::endl;
     }
 }
 
 void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persistent::version_t version) {
-    dbg_default_debug("PersistenceManager: handling verify request for subgroup {} version {}", subgroup_id, version);
+    dbg_debug(persistence_logger, "PersistenceManager: handling verify request for subgroup {} version {}", subgroup_id, version);
     auto search = objects_by_subgroup_id.find(subgroup_id);
     if(search != objects_by_subgroup_id.end()) {
         ReplicatedObject* subgroup_object = search->second;
@@ -180,7 +182,7 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
             if(verification_success) {
                 minimum_verified_version = std::min(minimum_verified_version, other_signed_version);
             } else {
-                dbg_default_warn("Verification of version {} from node {} failed! {}", other_signed_version, Vc.members[shard_member_rank], openssl::get_error_string(ERR_get_error(), "OpenSSL error"));
+                dbg_warn(persistence_logger, "Verification of version {} from node {} failed! {}", other_signed_version, Vc.members[shard_member_rank], openssl::get_error_string(ERR_get_error(), "OpenSSL error"));
             }
         }
         //Update verified_num to the lowest version number that successfully verified across all shard members
@@ -229,7 +231,7 @@ void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
 void PersistenceManager::shutdown(bool wait) {
     // if(replicated_objects == nullptr) return;  //skip for raw subgroups - NO DON'T
 
-    dbg_default_debug("PersistenceManager thread shutting down");
+    dbg_debug(persistence_logger, "PersistenceManager thread shutting down");
     thread_shutdown = true;
     sem_post(&persistence_request_sem);  // kick the persistence thread in case it is sleeping
 
