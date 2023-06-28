@@ -550,7 +550,7 @@ uint64_t _resources::get_oob_mr_key(void* addr) {
     throw derecho::derecho_exception("get_oob_mr_key():address does not fall in memory region");
 }
 
-void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
+void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size, bool blocking) {
     std::shared_lock rd_lck(oob_mrs_mutex);
     // STEP 1: check if io vector is valid
     size_t iov_tot_sz = 0;
@@ -653,7 +653,9 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     }
 
     // STEP 4: wait for completion
-    wait_for_thread_local_completion_entries(1);
+    if (blocking) {
+        oob_wait_for(op);
+    }
 }
 
 void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms) {
@@ -696,12 +698,23 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
     }
 }
 
-void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
-    oob_remote_op(OOB_OP_WRITE,iov,iovcnt,remote_dest_addr,rkey,size);
+void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size, bool blocking) {
+    oob_remote_op(OOB_OP_WRITE,iov,iovcnt,remote_dest_addr,rkey,size,blocking);
 }
 
-void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size) {
-    oob_remote_op(OOB_OP_READ, iov,iovcnt,remote_src_addr,rkey,size);
+void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size, bool blocking) {
+    oob_remote_op(OOB_OP_READ, iov,iovcnt,remote_src_addr,rkey,size,blocking);
+}
+
+void _resources::oob_wait_for(uint32_t op) {
+    switch(op){
+    case OOB_OP_READ:
+    case OOB_OP_WRITE:
+    case OOB_OP_SEND:
+    case OOB_OP_RECV:
+    default:
+        wait_for_thread_local_completion_entries(1);
+    }
 }
 
 void resources::report_failure() {
