@@ -12,6 +12,7 @@
 #include "derecho/sst/detail/sst_impl.hpp"
 #include "derecho/tcp/tcp.hpp"
 #include "derecho/utils/logger.hpp"
+#include "derecho/utils/time.h"
 #include "derecho/core/derecho_exception.hpp"
 
 #include <arpa/inet.h>
@@ -652,21 +653,37 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     }
 
     // STEP 4: wait for completion
-    std::optional<std::pair<int32_t, int32_t>> ce;
-    uint64_t        start_time_msec;
-    uint64_t        cur_time_msec;
-    struct timeval  cur_time;
-    gettimeofday(&cur_time, NULL);
-    start_time_msec = (cur_time.tv_sec*1e3)+(cur_time.tv_usec/1e3);
-    uint64_t        poll_cq_timeout_ms = derecho::getConfUInt64(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS);
+    wait_for_thread_local_completion_entries(1);
+}
 
-    while (true) {
+void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms) {
+    std::optional<std::pair<int32_t, int32_t>> ce;
+    uint64_t start_time_msec;
+    uint64_t cur_time_msec;
+    struct timeval cur_time;
+    start_time_msec = get_time()/1e6;
+    uint64_t poll_cq_timeout_ms = timeout_ms;
+    if (poll_cq_timeout_ms == 0) {
+        poll_cq_timeout_ms = derecho::getConfUInt64(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS);
+    }
+    const auto tid = std::this_thread::get_id();
+
+    while (num_entries) {
         ce = util::polling_data.get_completion_entry(tid);
         if (ce) {
-            break;
+            auto ce_v = ce.value();
+            if (ce_v.first != remote_id) {
+                throw derecho::derecho_exception("completion event is from unexpected node:" +
+                                                 std::to_string(ce_v.first) + ", expecting node:" +
+                                                 std::to_string(remote_id));
+            }
+            if (ce_v.second != 1) {
+                throw derecho::derecho_exception("completion event reports failure.");
+            }
+            num_entries --;
+            continue;
         }
-        gettimeofday(&cur_time, NULL);
-        cur_time_msec = (cur_time.tv_sec*1e3) + (cur_time.tv_usec/1e3);
+        cur_time_msec = get_time()/1e6;
         if ((cur_time_msec - start_time_msec) >= poll_cq_timeout_ms) {
             //timeout
             break;
@@ -675,12 +692,7 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
 
     if (!ce) {
         // timeout or failed.
-        throw derecho::derecho_exception("oob_remote_op() with node:" + std::to_string(remote_id) + " timeout.");
-    }
-
-    auto ce_v = ce.value();
-    if ((ce_v.first != remote_id) || (ce_v.second != 1)) {
-        throw derecho::derecho_exception("oob_remote_op() with node:" + std::to_string(remote_id) + " failed with unknown error.");
+        throw derecho::derecho_exception("waiting for completion event from node:" + std::to_string(remote_id) + " timeout.");
     }
 }
 

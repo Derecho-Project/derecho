@@ -150,7 +150,7 @@ public:
      * @param addr  the address of the OOB memory
      * @param size  the size of the OOB memory
      *
-     * @throws derecho_exception at failure.
+     * @throws derecho_exception on failure.
      */
     static void register_oob_memory(void* addr, size_t size);
 
@@ -158,13 +158,25 @@ public:
      * Unregister oob memory
      * @param addr the address of OOB memory
      *
-     * @throws derecho_exception at failure.
+     * @throws derecho_exception on failure.
      */
     static void unregister_oob_memory(void* addr);
 
+    /**
+     * Wait for a completion entries
+     * @param num_entries   The number of entries to wait for
+     * @param timeout_ms    The number of milliseconds to wait before throwing timeout. By default, it waits for the
+     *                      CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS milliseconds at most.
+     *
+     * @throws derecho_exception on failure.
+     */
+    void wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms=0ull);
 private:
+
 #define OOB_OP_READ     0x0
 #define OOB_OP_WRITE    0x1
+#define OOB_OP_SEND     0x2
+#define OOB_OP_RECV     0x3
     /*
      * oob operation
      * @param op                The operation, current we support OOB_OP_READ and OOB_OP_WRITE.
