@@ -550,6 +550,7 @@ uint64_t _resources::get_oob_mr_key(void* addr) {
     throw derecho::derecho_exception("get_oob_mr_key():address does not fall in memory region");
 }
 
+
 void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size, bool blocking) {
     std::shared_lock rd_lck(oob_mrs_mutex);
     // STEP 1: check if io vector is valid
@@ -566,86 +567,130 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         throw derecho::derecho_exception("oob_remote_write(): remote buffer is smaller than data.");
     }
 
-    // STEP 2: do one-sided RDMA transfer
-    struct fi_rma_iov rma_iov;
-    struct fi_msg_rma msg;
-
-    rma_iov.addr = ((LF_USE_VADDR) ? reinterpret_cast<uint64_t>(remote_dest_addr) : 0);
-    rma_iov.len = size;
-    rma_iov.key = rkey;
-
-    msg.msg_iov = iov;
-    msg.iov_count = iovcnt;
-    msg.desc = desc;
-    msg.addr = 0; // not used for a connection endpoint
-    msg.rma_iov = &rma_iov;
-    msg.rma_iov_count = 1;
-    msg.data = 0l; // not used
-
-    // set up completion entry.
+    // STEP 2: 
+    // - set up completion entry.
     const auto tid = std::this_thread::get_id();
     uint32_t ce_idx = util::polling_data.get_index(tid);
     util::polling_data.set_waiting(tid);
     lf_sender_ctxt sctxt;
     sctxt.set_remote_id(remote_id);
     sctxt.set_ce_idx(ce_idx);
-    msg.context = (void*)&sctxt;
-    dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
-
-    dbg_warn(sst_logger, "{}: op = {:d}, msg.context = {:p}\n"
-                         "\tmsg.msg_iov.iov_base     = {:p}\n"
-                         "\tmsg.msg_iov.iov_len      = {:x}\n"
-                         "\tmsg.iov_count            = {}\n"
-                         "\tmsg.desc[0]              = {:x}\n"
-                         "\tmsg.rma_iov->addr        = {:x}\n"
-                         "\tmsg.rma_iov->len         = {:x}\n"
-                         "\tmsg.rma_iov->key         = {:x}\n"
-                         "\tmsg.rma_iov_count        = {}\n"
-                         "\tmsg.data                 = {}\n",
-             __func__, op, static_cast<void*>(&sctxt),
-             msg.msg_iov->iov_base,
-             msg.msg_iov->iov_len,
-             msg.iov_count,
-             reinterpret_cast<uint64_t>(msg.desc[0]),
-             msg.rma_iov->addr,
-             msg.rma_iov->len,
-             msg.rma_iov->key,
-             msg.rma_iov_count,
-             msg.data);
 
     int ret = -1;
-    if (op == OOB_OP_WRITE) {
-        // STEP 3: According to the IBTA Spec, we need to put a barrier (atomic operation) after the data has been written.
-        // Cited from IBTA spec o9-20:
-        // """
-        // An application shall not depend on the contents of an RDMA WRITE buffer at the responder until one of the
-        // following has occurred:
-        // - Arrival and Completion of the last RDMA WRTIE request packet when used with Immediate data.
-        // - Arrival and completion of a subsequent SEND message.
-        // - Update of a memory element by a subsequent ATOMIC operation.
-        // """
-        // However, SST assumes that the contents will be visible to the responder in the order it appears. The CMU FaRM
-        // uses the same assumption. It sounds plausible but more implementation dependent. We have many other RDMA
-        // implementations too. We need to re-check this later.
-        //
-        // So far, we wait for the completion.
-        ret = retry_on_eagain_unless("fi_writemsg failed.",
-                                     [this](){return remote_failed.load();},
-                                     fi_writemsg,
-                                     this->ep,
-                                     &msg, FI_COMPLETION);
-    } else if (op == OOB_OP_READ) {
-        // STEP 3: According to the IBTA Spec, we need wait for the completion before we can use this data.
-        // Cited from IBTA spec o9-21:
-        // """
-        // An application shall not depend on the contents of an RDMA READ target buffer at the requestor until the completion of the corresponding WQE
-        // """
-        //
-        ret = retry_on_eagain_unless("fi_readmsg failed.",
-                                     [this](){return remote_failed.load();},
-                                     fi_readmsg,
-                                     this->ep,
-                                     &msg, FI_COMPLETION);
+    if (op == OOB_OP_READ || op == OOB_OP_WRITE) {
+        // do one-sided RDMA transfer
+        struct fi_rma_iov rma_iov;
+        struct fi_msg_rma msg;
+    
+        rma_iov.addr = ((LF_USE_VADDR) ? reinterpret_cast<uint64_t>(remote_dest_addr) : 0);
+        rma_iov.len = size;
+        rma_iov.key = rkey;
+    
+        msg.msg_iov = iov;
+        msg.iov_count = iovcnt;
+        msg.desc = desc;
+        msg.addr = 0; // not used for a connection endpoint
+        msg.rma_iov = &rma_iov;
+        msg.rma_iov_count = 1;
+        msg.data = 0l; // not used
+    
+        // set up completion entry.
+        msg.context = (void*)&sctxt;
+        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
+        dbg_warn(sst_logger, "{}: op = {:d}, msg.context = {:p}\n"
+                             "\tmsg.msg_iov.iov_base     = {:p}\n"
+                             "\tmsg.msg_iov.iov_len      = {:x}\n"
+                             "\tmsg.iov_count            = {}\n"
+                             "\tmsg.desc[0]              = {:x}\n"
+                             "\tmsg.rma_iov->addr        = {:x}\n"
+                             "\tmsg.rma_iov->len         = {:x}\n"
+                             "\tmsg.rma_iov->key         = {:x}\n"
+                             "\tmsg.rma_iov_count        = {}\n"
+                             "\tmsg.data                 = {}\n",
+                 __func__, op, static_cast<void*>(&sctxt),
+                 msg.msg_iov->iov_base,
+                 msg.msg_iov->iov_len,
+                 msg.iov_count,
+                 reinterpret_cast<uint64_t>(msg.desc[0]),
+                 msg.rma_iov->addr,
+                 msg.rma_iov->len,
+                 msg.rma_iov->key,
+                 msg.rma_iov_count,
+                 msg.data);
+    
+        if (op == OOB_OP_WRITE) {
+            // STEP 3: According to the IBTA Spec, we need to put a barrier (atomic operation) after the data has been written.
+            // Cited from IBTA spec o9-20:
+            // """
+            // An application shall not depend on the contents of an RDMA WRITE buffer at the responder until one of the
+            // following has occurred:
+            // - Arrival and Completion of the last RDMA WRTIE request packet when used with Immediate data.
+            // - Arrival and completion of a subsequent SEND message.
+            // - Update of a memory element by a subsequent ATOMIC operation.
+            // """
+            // However, SST assumes that the contents will be visible to the responder in the order it appears. The CMU FaRM
+            // uses the same assumption. It sounds plausible but more implementation dependent. We have many other RDMA
+            // implementations too. We need to re-check this later.
+            //
+            // So far, we wait for the completion.
+            ret = retry_on_eagain_unless("fi_writemsg failed.",
+                                         [this](){return remote_failed.load();},
+                                         fi_writemsg,
+                                         this->ep,
+                                         &msg, FI_COMPLETION);
+        } else if (op == OOB_OP_READ) {
+            // STEP 3: According to the IBTA Spec, we need wait for the completion before we can use this data.
+            // Cited from IBTA spec o9-21:
+            // """
+            // An application shall not depend on the contents of an RDMA READ target buffer at the requestor until the completion of the corresponding WQE
+            // """
+            //
+            ret = retry_on_eagain_unless("fi_readmsg failed.",
+                                         [this](){return remote_failed.load();},
+                                         fi_readmsg,
+                                         this->ep,
+                                         &msg, FI_COMPLETION);
+        }
+    } else if (op == OOB_OP_SEND || op == OOB_OP_RECV) {
+        // do two-sided RDMA transfer
+        struct fi_msg msg;
+
+        msg.msg_iov = iov;
+        msg.iov_count = iovcnt;
+        msg.desc = desc;
+        msg.addr = 0; // not used
+        msg.data = 0; // not used
+
+        msg.context = (void*)&sctxt;
+        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
+        dbg_warn(sst_logger, "{}: op = {:d}, msg.context = {:p}\n"
+                             "\tmsg.msg_iov.iov_base     = {:p}\n"
+                             "\tmsg.msg_iov.iov_len      = {:x}\n"
+                             "\tmsg.iov_count            = {}\n"
+                             "\tmsg.desc[0]              = {:x}\n"
+                             "\tmsg.data                 = {}\n",
+                 __func__, op, static_cast<void*>(&sctxt),
+                 msg.msg_iov->iov_base,
+                 msg.msg_iov->iov_len,
+                 msg.iov_count,
+                 reinterpret_cast<uint64_t>(msg.desc[0]),
+                 msg.data);
+    
+        if (op == OOB_OP_SEND) {
+            ret = retry_on_eagain_unless("fi_sendmsg failed.",
+                                         [this](){return remote_failed.load();},
+                                         fi_sendmsg,
+                                         this->ep,
+                                         &msg, FI_COMPLETION); // TODO: FI_INJECT_COMPLETE|FI_TRANSMIT_COMPLETE|FI_DELIVERY_COMPLETE?
+        } else if (op == OOB_OP_RECV) {
+            ret = retry_on_eagain_unless("fi_recvmsg failed.",
+                                         [this](){return remote_failed.load();},
+                                         fi_sendmsg,
+                                         this->ep,
+                                         &msg, FI_COMPLETION); // TODO: FI_INJECT_COMPLETE|FI_TRANSMIT_COMPLETE|FI_DELIVERY_COMPLETE?
+        }
+    } else {
+        throw derecho::derecho_exception("oob_remote_op() failed with unknown operation: " + std::to_string(op));
     }
 
     if (ret != 0) {
@@ -662,7 +707,6 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
     std::optional<std::pair<int32_t, int32_t>> ce;
     uint64_t start_time_msec;
     uint64_t cur_time_msec;
-    struct timeval cur_time;
     start_time_msec = get_time()/1e6;
     uint64_t poll_cq_timeout_ms = timeout_ms;
     if (poll_cq_timeout_ms == 0) {
