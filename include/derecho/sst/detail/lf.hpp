@@ -187,15 +187,11 @@ private:
      * @param remote_dest_addr  The remote address for receiving this message
      * @param rkey              The access key for the remote memory.
      * @param size              The size of the remote buffer
-     * @param blocking          If true, wait until the operation is complete. It is defaulted to true. Otherwise,
-     *                          you MUST call oob_wait_for() explicitly in the same thread to make sure the operation
-     *                          is complete!
      *
      * @throws derecho_exception at failure.
      */
     void oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
-                       void* remote_dest_addr, uint64_t rkey, size_t size,
-                       bool blocking);
+                       void* remote_dest_addr, uint64_t rkey, size_t size);
 
 public:
     /*
@@ -205,13 +201,11 @@ public:
      * @param remote_dest_addr  The remote address for receiving this message
      * @param rkey              The access key for the remote memory.
      * @param size              The size of the remote buffer
-     * @param blocking          See 'blocking' parameter of oob_remote_op()
      *
      * @throws derecho_exception at failure.
      */
     void oob_remote_write(const struct iovec* iov, int iovcnt,
-                          void* remote_dest_addr, uint64_t rkey, size_t size,
-                          bool blocking=true);
+                          void* remote_dest_addr, uint64_t rkey, size_t size);
 
     /*
      * oob read
@@ -220,13 +214,29 @@ public:
      * @param remote_src_addr   The remote address for receiving this message
      * @param rkey              The access key for the remote memory.
      * @param size              The size of the remote buffer
-     * @param blocking          See 'blocking' parameter of oob_remote_op()
      *
      * @throws derecho_exception at failure.
      */
     void oob_remote_read(const struct iovec* iov, int iovcnt,
-                         void* remote_src_addr, uint64_t rkey, size_t size,
-                         bool blocking=true);
+                         void* remote_src_addr, uint64_t rkey, size_t size);
+
+    /*
+     * oob send
+     * @param iov               The gather memory vector.
+     * @param iovcnt            The length of the vector.
+     *
+     * @throws derecho_exception at failure.
+     */
+    void oob_send(const struct iovec* iov, int iovcnt);
+
+    /*
+     * oob recv
+     * @param iov               The gather memory vector.
+     * @param iovcnt            The length of the vector.
+     *
+     * @throws derecho_exception at failure.
+     */
+    void oob_recv(const struct iovec* iov, int iovcnt);
 
     /*
      * Public callable wrapper around wait_for_thread_local_completion_entries()
@@ -238,7 +248,7 @@ public:
      *                          For most of the cases, we wait for only one completion. To allow an operation like
      *                          "exchange", which is to be implemented, we might need to write for two completions.
      */
-    void oob_wait_for(uint32_t op);
+    void wait_for_oob_op(uint32_t op);
 
     /*
      * release singleton resources

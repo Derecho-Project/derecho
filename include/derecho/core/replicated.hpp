@@ -450,28 +450,74 @@ public:
     virtual const T& get_ref() const;
 
     /*
-     * write to remote OOB memory
+     * write to remote OOB memory, a following wait_for_oob_op(OOB_OP_WRITE)
+     * MUST be called in the same thread.
+     *
      * @param remote_node       remote node id
      * @param iov               gather of local memory regions
      * @param iovcnt
      * @param remote_dest_addr  the address of the remote memory region
      * @param rkey              the access key for remote memory
      * @param size              the size of the remote memory region
+     *
      * @throw                   derecho::derecho_exception on error
      */
-    virtual void oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, uint64_t rkey, size_t size);
+    virtual void oob_remote_write(
+            const node_id_t& remote_node,
+            const struct iovec* iov, int iovcnt, 
+            uint64_t remote_dest_addr, uint64_t rkey, size_t size);
 
     /*
-     * read from remote OOB memory
+     * read from remote OOB memory, a following wait_for_oob_op(OOB_OP_READ)
+     * MUST be called in the same thread.
+     *
      * @param remote_node       remote node id
      * @param iov               scatter of local memory regions
      * @param iovcnt
      * @param remote_src_addr   the address of the remote memory region
      * @param rkey              the access key for remote memory
      * @param size              the size of the remote memory region
+     *
      * @throw                   derecho::derecho_exception on error
      */
-    virtual void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size);
+    virtual void oob_remote_read(
+            const node_id_t& remote_node,
+            const struct iovec* iov, int iovcnt,
+            uint64_t remote_src_addr, uint64_t rkey, size_t size);
+
+    /*
+     * send data in buffer(s) to remote, a following wait_for_oob_op(OOB_OP_SEND)
+     * MUST be called in the same thread.
+     *
+     * @param remote_node       remote node id
+     * @param iov               scatter of local memory regions
+     * @param iovcnt
+     *
+     * @throw                   derecho::derecho_exception on error
+     */
+    virtual void oob_send(const node_id_t& remote_node, const struct iovec* iov, int iovcnt);
+
+    /*
+     * receive remote data to local buffers, a following wait_for_oob_op(OOB_OP_SEND)
+     * MUST be called in the same thread.
+     *
+     * @param remote_node       remote node id
+     * @param iov               scatter of local memory regions
+     * @param iovcnt
+     *
+     * @throw                   derecho::derecho_exception on error
+     */
+    virtual void oob_recv(const node_id_t& remote_node, const struct iovec* iov, int iovcnt);
+
+    /*
+     * wait for non-blocking oob operation.
+     *
+     * @param remote_node       remote node id
+     * @param op                the operation
+     *
+     * @throw                   derecho::derecho_exception on error
+     */
+    virtual void wait_for_oob_op(const node_id_t& remote_node, uint32_t op);
 };
 
 template <typename T>

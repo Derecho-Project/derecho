@@ -132,12 +132,24 @@ void P2PConnection::unregister_oob_memory(void* addr) {
     _resources::unregister_oob_memory(addr);
 }
 
+void P2PConnection::wait_for_oob_op(uint32_t op) {
+    res->wait_for_oob_op(op);
+}
+
 void P2PConnection::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
     res->oob_remote_write(iov,iovcnt,remote_dest_addr,rkey,size);
 }
 
 void P2PConnection::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size) {
     res->oob_remote_read(iov,iovcnt,remote_src_addr,rkey,size);
+}
+
+void P2PConnection::oob_send(const struct iovec* iov, int iovcnt) {
+    res->oob_send(iov,iovcnt);
+}
+
+void P2PConnection::oob_recv(const struct iovec* iov, int iovcnt) {
+    res->oob_recv(iov,iovcnt);
 }
 
 P2PConnection::~P2PConnection() {}

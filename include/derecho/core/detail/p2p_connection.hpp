@@ -114,12 +114,14 @@ public:
      * @throw           derecho::derecho_exception on failure
      */
     static void register_oob_memory(void* addr, size_t size);
+
     /**
      * Unregister Out-of-band memory region
      * @param addr      The address of the memory region
      * @throw           derecho::derecho_exception on failure
      */
     static void unregister_oob_memory(void* addr);
+
     /**
      * oob write
      * @param iov
@@ -128,9 +130,12 @@ public:
      * @param rkey
      * @param size
      *
-     * @throws derecho::derecho_exception at failure
+     * @throws derecho::derecho_exception on failure
      */
-    void oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size);
+    void oob_remote_write(
+            const struct iovec* iov, int iovcnt,
+            void* remote_dest_addr, uint64_t rkey, size_t size);
+
     /**
      * oob read
      * @param iov
@@ -139,8 +144,40 @@ public:
      * @param rkey
      * @param size
      *
-     * @throws derecho::derecho_exception at failure
+     * @throws derecho::derecho_exception on failure
      */
-    void oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size);
+    void oob_remote_read(
+            const struct iovec* iov, int iovcnt,
+            void* remote_src_addr, uint64_t rkey, size_t size);
+
+    /**
+     * oob send
+     * @param iov
+     * @param iovcnt
+     *
+     * @throws derecho::derecho_exception on failure
+     *
+     */
+    void oob_send(
+            const struct iovec* iov, int iovcnt);
+
+    /**
+     * oob recv
+     * @param iov
+     * @param iovcnt
+     *
+     * @throws derecho::derecho_exception on failure
+     */
+    void oob_recv(
+            const struct iovec* iov, int iovcnt);
+
+    /**
+     * Wait for a non-blocking oob operation in the same thread.
+     * IMPORTANT: We assume the order of events are ordered.
+     * @param op        Operation
+     * @throw           derecho::derecho_exception on failure
+     */
+    void wait_for_oob_op(uint32_t op);
+
 };
 }  // namespace sst

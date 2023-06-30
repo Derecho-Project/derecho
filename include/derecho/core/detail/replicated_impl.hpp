@@ -312,6 +312,21 @@ void Replicated<T>::oob_remote_read(const node_id_t& remote_node, const struct i
 }
 
 template <typename T>
+void Replicated<T>::oob_send(const node_id_t& remote_node, const struct iovec* iov, int iovcnt) {
+    group_rpc_manager.oob_send(remote_node,iov,iovcnt);
+}
+
+template <typename T>
+void Replicated<T>::oob_recv(const node_id_t& remote_node, const struct iovec* iov, int iovcnt) {
+    group_rpc_manager.oob_recv(remote_node,iov,iovcnt);
+}
+
+template <typename T>
+void Replicated<T>::wait_for_oob_op(const node_id_t& remote_node, uint32_t op) {
+    group_rpc_manager.wait_for_oob_op(remote_node,op);
+}
+
+template <typename T>
 const uint64_t Replicated<T>::compute_global_stability_frontier() {
     return group_rpc_manager.view_manager.compute_global_stability_frontier(subgroup_id);
 }

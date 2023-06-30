@@ -551,7 +551,7 @@ uint64_t _resources::get_oob_mr_key(void* addr) {
 }
 
 
-void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size, bool blocking) {
+void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
     std::shared_lock rd_lck(oob_mrs_mutex);
     // STEP 1: check if io vector is valid
     size_t iov_tot_sz = 0;
@@ -563,7 +563,8 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         }
         iov_tot_sz += iov[i].iov_len;
     }
-    if (iov_tot_sz > size) {
+    if (iov_tot_sz > size && 
+        (op == OOB_OP_READ || op == OOB_OP_WRITE)) {
         throw derecho::derecho_exception("oob_remote_write(): remote buffer is smaller than data.");
     }
 
@@ -696,11 +697,6 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     if (ret != 0) {
         throw derecho::derecho_exception("oob_remote_op() failed with " + std::to_string(ret));
     }
-
-    // STEP 4: wait for completion
-    if (blocking) {
-        oob_wait_for(op);
-    }
 }
 
 void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms) {
@@ -742,15 +738,23 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
     }
 }
 
-void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size, bool blocking) {
-    oob_remote_op(OOB_OP_WRITE,iov,iovcnt,remote_dest_addr,rkey,size,blocking);
+void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
+    oob_remote_op(OOB_OP_WRITE,iov,iovcnt,remote_dest_addr,rkey,size);
 }
 
-void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size, bool blocking) {
-    oob_remote_op(OOB_OP_READ, iov,iovcnt,remote_src_addr,rkey,size,blocking);
+void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size) {
+    oob_remote_op(OOB_OP_READ, iov, iovcnt, remote_src_addr, rkey, size);
 }
 
-void _resources::oob_wait_for(uint32_t op) {
+void _resources::oob_send(const struct iovec* iov, int iovcnt) {
+    oob_remote_op(OOB_OP_SEND, iov, iovcnt, 0, 0, 0);
+}
+
+void _resources::oob_recv(const struct iovec* iov, int iovcnt) {
+    oob_remote_op(OOB_OP_RECV, iov, iovcnt, 0, 0, 0);
+}
+
+void _resources::wait_for_oob_op(uint32_t op) {
     switch(op){
     case OOB_OP_READ:
     case OOB_OP_WRITE:
