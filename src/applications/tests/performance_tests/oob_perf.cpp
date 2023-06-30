@@ -120,6 +120,7 @@ uint64_t OOBRDMA::put(const uint64_t& caller_addr, const uint64_t rkey, const ui
     iov.iov_len     = static_cast<size_t>(size);
 
     subgroup_handle.oob_remote_read(group->get_rpc_caller_id(),&iov,1,caller_addr,rkey,size);
+    subgroup_handle.wait_for_oob_op(group->get_rpc_caller_id(),OOB_OP_READ);
 
     return callee_addr;
 }
@@ -147,6 +148,7 @@ bool OOBRDMA::get(const uint64_t& callee_addr, const uint64_t& caller_addr, cons
     iov.iov_base    = reinterpret_cast<void*>(callee_addr);
     iov.iov_len     = static_cast<size_t>(size);
     subgroup_handle.oob_remote_write(group->get_rpc_caller_id(),&iov,1,caller_addr,rkey,size);
+    subgroup_handle.wait_for_oob_op(group->get_rpc_caller_id(),OOB_OP_WRITE);
     return true;
 }
 

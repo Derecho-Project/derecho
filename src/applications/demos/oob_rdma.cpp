@@ -177,6 +177,7 @@ bool OOBRDMA::recv(const uint64_t& callee_addr, const uint64_t size) const {
 
 static void print_data (void* addr,size_t size) {
     std::cout << "data@0x" << std::hex << reinterpret_cast<uint64_t>(addr) << " [ " << std::endl;
+
     for (uint32_t cidx=0;cidx<16;cidx++) {
         std::cout << reinterpret_cast<char*>(addr)[cidx] << " ";
     }
@@ -185,12 +186,14 @@ static void print_data (void* addr,size_t size) {
     for (uint32_t cidx=size - 16;cidx<size;cidx++) {
         std::cout << reinterpret_cast<char*>(addr)[cidx] << " ";
     }
-    std::cout << std::endl;
+
+    std::cout << std::dec << std::endl;
     std::cout << "]" << std::endl;
 }
 
 template <typename P2PCaller>
 void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buffer_laddr, void* get_buffer_laddr, size_t oob_data_size) {
+
     std::cout << "Testing node-" << nid << std::endl;
     memset(put_buffer_laddr, 'A', oob_data_size);
     memset(get_buffer_laddr, 'a', oob_data_size);
@@ -287,7 +290,7 @@ int main(int argc, char** argv) {
         std::cout << "Finished constructing/joining Group." << std::endl;
         memset(oob_mr_ptr,'A',oob_mr_size);
         group.register_oob_memory(oob_mr_ptr, oob_mr_size);
-        std::cout << oob_mr_size << "bytes of OOB Memory registered" << std::endl;
+        std::cout << oob_mr_size << " bytes of OOB Memory registered" << std::endl;
 
         std::cout << "Press Enter to shutdown gracefully." << std::endl;
 
@@ -297,12 +300,17 @@ int main(int argc, char** argv) {
             void* put_buffer_laddr  = oob_mr_ptr;
             void* get_buffer_laddr  = reinterpret_cast<void*>(((reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_data_size + 4095)>>12)<<12);
 
+            std::cout << "[DEBUG]@" << __LINE__ << ": oob_mr_size = " << oob_mr_size << std::endl;
+            std::cout << "[DEBUG]@" << __LINE__ << ": oob_data_size = " << oob_data_size << std::endl;
+
             for(const auto& member: group.get_members()) {
                 if (member == group.get_my_id()) {
                     continue;
                 }
                 // TEST
+                std::cout << "[DEBUG]@" << __LINE__ << ":oob_mr_size = " << oob_mr_size << std::endl;
                 do_test(group.get_subgroup<OOBRDMA>(),member,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size);
+                std::cout << "[DEBUG]@" << __LINE__ << ":oob_mr_size = " << oob_mr_size << std::endl;
             }
         }
 
@@ -310,7 +318,7 @@ int main(int argc, char** argv) {
         std::cin.get();
 
         group.unregister_oob_memory(oob_mr_ptr);
-        std::cout << oob_mr_size << "bytes of OOB Memory unregistered" << std::endl;
+        std::cout << oob_mr_size << " bytes of OOB Memory unregistered" << std::endl;
         group.barrier_sync();
         group.leave();
     } else if (argv[1] == std::string("client")) {
@@ -320,7 +328,7 @@ int main(int argc, char** argv) {
         std::cout << "External caller created." << std::endl;
 
         external_group.register_oob_memory(oob_mr_ptr, oob_mr_size);
-        std::cout << oob_mr_size << "bytes of OOB Memory registered" << std::endl;
+        std::cout << oob_mr_size << " bytes of OOB Memory registered" << std::endl;
 
         {
             uint64_t rkey           = external_group.get_oob_memory_key(oob_mr_ptr);
