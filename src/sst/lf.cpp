@@ -172,6 +172,7 @@ static void load_configuration() {
 
 std::shared_mutex _resources::oob_mrs_mutex;
 std::map<uint64_t,struct _resources::oob_mr_t> _resources::oob_mrs;
+thread_local std::queue<std::unique_ptr<struct lf_sender_ctxt>> _resources::oob_sender_ctxt_queue;
 
 void _resources::global_release() {
     std::unique_lock wr_lck(_resources::oob_mrs_mutex);
@@ -573,9 +574,9 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     const auto tid = std::this_thread::get_id();
     uint32_t ce_idx = util::polling_data.get_index(tid);
     util::polling_data.set_waiting(tid);
-    lf_sender_ctxt sctxt;
-    sctxt.set_remote_id(remote_id);
-    sctxt.set_ce_idx(ce_idx);
+    auto sctxt_ptr = std::make_unique<struct lf_sender_ctxt>();
+    sctxt_ptr->set_remote_id(remote_id);
+    sctxt_ptr->set_ce_idx(ce_idx);
 
     int ret = -1;
     if (op == OOB_OP_READ || op == OOB_OP_WRITE) {
@@ -596,8 +597,8 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         msg.data = 0l; // not used
     
         // set up completion entry.
-        msg.context = (void*)&sctxt;
-        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
+        msg.context = (void*)sctxt_ptr.get();
+        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(sctxt_ptr.get()));
         dbg_warn(sst_logger, "{}: op = {:d}, msg.context = {:p}\n"
                              "\tmsg.msg_iov.iov_base     = {:p}\n"
                              "\tmsg.msg_iov.iov_len      = {:x}\n"
@@ -608,7 +609,7 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
                              "\tmsg.rma_iov->key         = {:x}\n"
                              "\tmsg.rma_iov_count        = {}\n"
                              "\tmsg.data                 = {}\n",
-                 __func__, op, static_cast<void*>(&sctxt),
+                 __func__, op, static_cast<void*>(sctxt_ptr.get()),
                  msg.msg_iov->iov_base,
                  msg.msg_iov->iov_len,
                  msg.iov_count,
@@ -662,15 +663,15 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         msg.addr = 0; // not used
         msg.data = 0; // not used
 
-        msg.context = (void*)&sctxt;
-        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
+        msg.context = (void*)sctxt_ptr.get();
+        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(sctxt_ptr.get()));
         dbg_warn(sst_logger, "{}: op = {:d}, msg.context = {:p}\n"
                              "\tmsg.msg_iov.iov_base     = {:p}\n"
                              "\tmsg.msg_iov.iov_len      = {:x}\n"
                              "\tmsg.iov_count            = {}\n"
                              "\tmsg.desc[0]              = {:x}\n"
                              "\tmsg.data                 = {}\n",
-                 __func__, op, static_cast<void*>(&sctxt),
+                 __func__, op, static_cast<void*>(sctxt_ptr.get()),
                  msg.msg_iov->iov_base,
                  msg.msg_iov->iov_len,
                  msg.iov_count,
@@ -697,6 +698,9 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     if (ret != 0) {
         throw derecho::derecho_exception("oob_remote_op() failed with " + std::to_string(ret));
     }
+
+    // save the context pointer
+    oob_sender_ctxt_queue.push(std::move(sctxt_ptr));
 }
 
 void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms) {
@@ -723,6 +727,8 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
                 throw derecho::derecho_exception("completion event reports failure.");
             }
             num_entries --;
+            // pop context
+            oob_sender_ctxt_queue.pop();
             continue;
         }
         cur_time_msec = get_time()/1e6;

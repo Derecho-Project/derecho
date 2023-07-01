@@ -20,6 +20,7 @@
 #include <shared_mutex>
 #include <map>
 #include <tuple>
+#include <queue>
 
 #ifndef LF_VERSION
 #define LF_VERSION FI_VERSION(1, 5)
@@ -111,6 +112,7 @@ private:
     };
     static std::shared_mutex  oob_mrs_mutex;
     static std::map<uint64_t,struct oob_mr_t> oob_mrs;
+    thread_local static std::queue<std::unique_ptr<struct lf_sender_ctxt>> oob_sender_ctxt_queue;
     /**
      * get the descriptor of the corresponding oob memory region
      * Important: it assumes shared lock on oob_mrs_mutex.
