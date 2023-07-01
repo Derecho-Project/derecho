@@ -136,7 +136,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             assert_always(check_size == size);
         }
 
-        dbg_trace(RpcLoggerPtr::get(), "Ready to send an RPC call message with invocation ID {}", fmt::ptr(results_heap_ptr));
+        dbg_trace(RpcLoggerPtr::get(), "Ready to send an RPC call message with invocation ID {}", reinterpret_cast<uint64_t>(results_heap_ptr));
         //The return struct can get a new weak_ptr, different from the one stored on the heap,
         //since it will only be used by RPCManager (not the response message)
         return send_return{size, serialized_args, std::move(query_results),

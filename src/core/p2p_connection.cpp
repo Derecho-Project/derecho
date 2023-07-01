@@ -111,8 +111,8 @@ void P2PConnection::send(MESSAGE_TYPE type, uint64_t sequence_num) {
         dbg_trace(rpc_logger, "Sending {} to node {}, about to call post_remote_write. getOffsetBuf() is {}, getOffsetSeqNum() is {}",
                           type, remote_id, getOffsetBuf(type, sequence_num), getOffsetSeqNum(type, sequence_num));
         uint64_t seq_num = ((uint64_t*)(outgoing_p2p_buffer.get() + getOffsetSeqNum(type, sequence_num)))[0];
-        long invocation_id = ((long*)(outgoing_p2p_buffer.get() + getOffsetBuf(type, sequence_num) + derecho::rpc::remote_invocation_utilities::header_space() + 1))[0];
-        dbg_trace(rpc_logger, "Sequence number in the OffsetSeqNum position is {}. Invocation ID in the payload is {}", seq_num, invocation_id);
+        long invocation_id = ((long*)(outgoing_p2p_buffer.get() + getOffsetBuf(type, sequence_num) + derecho::rpc::remote_invocation_utilities::header_space()))[0];
+        dbg_trace(rpc_logger, "Sequence number in the OffsetSeqNum position is {}. Invocation ID in the payload is {}.", seq_num, invocation_id);
         res->post_remote_write(getOffsetBuf(type, sequence_num),
                                connection_params.max_msg_sizes[type] - sizeof(uint64_t));
         res->post_remote_write(getOffsetSeqNum(type, sequence_num),
