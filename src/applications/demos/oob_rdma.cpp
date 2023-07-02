@@ -148,19 +148,19 @@ uint64_t OOBRDMA::send(const uint64_t size) const {
         std::cerr << "Cannot put " << size << " bytes of data, it's more than my memory region limit:" << oob_mr_size << std::endl;
         return 0ull;
     }
-    std::cout << "Line " << __LINE__ << std::endl;
+    std::cout << "Line: " << __LINE__ << std::endl;
     // STEP 2 - get a random address
     uint64_t callee_addr = reinterpret_cast<uint64_t>(oob_mr_ptr) + (static_cast<uint64_t>(rand()%((oob_mr_size - size) >> 12))<<12);
     // STEP 3 - do RDMA recv to get the OOB data.
     auto& subgroup_handle = group->template get_subgroup<OOBRDMA>(this->subgroup_index);
-    std::cout << "Line " << __LINE__ << std::endl;
+    std::cout << "Line: " << __LINE__ << std::endl;
     struct iovec iov;
     iov.iov_base    = reinterpret_cast<void*>(callee_addr);
     iov.iov_len     = static_cast<size_t>(size);
     subgroup_handle.oob_recv(group->get_rpc_caller_id(),&iov,1);
-    std::cout << "Line " << __LINE__ << std::endl;
+    std::cout << "Line: " << __LINE__ << std::endl;
     subgroup_handle.wait_for_oob_op(group->get_rpc_caller_id(),OOB_OP_RECV,1000);
-    std::cout << "Line " << __LINE__ << std::endl;
+    std::cout << "Line: " << __LINE__ << std::endl;
     return callee_addr;
 }
 
@@ -171,13 +171,17 @@ bool OOBRDMA::recv(const uint64_t& callee_addr, const uint64_t size) const {
         std::cerr << "callee address:0x" << std::hex << callee_addr << " or size " << size << " is invalid." << std::dec << std::endl;
         return false;
     }
+    std::cout << "Line: " << __LINE__ << std::endl;
     // STEP 2 - do RDMA send
     auto& subgroup_handle = group->template get_subgroup<OOBRDMA>(this->subgroup_index);
+    std::cout << "Line: " << __LINE__ << std::endl;
     struct iovec iov;
     iov.iov_base    = reinterpret_cast<void*>(callee_addr); 
     iov.iov_len     = static_cast<size_t>(size);
     subgroup_handle.oob_send(group->get_rpc_caller_id(),&iov,1);
+    std::cout << "Line: " << __LINE__ << std::endl;
     subgroup_handle.wait_for_oob_op(group->get_rpc_caller_id(),OOB_OP_SEND,1000);
+    std::cout << "Line: " << __LINE__ << std::endl;
     return true;
 }
 
@@ -216,25 +220,36 @@ void do_send_recv_test(SubgroupRefT& subgroup_handle,
     print_data(recv_buffer_laddr,oob_data_size);
 
     // 2 - do send
+    // 2.1 - post p2p_send
+    auto send_results = subgroup_handle.template p2p_send<RPC_NAME(send)>(nid,oob_data_size);
+    std::cout << "Line:" << __LINE__ << std::endl;
+    // 2.2 - send oob data
     struct iovec iov;
     uint64_t remote_addr;
     iov.iov_base = send_buffer_laddr;
     iov.iov_len = oob_data_size;
     subgroup_handle.oob_send(nid,&iov,1);
     std::cout << "Line:" << __LINE__ << std::endl;
-    auto send_results = subgroup_handle.template p2p_send<RPC_NAME(send)>(nid,oob_data_size);
-    std::cout << "Line:" << __LINE__ << std::endl;
+    // 2.3 - wait for oob send
     subgroup_handle.wait_for_oob_op(nid,OOB_OP_SEND,1000);
     std::cout << "Line:" << __LINE__ << std::endl;
+    // 2.4 - wait for p2p reply
     remote_addr = send_results.get().get(nid);
     std::cout << "Data sent to remote address @" << std::hex << remote_addr << std::dec << std::endl;
 
     // 3 - do recv
     iov.iov_base = recv_buffer_laddr;
     iov.iov_len = oob_data_size;
+    // 3.1 - post oob buffer for receive
     subgroup_handle.oob_recv(nid,&iov,1);
+    std::cout << "Line:" << __LINE__ << std::endl;
+    // 3.2 - post p2p_send 
     auto recv_results = subgroup_handle.template p2p_send<RPC_NAME(recv)>(nid,remote_addr,oob_data_size);
+    std::cout << "Line:" << __LINE__ << std::endl;
+    // 3.3 - wait until oob received.
     subgroup_handle.wait_for_oob_op(nid,OOB_OP_RECV,1000);
+    std::cout << "Line:" << __LINE__ << std::endl;
+    // 3.4 - wait for p2p reply
     bool recv_res = recv_results.get().get(nid);
     if (!recv_res) {
         std::cerr << "Data receive OOB operation failed." << std::endl;
