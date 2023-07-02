@@ -167,12 +167,11 @@ public:
     /**
      * Wait for a completion entries
      * @param num_entries   The number of entries to wait for
-     * @param timeout_ms    The number of milliseconds to wait before throwing timeout. By default, it waits for the
-     *                      CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS milliseconds at most.
+     * @param timeout_ms    The number of milliseconds to wait before throwing timeout
      *
      * @throws derecho_exception on failure.
      */
-    void wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms=0ull);
+    void wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms);
 private:
 
 #define OOB_OP_READ     0x0
@@ -249,8 +248,9 @@ public:
      *                          - OOB_OP_RECV
      *                          For most of the cases, we wait for only one completion. To allow an operation like
      *                          "exchange", which is to be implemented, we might need to write for two completions.
+     * @param timeout_ms        Timeout settings in milliseconds.
      */
-    void wait_for_oob_op(uint32_t op);
+    void wait_for_oob_op(uint32_t op, uint64_t timeout_ms);
 
     /*
      * release singleton resources

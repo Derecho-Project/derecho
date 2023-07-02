@@ -175,9 +175,11 @@ public:
      * Wait for a non-blocking oob operation in the same thread.
      * IMPORTANT: We assume the order of events are ordered.
      * @param op        Operation
+     * @param timeout_ms
+     *                  timeout setting in milliseconds
      * @throw           derecho::derecho_exception on failure
      */
-    void wait_for_oob_op(uint32_t op);
+    void wait_for_oob_op(uint32_t op, uint64_t timeout_ms);
 
 };
 }  // namespace sst

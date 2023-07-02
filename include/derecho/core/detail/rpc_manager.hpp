@@ -461,10 +461,11 @@ public:
      * wait for a non-blocking event.
      * @param remote_node       remote node id
      * @param op                the operation
+     * @param timeout_ms        timeout settings in milliseconds
      *
      * @throw                   derecho::derecho_exception on error
      */
-    void wait_for_oob_op(const node_id_t& remote_node, uint32_t op);
+    void wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_ms);
 };
 
 // Now that RPCManager is finished being declared, we can declare these convenience types

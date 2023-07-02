@@ -132,8 +132,8 @@ void P2PConnection::unregister_oob_memory(void* addr) {
     _resources::unregister_oob_memory(addr);
 }
 
-void P2PConnection::wait_for_oob_op(uint32_t op) {
-    res->wait_for_oob_op(op);
+void P2PConnection::wait_for_oob_op(uint32_t op, uint64_t timeout_ms) {
+    res->wait_for_oob_op(op,timeout_ms);
 }
 
 void P2PConnection::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {

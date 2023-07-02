@@ -708,10 +708,6 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
     uint64_t start_time_msec;
     uint64_t cur_time_msec;
     start_time_msec = get_time()/1e6;
-    uint64_t poll_cq_timeout_ms = timeout_ms;
-    if (poll_cq_timeout_ms == 0) {
-        poll_cq_timeout_ms = derecho::getConfUInt64(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS);
-    }
     const auto tid = std::this_thread::get_id();
 
     while (num_entries) {
@@ -732,7 +728,7 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
             continue;
         }
         cur_time_msec = get_time()/1e6;
-        if ((cur_time_msec - start_time_msec) >= poll_cq_timeout_ms) {
+        if ((cur_time_msec - start_time_msec) >= timeout_ms) {
             //timeout
             break;
         }
@@ -760,14 +756,14 @@ void _resources::oob_recv(const struct iovec* iov, int iovcnt) {
     oob_remote_op(OOB_OP_RECV, iov, iovcnt, 0, 0, 0);
 }
 
-void _resources::wait_for_oob_op(uint32_t op) {
+void _resources::wait_for_oob_op(uint32_t op, uint64_t timeout_ms) {
     switch(op){
     case OOB_OP_READ:
     case OOB_OP_WRITE:
     case OOB_OP_SEND:
     case OOB_OP_RECV:
     default:
-        wait_for_thread_local_completion_entries(1);
+        wait_for_thread_local_completion_entries(1, timeout_ms);
     }
 }
 
