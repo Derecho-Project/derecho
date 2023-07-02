@@ -1070,7 +1070,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             dbg_debug(g_ctxt.sst_logger, "WEIRD: we get an entry with op_context = NULL.");
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!
         } else {
-            //dbg_trace(g_ctxt.sst_logger, "Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
+            // dbg_trace(g_ctxt.sst_logger, "Normal: we get an entry with op_context = {:p}.", static_cast<void*>(sctxt));
             return {sctxt->ce_idx(), {sctxt->remote_id(), 1}};
         }
     } else {  // shutdown return a bad entry
