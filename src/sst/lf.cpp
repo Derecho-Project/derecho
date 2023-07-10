@@ -687,7 +687,7 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         } else if (op == OOB_OP_RECV) {
             ret = retry_on_eagain_unless("fi_recvmsg failed.",
                                          [this](){return remote_failed.load();},
-                                         fi_sendmsg,
+                                         fi_recvmsg,
                                          this->ep,
                                          &msg, FI_COMPLETION); // TODO: FI_INJECT_COMPLETE|FI_TRANSMIT_COMPLETE|FI_DELIVERY_COMPLETE?
         }
