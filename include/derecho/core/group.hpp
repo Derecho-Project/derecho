@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file    group.hpp
+ * @brief   Declaration of the `Group<>` class template.
+ */
+
 #include "derecho/conf/conf.hpp"
 #include "derecho/tcp/tcp.hpp"
 #include "derecho_exception.hpp"
@@ -29,6 +34,9 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @brief   The umbrella namespace for derecho.
+ */
 namespace derecho {
 /**
  * The function that implements index_of_type, which is separate to hide the

@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file    external_group.hpp
+ * @brief   This file contains the APIs for external clients.
+ */
+
 #include "derecho/conf/conf.hpp"
 #include "detail/connection_manager.hpp"
 #include "detail/p2p_connection_manager.hpp"

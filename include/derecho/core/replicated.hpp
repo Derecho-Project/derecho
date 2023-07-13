@@ -1,7 +1,6 @@
 /**
- * @file replicated.h
- *
- * @date Feb 3, 2017
+ * @file    replicated.hpp
+ * @brief   Declaration of the `Replicated<T>` class template.
  */
 
 #pragma once
