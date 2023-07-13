@@ -83,6 +83,9 @@ find_package(OpenSSL 1.1.1 REQUIRED)
 # Target: nlohmann_json::nlohmann_json
 find_package(nlohmann_json 3.9.0 REQUIRED)
 
+# Target: Doxygen
+find_package(Doxygen)
+
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
 add_subdirectory(src/utils)
@@ -163,3 +166,13 @@ install(FILES
 
 # Build applications
 add_subdirectory(src/applications)
+
+if (DOXYGEN_FOUND)
+    # create docs
+    doxygen_add_docs(docs
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ALL
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        CONFIG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
+    )
+endif()
