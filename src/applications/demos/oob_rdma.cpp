@@ -376,8 +376,8 @@ int main(int argc, char** argv) {
         // wait here
         std::cin.get();
 
-        group.unregister_oob_memory(oob_mr_ptr);
-        std::cout << oob_mr_size << " bytes of OOB Memory unregistered" << std::endl;
+        group.deregister_oob_memory(oob_mr_ptr);
+        std::cout << oob_mr_size << " bytes of OOB Memory deregistered" << std::endl;
         group.barrier_sync();
         group.leave();
     } else if (argv[1] == std::string("client")) {
@@ -400,7 +400,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        external_group.unregister_oob_memory(oob_mr_ptr);
+        external_group.deregister_oob_memory(oob_mr_ptr);
         std::cout << oob_mr_size << "bytes of OOB Memory unregistered" << std::endl;
     } else {
         std::cout << "unknown command:" << argv[1] << std::endl;

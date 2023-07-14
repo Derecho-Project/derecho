@@ -157,12 +157,12 @@ public:
     static void register_oob_memory(void* addr, size_t size);
 
     /**
-     * Unregister oob memory
+     * Deregister oob memory
      * @param addr the address of OOB memory
      *
      * @throws derecho_exception on failure.
      */
-    static void unregister_oob_memory(void* addr);
+    static void deregister_oob_memory(void* addr);
 
     /**
      * Wait for a completion entries

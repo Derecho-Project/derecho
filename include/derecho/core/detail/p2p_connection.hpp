@@ -116,11 +116,11 @@ public:
     static void register_oob_memory(void* addr, size_t size);
 
     /**
-     * Unregister Out-of-band memory region
+     * Deregister Out-of-band memory region
      * @param addr      The address of the memory region
      * @throw           derecho::derecho_exception on failure
      */
-    static void unregister_oob_memory(void* addr);
+    static void deregister_oob_memory(void* addr);
 
     /**
      * oob write

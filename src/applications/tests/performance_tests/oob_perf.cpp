@@ -391,7 +391,7 @@ int main(int argc, char** argv) {
 
         // wait here
         group.barrier_sync();
-        group.unregister_oob_memory(oob_mr_ptr);
+        group.deregister_oob_memory(oob_mr_ptr);
         std::cout << oob_mr_size << " bytes of OOB Memory unregistered" << std::endl;
         group.barrier_sync();
         group.leave();

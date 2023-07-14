@@ -133,8 +133,8 @@ void P2PConnection::register_oob_memory(void* addr, size_t size) {
     _resources::register_oob_memory(addr,size);
 }
 
-void P2PConnection::unregister_oob_memory(void* addr) {
-    _resources::unregister_oob_memory(addr);
+void P2PConnection::deregister_oob_memory(void* addr) {
+    _resources::deregister_oob_memory(addr);
 }
 
 void P2PConnection::wait_for_oob_op(uint32_t op, uint64_t timeout_ms) {

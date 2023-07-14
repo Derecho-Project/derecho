@@ -507,7 +507,7 @@ void _resources::register_oob_memory(void* addr, size_t size) {
                      addr, size, reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)), fi_mr_key(oob_mr));
 }
 
-void _resources::unregister_oob_memory(void* addr) {
+void _resources::deregister_oob_memory(void* addr) {
     std::shared_lock rd_lck(oob_mrs_mutex);
     if (oob_mrs.find(reinterpret_cast<uint64_t>(addr)) == oob_mrs.end()) {
         throw derecho::derecho_exception(std::string("oob memory region@") + std::to_string(reinterpret_cast<uint64_t>(addr)) + " is not found.");
@@ -517,7 +517,7 @@ void _resources::unregister_oob_memory(void* addr) {
     struct fid_mr* oob_mr = oob_mrs.at(reinterpret_cast<uint64_t>(addr)).mr;
     oob_mrs.erase(reinterpret_cast<uint64_t>(addr));
     wr_lock.unlock();
-    fail_if_nonzero_retry_on_eagain("unregister write mr", REPORT_ON_FAILURE,
+    fail_if_nonzero_retry_on_eagain("deregister write mr", REPORT_ON_FAILURE,
                                     fi_close, &oob_mr->fid);
 }
 

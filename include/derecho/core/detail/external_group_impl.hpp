@@ -590,7 +590,7 @@ void ExternalGroupClient<ReplicatedTypes...>::register_oob_memory(void* addr, si
 }
 
 template <typename... ReplicatedTypes>
-void ExternalGroupClient<ReplicatedTypes...>::unregister_oob_memory(void* addr) {
-    sst::P2PConnection::unregister_oob_memory(addr);
+void ExternalGroupClient<ReplicatedTypes...>::deregister_oob_memory(void* addr) {
+    sst::P2PConnection::deregister_oob_memory(addr);
 }
 }  // namespace derecho
