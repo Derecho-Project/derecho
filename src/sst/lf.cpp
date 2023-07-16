@@ -180,7 +180,8 @@ void _resources::global_release() {
         fail_if_nonzero_retry_on_eagain("close oob memory region", REPORT_ON_FAILURE,
                                         fi_close, &oob_mr.second.mr->fid);
     }
-    _resources::oob_mrs.clear();
+    // -Why will this cause double free?
+    // _resources::oob_mrs.clear();
     wr_lck.unlock();
 }
 
