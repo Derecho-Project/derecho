@@ -499,12 +499,12 @@ void _resources::register_oob_memory(void* addr, size_t size) {
     mr.mr = oob_mr;
     oob_mrs.emplace(reinterpret_cast<uint64_t>(addr),mr);
 
-    dbg_default_warn("OOB memory registered with \n"
-                     "\taddr = {:p}\n"
-                     "\tsize = {:x}\n"
-                     "\tdesc = {:x}\n"
-                     "\trkey = {:x}\n",
-                     addr, size, reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)), fi_mr_key(oob_mr));
+    dbg_default_trace("OOB memory registered with \n"
+                      "\taddr = {:p}\n"
+                      "\tsize = {:x}\n"
+                      "\tdesc = {:x}\n"
+                      "\trkey = {:x}\n",
+                      addr, size, reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)), fi_mr_key(oob_mr));
 }
 
 void _resources::deregister_oob_memory(void* addr) {
@@ -599,26 +599,6 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         // set up completion entry.
         msg.context = (void*)sctxt_ptr.get();
         dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(sctxt_ptr.get()));
-        dbg_warn(sst_logger, "{}: op = {:d}, msg.context = {:p}\n"
-                             "\tmsg.msg_iov.iov_base     = {:p}\n"
-                             "\tmsg.msg_iov.iov_len      = {:x}\n"
-                             "\tmsg.iov_count            = {}\n"
-                             "\tmsg.desc[0]              = {:x}\n"
-                             "\tmsg.rma_iov->addr        = {:x}\n"
-                             "\tmsg.rma_iov->len         = {:x}\n"
-                             "\tmsg.rma_iov->key         = {:x}\n"
-                             "\tmsg.rma_iov_count        = {}\n"
-                             "\tmsg.data                 = {}\n",
-                 __func__, op, static_cast<void*>(sctxt_ptr.get()),
-                 msg.msg_iov->iov_base,
-                 msg.msg_iov->iov_len,
-                 msg.iov_count,
-                 reinterpret_cast<uint64_t>(msg.desc[0]),
-                 msg.rma_iov->addr,
-                 msg.rma_iov->len,
-                 msg.rma_iov->key,
-                 msg.rma_iov_count,
-                 msg.data);
     
         if (op == OOB_OP_WRITE) {
             // STEP 3: According to the IBTA Spec, we need to put a barrier (atomic operation) after the data has been written.
@@ -665,18 +645,6 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
 
         msg.context = (void*)sctxt_ptr.get();
         dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(sctxt_ptr.get()));
-        dbg_warn(sst_logger, "{}: op = {:d}, msg.context = {:p}\n"
-                             "\tmsg.msg_iov.iov_base     = {:p}\n"
-                             "\tmsg.msg_iov.iov_len      = {:x}\n"
-                             "\tmsg.iov_count            = {}\n"
-                             "\tmsg.desc[0]              = {:x}\n"
-                             "\tmsg.data                 = {}\n",
-                 __func__, op, static_cast<void*>(sctxt_ptr.get()),
-                 msg.msg_iov->iov_base,
-                 msg.msg_iov->iov_len,
-                 msg.iov_count,
-                 reinterpret_cast<uint64_t>(msg.desc[0]),
-                 msg.data);
     
         if (op == OOB_OP_SEND) {
             ret = retry_on_eagain_unless("fi_sendmsg failed.",
