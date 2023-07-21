@@ -167,9 +167,9 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
 
     util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API
-    verbs_sender_ctxt sctxt[receiver_ranks.size()];
+    verbs_sender_ctxt ce_ctxt[receiver_ranks.size()];
 #else
-    lf_sender_ctxt sctxt[receiver_ranks.size()];
+    lf_completion_entry_ctxt ce_ctxt[receiver_ranks.size()];
 #endif
     for(auto index : receiver_ranks) {
         // don't write to yourself or a frozen row
@@ -177,9 +177,9 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
             continue;
         }
         // perform a remote RDMA write on the owner of the row
-        sctxt[index].set_remote_id(index);
-        sctxt[index].set_ce_idx(ce_idx);
-        res_vec[index]->post_remote_write_with_completion(&sctxt[index], offset, size);
+        ce_ctxt[index].set_remote_id(index);
+        ce_ctxt[index].set_ce_idx(ce_idx);
+        res_vec[index]->post_remote_write_with_completion(&ce_ctxt[index], offset, size);
         posted_write_to[index] = true;
         num_writes_posted++;
     }

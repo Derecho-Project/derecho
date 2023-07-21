@@ -28,14 +28,34 @@
 
 namespace sst {
 
-struct lf_sender_ctxt {
-    uint32_t _ce_idx;     // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
-    uint32_t _remote_id;  // thread id of the sender
+class lf_completion_entry_ctxt {
+private:
+    uint32_t    _ce_idx;     // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
+    uint32_t    _remote_id;  // thread id of the sender
+    /**
+     * @brief Managed flag
+     * There two kinds of completion contexts:
+     * - managed: the caller of libfabric APIs will manage the context by themselves, therefore the completion polling
+     *   thread does not need to release the context memory.
+     * - unmanaged: the caller of libfabric APIs will not manage the context. It means that the caller allocated the
+     *   memory for the context using `malloc()`, `calloc()`, `new`, and etc.. Therefore, the completion polling thread
+     *   is responsible of free the memory.
+     */
+    bool        _managed;
+
+public:
+    // constructor
+    lf_completion_entry_ctxt(bool managed = true):
+        _ce_idx(0xffffffff),
+        _remote_id(0xffffffff),
+        _managed(managed) {}
+
     // getters and setters
-    uint32_t ce_idx() { return _ce_idx; }
-    uint32_t remote_id() { return _remote_id; }
-    void set_ce_idx(const uint32_t& idx) { _ce_idx = idx; }
-    void set_remote_id(const uint32_t& rid) { _remote_id = rid; }
+    inline uint32_t ce_idx() { return _ce_idx; }
+    inline uint32_t remote_id() { return _remote_id; }
+    inline void set_ce_idx(const uint32_t& idx) { _ce_idx = idx; }
+    inline void set_remote_id(const uint32_t& rid) { _remote_id = rid; }
+    inline bool is_managed() { return _managed; }
 };
 
 /**
@@ -72,7 +92,7 @@ protected:
      * @param op - 0 for read and 1 for write
      * @param return the return code for operation.
      */
-    int post_remote_send(lf_sender_ctxt* ctxt, const long long int offset, const long long int size,
+    int post_remote_send(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size,
                          const int op, const bool completion);
 
 public:
@@ -112,7 +132,7 @@ private:
     };
     static std::shared_mutex  oob_mrs_mutex;
     static std::map<uint64_t,struct oob_mr_t> oob_mrs;
-    thread_local static std::queue<std::unique_ptr<struct lf_sender_ctxt>> oob_sender_ctxt_queue;
+
     /**
      * get the descriptor of the corresponding oob memory region
      * Important: it assumes shared lock on oob_mrs_mutex.
@@ -309,9 +329,9 @@ public:
     void post_remote_write(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write(const long long int offset, long long int size);
-    void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size);
+    void post_remote_write_with_completion(lf_completion_entry_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_remote_write_with_completion(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size);
 
 };
 
@@ -320,7 +340,7 @@ public:
  * with functions that support two-sided sends and receives.
  */
 class resources_two_sided : public _resources {
-    int post_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    int post_receive(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size);
 
 public:
     /** constructor: simply forwards to _resources::_resources */
@@ -335,11 +355,11 @@ public:
     void post_two_sided_send(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_two_sided_send(const long long int offset, long long int size);
-    void post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int size);
+    void post_two_sided_send_with_completion(lf_completion_entry_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
-    void post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int size);
-    void post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_two_sided_send_with_completion(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_two_sided_receive(lf_completion_entry_ctxt* ctxt, const long long int size);
+    void post_two_sided_receive(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size);
 };
 
 /**

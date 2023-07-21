@@ -99,12 +99,12 @@ int main() {
 
     util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API
-    struct verbs_sender_ctxt sctxt;
+    struct verbs_sender_ctxt ce_ctxt;
 #else
-    struct lf_sender_ctxt sctxt;
+    lf_completion_entry_ctxt ce_ctxt;
 #endif
-    sctxt.set_remote_id(r_index);
-    sctxt.set_ce_idx(id);
+    ce_ctxt.set_remote_id(r_index);
+    ce_ctxt.set_ce_idx(id);
 
     if(node_rank == 0) {
         // wait for random time
@@ -116,7 +116,7 @@ int main() {
         a = 1;
         res->post_two_sided_send(sizeof(int));
         util::polling_data.set_waiting(tid);
-        res->post_two_sided_receive(&sctxt, sizeof(int));
+        res->post_two_sided_receive(&ce_ctxt, sizeof(int));
 
         cout << "Receive buffer posted" << endl;
         wait_for_completion(tid);
@@ -129,7 +129,7 @@ int main() {
 
     else {
         util::polling_data.set_waiting(tid);
-        res->post_two_sided_receive(&sctxt, sizeof(int));
+        res->post_two_sided_receive(&ce_ctxt, sizeof(int));
         cout << "Receive buffer posted" << endl;
         wait_for_completion(tid);
         util::polling_data.reset_waiting(tid);

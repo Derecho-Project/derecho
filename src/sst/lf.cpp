@@ -172,7 +172,6 @@ static void load_configuration() {
 
 std::shared_mutex _resources::oob_mrs_mutex;
 std::map<uint64_t,struct _resources::oob_mr_t> _resources::oob_mrs;
-thread_local std::queue<std::unique_ptr<struct lf_sender_ctxt>> _resources::oob_sender_ctxt_queue;
 
 void _resources::global_release() {
     std::unique_lock wr_lck(_resources::oob_mrs_mutex);
@@ -395,7 +394,7 @@ _resources::~_resources() {
 }
 
 int _resources::post_remote_send(
-        lf_sender_ctxt* ctxt,
+        lf_completion_entry_ctxt* ctxt,
         const long long int offset,
         const long long int size,
         const int op,
@@ -575,9 +574,9 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     const auto tid = std::this_thread::get_id();
     uint32_t ce_idx = util::polling_data.get_index(tid);
     util::polling_data.set_waiting(tid);
-    auto sctxt_ptr = std::make_unique<struct lf_sender_ctxt>();
-    sctxt_ptr->set_remote_id(remote_id);
-    sctxt_ptr->set_ce_idx(ce_idx);
+    lf_completion_entry_ctxt* ce_ctxt_ptr = new lf_completion_entry_ctxt(false);
+    ce_ctxt_ptr->set_remote_id(remote_id);
+    ce_ctxt_ptr->set_ce_idx(ce_idx);
 
     int ret = -1;
     if (op == OOB_OP_READ || op == OOB_OP_WRITE) {
@@ -598,8 +597,8 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         msg.data = 0l; // not used
     
         // set up completion entry.
-        msg.context = (void*)sctxt_ptr.get();
-        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(sctxt_ptr.get()));
+        msg.context = static_cast<void*>(ce_ctxt_ptr);
+        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(ce_ctxt_ptr));
     
         if (op == OOB_OP_WRITE) {
             // STEP 3: According to the IBTA Spec, we need to put a barrier (atomic operation) after the data has been written.
@@ -644,8 +643,8 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         msg.addr = 0; // not used
         msg.data = 0; // not used
 
-        msg.context = (void*)sctxt_ptr.get();
-        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(sctxt_ptr.get()));
+        msg.context = static_cast<void*>(ce_ctxt_ptr);
+        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(ce_ctxt_ptr));
     
         if (op == OOB_OP_SEND) {
             ret = retry_on_eagain_unless("fi_sendmsg failed.",
@@ -667,9 +666,6 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     if (ret != 0) {
         throw derecho::derecho_exception("oob_remote_op() failed with " + std::to_string(ret));
     }
-
-    // save the context pointer
-    oob_sender_ctxt_queue.push(std::move(sctxt_ptr));
 }
 
 void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms) {
@@ -692,8 +688,6 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
                 throw derecho::derecho_exception("completion event reports failure.");
             }
             num_entries --;
-            // pop context
-            oob_sender_ctxt_queue.pop();
             continue;
         }
         cur_time_msec = get_time()/1e6;
@@ -772,7 +766,7 @@ void resources::post_remote_write(const long long int offset, long long int size
     }
 }
 
-void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size) {
+void resources::post_remote_write_with_completion(lf_completion_entry_ctxt* ctxt, const long long int size) {
     int return_code = post_remote_send(ctxt, 0, size, 1, true);
     if(return_code != 0) {
         dbg_error(sst_logger, "post_remote_write(3) failed with return code {}", return_code);
@@ -780,7 +774,7 @@ void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const lo
     }
 }
 
-void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources::post_remote_write_with_completion(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size) {
     int return_code = post_remote_send(ctxt, offset, size, 1, true);
     if(return_code != 0) {
         dbg_error(sst_logger, "post_remote_write(4) failed with return code {}", return_code);
@@ -816,35 +810,35 @@ void resources_two_sided::post_two_sided_send(const long long int offset, const 
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(lf_completion_entry_ctxt* ctxt, const long long int size) {
     int rc = post_remote_send(ctxt, 0, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(ctxt, offset, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_id is" << ctxt->remote_id() << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int size) {
+void resources_two_sided::post_two_sided_receive(lf_completion_entry_ctxt* ctxt, const long long int size) {
     int rc = post_receive(ctxt, 0, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_receive(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_receive(ctxt, offset, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
-int resources_two_sided::post_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+int resources_two_sided::post_receive(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size) {
     struct iovec msg_iov;
     struct fi_msg msg;
     int ret;
@@ -982,9 +976,12 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             dbg_error(g_ctxt.sst_logger, "\top_context:NULL");
         } else {
 #ifndef NOLOG
-            lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
+            lf_completion_entry_ctxt* ce_ctxt = (lf_completion_entry_ctxt*)eentry.op_context;
 #endif
-            dbg_error(g_ctxt.sst_logger, "\top_context:ce_idx={},remote_id={}", sctxt->ce_idx(), sctxt->remote_id());
+            dbg_error(g_ctxt.sst_logger, "\top_context:ce_idx={},remote_id={}", ce_ctxt->ce_idx(), ce_ctxt->remote_id());
+            if (!ce_ctxt->is_managed()) {
+                delete ce_ctxt;
+            }
         }
 #ifdef DEBUG_FOR_RELEASE
         printf("\tflags=%x\n", eentry.flags);
@@ -1019,8 +1016,8 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         /**
          * Since eentry.op_context is unreliable, we ignore it with returning a generic error.
         if(eentry.op_context != NULL) {
-            lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
-            return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
+            lf_completion_entry_ctxt* ce_ctxt = (lf_completion_entry_ctxt*)eentry.op_context;
+            return {ce_ctxt->ce_idx(), {ce_ctxt->remote_id(), -1}};
         } else {
             dbg_error(g_ctxt.sst_logger, "\tFailed polling the completion queue");
             fprintf(stderr, "Failed polling the completion queue");
@@ -1030,13 +1027,18 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         return {(uint32_t)0xFFFFFFFF, {0, -1}};  // we don't know who sent the message.
     }
     if(!shutdown) {
-        lf_sender_ctxt* sctxt = (lf_sender_ctxt*)entry.op_context;
-        if(sctxt == NULL) {
+        lf_completion_entry_ctxt* ce_ctxt = (lf_completion_entry_ctxt*)entry.op_context;
+        if(ce_ctxt == NULL) {
             dbg_debug(g_ctxt.sst_logger, "WEIRD: we get an entry with op_context = NULL.");
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!
         } else {
-            // dbg_trace(g_ctxt.sst_logger, "Normal: we get an entry with op_context = {:p}.", static_cast<void*>(sctxt));
-            return {sctxt->ce_idx(), {sctxt->remote_id(), 1}};
+            
+            // dbg_trace(g_ctxt.sst_logger, "Normal: we get an entry with op_context = {:p}.", static_cast<void*>(ce_ctxt));
+            std::pair<uint32_t,std::pair<int32_t,int32_t>> ret = {ce_ctxt->ce_idx(), {ce_ctxt->remote_id(), 1}};
+            if (!ce_ctxt->is_managed()) {
+                delete ce_ctxt;
+            }
+            return ret;
         }
     } else {  // shutdown return a bad entry
         return {0, {0, 0}};

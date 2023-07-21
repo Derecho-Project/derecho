@@ -72,7 +72,7 @@ private:
 protected:
     std::atomic<bool> remote_failed;
     /** Post a remote RDMA operation. */
-    int post_remote_send(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size, const int op, const bool completion);
+    int post_remote_send(verbs_sender_ctxt* ce_ctxt, const long long int offset, const long long int size, const int op, const bool completion);
 
 public:
     /** Index of the remote node. */
@@ -129,13 +129,13 @@ public:
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write(const long long int offset, long long int size);
     /** Post an RDMA write at the beginning address of remote memory, and also request a completion event for it. */
-    void post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int size);
+    void post_remote_write_with_completion(verbs_sender_ctxt* ce_ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory, and also request a completion event for it. */
-    void post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
+    void post_remote_write_with_completion(verbs_sender_ctxt* ce_ctxt, const long long int offset, const long long int size);
 };
 
 class resources_two_sided : public _resources {
-    int post_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
+    int post_receive(verbs_sender_ctxt* ce_ctxt, const long long int offset, const long long int size);
 
 public:
     resources_two_sided(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
@@ -148,11 +148,11 @@ public:
     void post_two_sided_send(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_two_sided_send(const long long int offset, long long int size);
-    void post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int size);
+    void post_two_sided_send_with_completion(verbs_sender_ctxt* ce_ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
-    void post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int size);
-    void post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
+    void post_two_sided_send_with_completion(verbs_sender_ctxt* ce_ctxt, const long long int offset, const long long int size);
+    void post_two_sided_receive(verbs_sender_ctxt* ce_ctxt, const long long int size);
+    void post_two_sided_receive(verbs_sender_ctxt* ce_ctxt, const long long int offset, const long long int size);
 };
 
 bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);

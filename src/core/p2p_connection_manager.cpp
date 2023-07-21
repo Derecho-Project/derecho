@@ -167,9 +167,9 @@ void P2PConnectionManager::check_failures_loop() {
 
         util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API
-        std::map<uint32_t, verbs_sender_ctxt> sctxt;
+        std::map<uint32_t, verbs_sender_ctxt> ce_ctxt;
 #else
-        std::map<uint32_t, lf_sender_ctxt> sctxt;
+        std::map<uint32_t, lf_completion_entry_ctxt> ce_ctxt;
 #endif
 
         for(node_id_t node_id = 0; node_id < p2p_connections.size(); ++node_id) {
@@ -184,10 +184,10 @@ void P2PConnectionManager::check_failures_loop() {
                 continue;
             }
             p2p_connections[node_id].second->num_rdma_writes = 0;
-            sctxt[node_id].set_remote_id(node_id);
-            sctxt[node_id].set_ce_idx(ce_idx);
+            ce_ctxt[node_id].set_remote_id(node_id);
+            ce_ctxt[node_id].set_ce_idx(ce_idx);
 
-            p2p_connections[node_id].second->get_res()->post_remote_write_with_completion(&sctxt[node_id],
+            p2p_connections[node_id].second->get_res()->post_remote_write_with_completion(&ce_ctxt[node_id],
                                                                                           p2p_buf_size - sizeof(bool),
                                                                                           sizeof(bool));
             posted_write_to.insert(node_id);
