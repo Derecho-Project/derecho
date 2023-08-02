@@ -20,4 +20,4 @@ target_include_directories(core PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
 )
 # OBJECT libraries are not linked, but this command can be used to declare library dependencies
-target_link_libraries(core spdlog::spdlog)
+target_link_libraries(core mutils::mutils mutils::mutils-containers spdlog::spdlog)
