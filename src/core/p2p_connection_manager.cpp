@@ -198,7 +198,7 @@ void P2PConnectionManager::check_failures_loop() {
 
         // track which nodes respond successfully
         std::unordered_set<node_id_t> polled_successfully_from;
-        std::vector<node_id_t> failed_node_indexes;
+        std::vector<node_id_t> failed_nodes;
 
         /** Completion Queue poll timeout in millisec */
         const unsigned int MAX_POLL_CQ_TIMEOUT = derecho::getConfUInt32(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS);
@@ -210,12 +210,12 @@ void P2PConnectionManager::check_failures_loop() {
         gettimeofday(&cur_time, NULL);
         start_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
 
-        for(unsigned int i = 0; i < posted_write_to.size(); i++) {
-            std::optional<std::pair<int32_t, int32_t>> ce;
+        for (node_id_t nid :  posted_write_to) {
+            std::optional<int32_t> result;
             while(true) {
                 // check if polling result is available
-                ce = util::polling_data.get_completion_entry(tid);
-                if(ce) {
+                result = util::polling_data.get_completion_entry(tid,nid);
+                if(result) {
                     break;
                 }
                 gettimeofday(&cur_time, NULL);
@@ -225,30 +225,17 @@ void P2PConnectionManager::check_failures_loop() {
                     break;
                 }
             }
-            // if waiting for a completion entry timed out
-            if(!ce) {
-                // mark all nodes that have not yet responded as failed
-                for(const node_id_t& posted_id : posted_write_to) {
-                    if(polled_successfully_from.find(posted_id) != polled_successfully_from.end()) {
-                        continue;
-                    }
-                    failed_node_indexes.push_back(posted_id);
-                }
-                break;
-            }
 
-            auto ce_v = ce.value();
-            int remote_id = ce_v.first;
-            int result = ce_v.second;
-            if(result == 1) {
-                polled_successfully_from.insert(remote_id);
-            } else if(result == -1) {
-                failed_node_indexes.push_back(remote_id);
+            if (result && result.value() == 1) {
+                polled_successfully_from.insert(nid);
+            } else {
+                failed_nodes.push_back(nid);
             }
         }
+
         util::polling_data.reset_waiting(tid);
 
-        for(auto nid : failed_node_indexes) {
+        for(auto nid : failed_nodes) {
             dbg_debug(rpc_logger, "p2p_connection_manager detected failure/timeout on node {}", nid);
             {
                 std::lock_guard<std::mutex> connection_lock(p2p_connections[nid].first);

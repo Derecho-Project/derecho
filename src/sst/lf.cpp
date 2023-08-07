@@ -669,22 +669,16 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
 }
 
 void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms) {
-    std::optional<std::pair<int32_t, int32_t>> ce;
+    std::optional<int32_t> result;
     uint64_t start_time_msec;
     uint64_t cur_time_msec;
     start_time_msec = get_time()/1e6;
     const auto tid = std::this_thread::get_id();
 
     while (num_entries) {
-        ce = util::polling_data.get_completion_entry(tid);
-        if (ce) {
-            auto ce_v = ce.value();
-            if (ce_v.first != remote_id) {
-                throw derecho::derecho_exception("completion event is from unexpected node:" +
-                                                 std::to_string(ce_v.first) + ", expecting node:" +
-                                                 std::to_string(remote_id));
-            }
-            if (ce_v.second != 1) {
+        result = util::polling_data.get_completion_entry(tid,remote_id);
+        if (result) {
+            if (result.value() != 1) {
                 throw derecho::derecho_exception("completion event reports failure.");
             }
             num_entries --;
@@ -697,7 +691,7 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
         }
     }
 
-    if (!ce) {
+    if (!result) {
         // timeout or failed.
         throw derecho::derecho_exception("waiting for completion event from node:" + std::to_string(remote_id) + " timeout.");
     }

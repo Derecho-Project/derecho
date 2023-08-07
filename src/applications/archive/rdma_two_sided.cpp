@@ -27,8 +27,8 @@ void initialize(int node_rank, const map<uint32_t, std::pair<string, uint16_t>> 
 #endif
 }
 
-void wait_for_completion(std::thread::id tid) {
-    std::optional<std::pair<int32_t, int32_t>> ce;
+void wait_for_completion(std::thread::id tid,int32_t nid) {
+    std::optional<int32_t> cr;
 
     unsigned long start_time_msec;
     unsigned long cur_time_msec;
@@ -40,18 +40,18 @@ void wait_for_completion(std::thread::id tid) {
 
     while(true) {
         // check if polling result is available
-        ce = util::polling_data.get_completion_entry(tid);
-        if(ce) {
+        cr = util::polling_data.get_completion_entry(tid,nid);
+        if(cr) {
             break;
         }
         gettimeofday(&cur_time, NULL);
-	cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
+        cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
         if((cur_time_msec - start_time_msec) >= 2000) {
             break;
         }
     }
     // if waiting for a completion entry timed out
-    if(!ce) {
+    if(!cr) {
         std::cerr << "Failed to get recv completion" << std::endl;
     }
 }
@@ -119,7 +119,7 @@ int main() {
         res->post_two_sided_receive(&ce_ctxt, sizeof(int));
 
         cout << "Receive buffer posted" << endl;
-        wait_for_completion(tid);
+        wait_for_completion(tid,r_index);
         util::polling_data.reset_waiting(tid);
         cout << "Data received" << endl;
 
@@ -131,7 +131,7 @@ int main() {
         util::polling_data.set_waiting(tid);
         res->post_two_sided_receive(&ce_ctxt, sizeof(int));
         cout << "Receive buffer posted" << endl;
-        wait_for_completion(tid);
+        wait_for_completion(tid,r_index);
         util::polling_data.reset_waiting(tid);
         cout << "Data received" << endl;
         while(b == 0) {

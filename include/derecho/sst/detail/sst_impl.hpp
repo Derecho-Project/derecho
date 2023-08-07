@@ -177,7 +177,7 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
             continue;
         }
         // perform a remote RDMA write on the owner of the row
-        ce_ctxt[index].set_remote_id(index);
+        ce_ctxt[index].set_remote_id(res_vec[index]->remote_id);
         ce_ctxt[index].set_ce_idx(ce_idx);
         res_vec[index]->post_remote_write_with_completion(&ce_ctxt[index], offset, size);
         posted_write_to[index] = true;
@@ -198,13 +198,15 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
     start_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
 
     // poll for a single completion for each write request submitted
-    for(unsigned int index = 0; index < num_writes_posted; ++index) {
-        std::optional<std::pair<int32_t, int32_t>> ce;
-
+    for(auto index : receiver_ranks) {
+        // didn't write to yourself or a frozen row
+        if(index == my_index || row_is_frozen[index]) {
+            continue;
+        }
+        std::optional<int32_t> result;
         while(true) {
-            // check if polling result is available
-            ce = util::polling_data.get_completion_entry(tid);
-            if(ce) {
+            result = util::polling_data.get_completion_entry(tid,res_vec[index]->remote_id);
+            if (result) {
                 break;
             }
             gettimeofday(&cur_time, NULL);
@@ -213,27 +215,10 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
                 break;
             }
         }
-        // if waiting for a completion entry timed out
-        if(!ce) {
-            // mark all nodes that have not yet responded as failed
-            for(unsigned int index2 = 0; index2 < num_members; ++index2) {
-                if(!posted_write_to[index2] || polled_successfully_from[index2]) {
-                    continue;
-                }
-                failed_node_indexes.push_back(index2);
-            }
-            break;
-        }
-
-        auto ce_v = ce.value();
-        int remote_id = ce_v.first;
-        int result = ce_v.second;
-        if(result == 1) {
-            polled_successfully_from[remote_id] = true;
-        } else if(result == -1) {
-            if(!row_is_frozen[index]) {
-                failed_node_indexes.push_back(remote_id);
-            }
+        if (result && result.value() == 1) {
+            polled_successfully_from[index] = true;
+        } else {
+            failed_node_indexes.push_back(index);
         }
     }
 

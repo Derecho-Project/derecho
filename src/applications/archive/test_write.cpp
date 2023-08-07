@@ -89,7 +89,7 @@ int main() {
     // poll for completion
     while(true)
     {
-      auto ce =  util::polling_data.get_completion_entry(tid);
+      auto ce =  util::polling_data.get_completion_entry(tid,r_index);
       if (ce) break;
     }
     sync(r_index);
