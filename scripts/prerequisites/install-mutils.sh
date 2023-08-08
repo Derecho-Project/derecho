@@ -13,10 +13,9 @@ WORKPATH=`mktemp -d`
 cd ${WORKPATH}
 git clone https://github.com/mpmilano/mutils.git
 cd mutils
-# git checkout f1bdc9f2224a6a85d91acd2703e346c52f0f1a42
-# git checkout 2b6f80b60f2b1695bd27dce8dd30cbc3170d7290
-git checkout d53e7fa7cd5146fd2995a7f05d5d01d03d872e67
-git apply ${SCRIPTPATH}/mutils.patch
+# Since there's no version tag or branch we can target, check out a particular commit
+# to avoid unexpected changes if there are new commits to master
+git checkout 81e16d898d1f58a2ce4e58253d4b397783866357
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} ..

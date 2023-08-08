@@ -31,39 +31,6 @@ include(GetGitRevisionDescription)
 # These packages export their location information in the "old" way,
 # with INCLUDE_DIRS and LIBRARIES variables
 
-# mutils_FOUND
-# mutils_INCLUDE_DIRS
-# mutils_LIBRARIES
-find_package(mutils)
-if (NOT ${mutils_FOUND})
-    message(FATAL_ERROR "mutils not found. Please install from https://github.com/mpmilano/mutils.git")
-else()
-    message(STATUS "Found mutils in: ${mutils_INCLUDE_DIRS}")
-    include_directories(${mutils_INCLUDE_DIRS})
-endif()
-
-# mutils-tasks_FOUND
-# mutils-tasks_INCLUDE_DIRS
-# mutils-tasks_LIBRARIES
-find_package(mutils-tasks)
-if (NOT ${mutils-tasks_FOUND})
-    message(FATAL_ERROR "mutils not found. Please install from https://github.com/mpmilano/mutils-tasks.git")
-else()
-    message(STATUS "Found mutils-tasks in: ${mutils-tasks_INCLUDE_DIRS}")
-    include_directories(${mutils-tasks_INCLUDE_DIRS})
-endif()
-
-# mutils-containers_FOUND
-# mutils-containers_INCLUDE_DIRS
-# mutils-containers_LIBRARIES
-find_package(mutils-containers)
-if (NOT ${mutils-containers_FOUND})
-    message(FATAL_ERROR "mutils-containers not found. Please install from https://github.com/mpmilano/mutils-containers.git")
-else()
-    message(STATUS "Found mutils-containers in: ${mutils-containers_INCLUDE_DIRS}")
-    include_directories(${mutils-containers_INCLUDE_DIRS})
-endif()
-
 # libfabric_FOUND
 # libfabric_INCLUDE_DIRS
 # libfabric_LIBRARIES
@@ -73,6 +40,12 @@ find_package(libfabric 1.12.1 REQUIRED)
 # by providing an IMPORT-type CMake target that you can use as a
 # dependency. Placing this target in target_link_libraries will
 # automatically ensure its headers are included.
+
+# Target: mutils::mutils
+find_package(mutils REQUIRED)
+
+# Target: mutils::mutils-containers
+find_package(mutils-containers REQUIRED)
 
 # Target: spdlog::spdlog
 find_package(spdlog 1.3.1 REQUIRED)
@@ -111,9 +84,8 @@ target_link_libraries(derecho
     rdmacm ibverbs rt pthread atomic stdc++fs
     spdlog::spdlog
     ${libfabric_LIBRARIES}
-    ${mutils_LIBRARIES}
-    ${mutils-containers_LIBRARIES}
-    ${mutils-tasks_LIBRARIES}
+    mutils::mutils
+    mutils::mutils-containers
     OpenSSL::Crypto
     nlohmann_json::nlohmann_json)
 set_target_properties(derecho PROPERTIES
@@ -126,7 +98,8 @@ add_dependencies(derecho
 
 # Setup for make install
 # Declare that we will install the targets built by "derecho"
-install(TARGETS derecho EXPORT derechoTargets
+install(TARGETS derecho
+        EXPORT derechoTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 # Declare that we will install the "include/" directory as a standard include directory
@@ -137,17 +110,19 @@ install(DIRECTORY
 # Use CMakePackageConfigHelpers to create a package version file and config file
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/cmake/derechoConfigVersion.cmake"
     VERSION ${derecho_VERSION}
     COMPATIBILITY AnyNewerVersion
 )
 
-set(ConfigPackageLocation lib/cmake/derecho)
+# The directory where all the derecho*.cmake files will be installed
+# The standard is <libDir>/cmake/<packageName>
+set(ConfigPackageLocation ${CMAKE_INSTALL_LIBDIR}/cmake/derecho)
 
 configure_package_config_file(derechoConfig.cmake
-    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/cmake/derechoConfig.cmake"
     INSTALL_DESTINATION ${ConfigPackageLocation}
-    PATH_VARS CMAKE_INSTALL_LIBDIR CMAKE_INSTALL_INCLUDEDIR ConfigPackageLocation
+    PATH_VARS CMAKE_INSTALL_LIBDIR CMAKE_INSTALL_INCLUDEDIR
 )
 
 # Create a CMake targets file for Derecho so it can be imported as a CMake package
@@ -159,8 +134,8 @@ install(EXPORT derechoTargets
 
 # Declare that we will install the cmake files that CmakePackageConfigHelpers just created
 install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/cmake/derechoConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/cmake/derechoConfigVersion.cmake"
     DESTINATION ${ConfigPackageLocation}
 )
 
