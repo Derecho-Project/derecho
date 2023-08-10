@@ -176,10 +176,10 @@ public:
      * IMPORTANT: We assume the order of events are ordered.
      * @param op        Operation
      * @param timeout_ms
-     *                  timeout setting in milliseconds
+     *                  timeout setting in microseconds
      * @throw           derecho::derecho_exception on failure
      */
-    void wait_for_oob_op(uint32_t op, uint64_t timeout_ms);
+    void wait_for_oob_op(uint32_t op, uint64_t timeout_us);
 
 };
 }  // namespace sst

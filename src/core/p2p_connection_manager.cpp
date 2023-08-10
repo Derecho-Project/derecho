@@ -344,7 +344,7 @@ void P2PConnectionManager::oob_recv(const node_id_t& remote_node, const struct i
     p2p_connections[remote_node].second->oob_recv(iov,iovcnt);
 }
 
-void P2PConnectionManager::wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_ms) {
+void P2PConnectionManager::wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us) {
     // TODO: probably it's better to expose wait_for_oob_op as a static function to avoid the lock here.
     std::lock_guard lck(p2p_connections[remote_node].first);
     if (p2p_connections[remote_node].second == nullptr) {
@@ -353,7 +353,7 @@ void P2PConnectionManager::wait_for_oob_op(const node_id_t& remote_node, uint32_
     if (active_p2p_connections[remote_node] == false) {
         throw derecho::derecho_exception("oob read from inactive node:" + std::to_string(remote_node));
     }
-    p2p_connections[remote_node].second->wait_for_oob_op(op,timeout_ms);
+    p2p_connections[remote_node].second->wait_for_oob_op(op,timeout_us);
 }
 
 }  // namespace sst

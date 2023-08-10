@@ -525,11 +525,11 @@ public:
      *
      * @param[in]   remote_node     Remote node id
      * @param[in]   op              The operation to wait for
-     * @param[in]   timeout_ms      Timeout settings in milliseconds.
+     * @param[in]   timeout_us      Timeout settings in microseconds.
      *
      * @throw                   derecho::derecho_exception on error
      */
-    virtual void wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_ms);
+    virtual void wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us);
 };
 
 template <typename T>

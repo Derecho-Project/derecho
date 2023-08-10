@@ -668,11 +668,11 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     }
 }
 
-void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_ms) {
+void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_us) {
     std::optional<int32_t> result;
-    uint64_t start_time_msec;
-    uint64_t cur_time_msec;
-    start_time_msec = get_time()/1e6;
+    uint64_t start_time_us;
+    uint64_t cur_time_us;
+    start_time_us = get_time()/1e3;
     const auto tid = std::this_thread::get_id();
 
     while (num_entries) {
@@ -684,8 +684,8 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
             num_entries --;
             continue;
         }
-        cur_time_msec = get_time()/1e6;
-        if ((cur_time_msec - start_time_msec) >= timeout_ms) {
+        cur_time_us = get_time()/1e3;
+        if ((cur_time_us - start_time_us) >= timeout_us) {
             //timeout
             break;
         }
@@ -713,14 +713,14 @@ void _resources::oob_recv(const struct iovec* iov, int iovcnt) {
     oob_remote_op(OOB_OP_RECV, iov, iovcnt, 0, 0, 0);
 }
 
-void _resources::wait_for_oob_op(uint32_t op, uint64_t timeout_ms) {
+void _resources::wait_for_oob_op(uint32_t op, uint64_t timeout_us) {
     switch(op){
     case OOB_OP_READ:
     case OOB_OP_WRITE:
     case OOB_OP_SEND:
     case OOB_OP_RECV:
     default:
-        wait_for_thread_local_completion_entries(1, timeout_ms);
+        wait_for_thread_local_completion_entries(1, timeout_us);
     }
 }
 

@@ -603,8 +603,8 @@ void RPCManager::oob_recv(const node_id_t& remote_node, const struct iovec* iov,
     connections->oob_recv(remote_node, iov, iovcnt);
 }
 
-void RPCManager::wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_ms) {
-    connections->wait_for_oob_op(remote_node, op, timeout_ms);
+void RPCManager::wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us) {
+    connections->wait_for_oob_op(remote_node, op, timeout_us);
 }
 
 bool in_rpc_handler() {

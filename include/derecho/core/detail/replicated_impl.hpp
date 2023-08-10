@@ -322,8 +322,8 @@ void Replicated<T>::oob_recv(const node_id_t& remote_node, const struct iovec* i
 }
 
 template <typename T>
-void Replicated<T>::wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_ms) {
-    group_rpc_manager.wait_for_oob_op(remote_node,op,timeout_ms);
+void Replicated<T>::wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us) {
+    group_rpc_manager.wait_for_oob_op(remote_node,op,timeout_us);
 }
 
 template <typename T>
