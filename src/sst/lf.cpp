@@ -304,6 +304,22 @@ void _resources::connect_endpoint(bool is_lf_server) {
         nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
             dbg_error(sst_logger, "failed to connect remote.");
+            /* retrieve more error information */
+            struct fi_eq_err_entry errbuf;
+            ssize_t nErr = fi_eq_readerr(this->eq,&errbuf,0);
+            if (nErr > 0) {
+                dbg_error(sst_logger, "{} bytes of error read.", nErr);
+                dbg_error(sst_logger, "\terror.context={:p}",errbuf.context);
+                dbg_error(sst_logger, "\terror.data={}",errbuf.data);
+                dbg_error(sst_logger, "\terror.err={}",errbuf.err);
+                dbg_error(sst_logger, "\terror.prov_errno={}",errbuf.prov_errno);
+                dbg_error(sst_logger, "\terror.err_data={:p}",errbuf.err_data);
+                dbg_error(sst_logger, "\terror.err_data_size={}",errbuf.err_data_size);
+                char buf[4096];
+                dbg_error(sst_logger, "\tstrerror={}",fi_eq_strerror(this->eq,errbuf.prov_errno,errbuf.err_data,buf,4096));
+            } else {
+                dbg_error(sst_logger, "Cannot read error info.");
+            }
             crash_with_message("failed to connect remote. nRead=%ld.\n", nRead);
         }
         dbg_debug(sst_logger, "{}:{} entry.fid={},this->ep->fid={}", __FILE__, __func__, (void*)entry.fid, (void*)&(this->ep->fid));
