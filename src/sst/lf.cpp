@@ -1059,8 +1059,29 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& in
 
     //dbg_default_info(fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
     // STEP 2: initialize fabric, domain, and completion queue
+    struct fi_info* info_candidates = nullptr;
     fail_if_nonzero_retry_on_eagain("fi_getinfo()", CRASH_ON_FAILURE,
-                                    fi_getinfo, LF_VERSION, nullptr, nullptr, 0, g_ctxt.hints, &(g_ctxt.fi));
+                                    fi_getinfo, LF_VERSION, nullptr, nullptr, 0, g_ctxt.hints, &(info_candidates));
+
+    // TOOD: this is a bug in libfabric till at least v1.18.1:
+    // fi_getinfo() does not respect hints->domain_attr.
+    struct fi_info* info_candidate = info_candidates;
+    while (info_candidate != nullptr) {
+        assert(g_ctxt.hints->domain_attr->name);
+        if (strcmp(info_candidate->domain_attr->name,g_ctxt.hints->domain_attr->name)) {
+            info_candidate = info_candidate->next;
+        } else {
+            // found
+            g_ctxt.fi = fi_dupinfo(info_candidate);
+            break;
+        }
+    }
+
+    fi_freeinfo(info_candidates);
+    if (g_ctxt.fi == nullptr) {
+        crash_with_message("SST: failed to get an fi_info data structure.");
+    }
+
     dbg_trace(logger, "going to use virtual address?{}", LF_USE_VADDR);
     fail_if_nonzero_retry_on_eagain("fi_fabric()", CRASH_ON_FAILURE,
                                     fi_fabric, g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), nullptr);
