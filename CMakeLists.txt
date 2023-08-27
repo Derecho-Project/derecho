@@ -170,9 +170,10 @@ add_subdirectory(src/applications)
 if (DOXYGEN_FOUND)
     # create docs
     doxygen_add_docs(docs
+        ${CMAKE_SOURCE_DIR}/README.md
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/src
         ALL
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
 endif()
