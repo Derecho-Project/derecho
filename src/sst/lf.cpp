@@ -306,6 +306,22 @@ void _resources::connect_endpoint(bool is_lf_server) {
         nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
             dbg_error(sst_logger, "failed to connect remote.");
+            /* retrieve more error information */
+            struct fi_eq_err_entry errbuf;
+            ssize_t nErr = fi_eq_readerr(this->eq,&errbuf,0);
+            if (nErr > 0) {
+                dbg_error(sst_logger, "{} bytes of error read.", nErr);
+                dbg_error(sst_logger, "\terror.context={:p}",errbuf.context);
+                dbg_error(sst_logger, "\terror.data={}",errbuf.data);
+                dbg_error(sst_logger, "\terror.err={}",errbuf.err);
+                dbg_error(sst_logger, "\terror.prov_errno={}",errbuf.prov_errno);
+                dbg_error(sst_logger, "\terror.err_data={:p}",errbuf.err_data);
+                dbg_error(sst_logger, "\terror.err_data_size={}",errbuf.err_data_size);
+                char buf[4096];
+                dbg_error(sst_logger, "\tstrerror={}",fi_eq_strerror(this->eq,errbuf.prov_errno,errbuf.err_data,buf,4096));
+            } else {
+                dbg_error(sst_logger, "Cannot read error info.");
+            }
             crash_with_message("failed to connect remote. nRead=%ld.\n", nRead);
         }
         dbg_debug(sst_logger, "{}:{} entry.fid={},this->ep->fid={}", __FILE__, __func__, (void*)entry.fid, (void*)&(this->ep->fid));
@@ -1083,8 +1099,29 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& in
 
     //dbg_default_info(fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
     // STEP 2: initialize fabric, domain, and completion queue
+    struct fi_info* info_candidates = nullptr;
     fail_if_nonzero_retry_on_eagain("fi_getinfo()", CRASH_ON_FAILURE,
-                                    fi_getinfo, LF_VERSION, nullptr, nullptr, 0, g_ctxt.hints, &(g_ctxt.fi));
+                                    fi_getinfo, LF_VERSION, nullptr, nullptr, 0, g_ctxt.hints, &(info_candidates));
+
+    // TOOD: this is a bug in libfabric till at least v1.18.1:
+    // fi_getinfo() does not respect hints->domain_attr.
+    struct fi_info* info_candidate = info_candidates;
+    while (info_candidate != nullptr) {
+        assert(g_ctxt.hints->domain_attr->name);
+        if (strcmp(info_candidate->domain_attr->name,g_ctxt.hints->domain_attr->name)) {
+            info_candidate = info_candidate->next;
+        } else {
+            // found
+            g_ctxt.fi = fi_dupinfo(info_candidate);
+            break;
+        }
+    }
+
+    fi_freeinfo(info_candidates);
+    if (g_ctxt.fi == nullptr) {
+        crash_with_message("SST: failed to get an fi_info data structure.");
+    }
+
     dbg_trace(logger, "going to use virtual address?{}", LF_USE_VADDR);
     fail_if_nonzero_retry_on_eagain("fi_fabric()", CRASH_ON_FAILURE,
                                     fi_fabric, g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), nullptr);
