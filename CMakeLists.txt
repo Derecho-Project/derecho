@@ -80,6 +80,7 @@ add_library(derecho SHARED
     $<TARGET_OBJECTS:tcp>
     $<TARGET_OBJECTS:persistent>
     $<TARGET_OBJECTS:openssl_wrapper>)
+if (${USE_VERBS_API})
 target_link_libraries(derecho
     rdmacm ibverbs rt pthread atomic stdc++fs
     spdlog::spdlog
@@ -88,6 +89,16 @@ target_link_libraries(derecho
     mutils::mutils-containers
     OpenSSL::Crypto
     nlohmann_json::nlohmann_json)
+else()
+target_link_libraries(derecho
+    rt pthread atomic stdc++fs
+    spdlog::spdlog
+    ${libfabric_LIBRARIES}
+    mutils::mutils
+    mutils::mutils-containers
+    OpenSSL::Crypto
+    nlohmann_json::nlohmann_json)
+endif()
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}
     VERSION ${derecho_build_VERSION}
