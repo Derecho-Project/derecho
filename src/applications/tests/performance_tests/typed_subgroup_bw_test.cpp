@@ -168,7 +168,7 @@ int main(int argc, char* argv[]) {
 
     //std::string str_1k(max_msg_size, 'x');
     uint8_t* bbuf = (uint8_t*)malloc(max_msg_size);
-    bzero(bbuf, max_msg_size);
+    memset(bbuf, 0, max_msg_size);
     Bytes bytes(bbuf, max_msg_size);
 
     // this function sends all the messages

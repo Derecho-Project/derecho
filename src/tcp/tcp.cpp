@@ -33,8 +33,7 @@ socket::socket(std::string server_ip, uint16_t server_port, bool retry)
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(server_port);
-    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,
-          server->h_length);
+    memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
 
     int optval = 1;
     if(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval))) {
@@ -94,8 +93,7 @@ int socket::try_connect(std::string servername, uint16_t port, int timeout_ms) {
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
-    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,
-          server->h_length);
+    memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
 
     //Temporarily set socket to nonblocking in order to connect with a timeout
     int sock_flags = fcntl(sock, F_GETFL, 0);
