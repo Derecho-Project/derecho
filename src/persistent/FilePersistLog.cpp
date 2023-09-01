@@ -41,8 +41,8 @@ FilePersistLog::FilePersistLog(const string& name, const string& dataPath, bool 
           m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
           m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
           m_sDataFile(dataPath + "/" + name + "." + DATA_FILE_SUFFIX),
-          m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_MAX_LOG_ENTRY)),
-          m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_MAX_DATA_SIZE)),
+          m_iMaxLogEntry(derecho::getConfUInt64(derecho::Conf::PERS_MAX_LOG_ENTRY)),
+          m_iMaxDataSize(derecho::getConfUInt64(derecho::Conf::PERS_MAX_DATA_SIZE)),
           m_logger(PersistLogger::get()),
           m_iLogFileDesc(-1),
           m_iDataFileDesc(-1),
@@ -55,7 +55,7 @@ FilePersistLog::FilePersistLog(const string& name, const string& dataPath, bool 
         throw persistent_lock_error("mutex_init failed", errno);
     }
     dbg_trace(m_logger, "{0} constructor: before load()", name);
-    if(derecho::getConfBoolean(CONF_PERS_RESET)) {
+    if(derecho::getConfBoolean(derecho::Conf::PERS_RESET)) {
         reset();
     }
     load();

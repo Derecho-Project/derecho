@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
     const uint is_external = std::stoi(argv[argc-4]);
     const uint is_sender = std::stoi(argv[argc-3]);
     int num_of_nodes = std::stoi(argv[argc-2]);
-    uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    uint64_t max_msg_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     const uint count = std::stoi(argv[argc-1]);
 
     if (!is_external) {

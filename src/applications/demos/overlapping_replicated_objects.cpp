@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
 
     cout << "Finished constructing/joining Group" << endl;
 
-    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    uint32_t my_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
     //Now have each node send some updates to the Replicated objects
     //The code must be different depending on which subgroup this node is in,
     //which we can determine by attempting to locate its shard in each subgroup.

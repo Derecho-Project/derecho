@@ -50,7 +50,7 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
     sprintf(filepath, "%s/%d-%s-nolog", _NOLOG_OBJECT_DIR_, storageType, _NOLOG_OBJECT_NAME_);
 
     // 0.5 - object file
-    if(derecho::getConfBoolean(CONF_PERS_RESET)) {
+    if(derecho::getConfBoolean(derecho::Conf::PERS_RESET)) {
         if(fs::exists(filepath)) {
             if(!fs::remove(filepath)) {
                 dbg_error(PersistLogger::get(), "{} loadNoLogObjectFromFile failed to remove file {}.", _NOLOG_OBJECT_NAME_, filepath);

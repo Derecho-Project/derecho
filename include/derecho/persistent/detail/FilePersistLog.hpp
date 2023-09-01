@@ -56,8 +56,8 @@ union LogEntry {
 // Currently, we allow 1M(2^20-1) log entries and
 // 512GB data size. The max log entry and max size are
 // both from the configuration file:
-// CONF_PERS_MAX_LOG_ENTRY - "PERS/max_log_entry"
-// CONF_PERS_MAX_DATA_SIZE - "PERS/max_data_size"
+// Conf::PERS_MAX_LOG_ENTRY - "PERS/max_log_entry"
+// Conf::PERS_MAX_DATA_SIZE - "PERS/max_data_size"
 #define MAX_LOG_ENTRY (this->m_iMaxLogEntry)
 #define MAX_LOG_SIZE (sizeof(LogEntry) * MAX_LOG_ENTRY)
 #define MAX_DATA_SIZE (this->m_iMaxDataSize)

@@ -179,8 +179,8 @@ public:
 typedef OSObject * POSObject;
 OSObject **g_objs = nullptr;
 void initialize_objects(uint32_t num_of_objs) {
-  uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
-  uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+  uint64_t max_msg_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+  uint32_t node_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
   // We just reserved 128 bytes for the message header and serialization.
 #define VALUE_SIZE(x) ((x) - 128)
   uint8_t default_value[VALUE_SIZE(max_msg_size)];
@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
     // create the key-value array
     initialize_objects(num_of_objs);
 
-    uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    uint64_t max_msg_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     uint64_t total_num_messages = num_of_nodes * num_of_objs;
     struct timespec t_start,t_end;
     std::atomic<bool> bReady = false;

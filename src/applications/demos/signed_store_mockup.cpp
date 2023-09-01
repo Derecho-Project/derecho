@@ -244,7 +244,7 @@ int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
     const std::size_t rpc_header_size = sizeof(std::size_t) + sizeof(std::size_t)
                                         + derecho::remote_invocation_utilities::header_space();
-    const std::size_t update_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
+    const std::size_t update_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
     //For generating random updates
     const std::string characters("abcdefghijklmnopqrstuvwxyz");
     std::mt19937 random_generator(getpid());
@@ -282,7 +282,7 @@ int main(int argc, char** argv) {
     int32_t my_client_shard = group.get_my_shard<ClientTier>();
     if(my_client_shard != -1) {
         std::cout << "Assigned the ClientTier role, in shard " << my_client_shard << std::endl;
-        uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+        uint32_t my_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
         //Simulate getting a bunch of updates from a client and submitting them to the object store
         Blob test_update(nullptr, update_size);
         derecho::Replicated<ClientTier>& this_subgroup = group.get_subgroup<ClientTier>();

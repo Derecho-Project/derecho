@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
                                         + derecho::remote_invocation_utilities::header_space();
 
     const uint32_t total_num_messages = std::stoi(argv[dashdash_pos + 1]);
-    const uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) - rpc_header_size;
+    const uint64_t max_msg_size = derecho::getConfUInt64(derecho::Conf::DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) - rpc_header_size;
 
     steady_clock::time_point begin_time, end_time;
 
@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
         std::cout << std::flush;
 
         log_results(exp_result{max_msg_size,
-                               derecho::getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
+                               derecho::getConfUInt32(derecho::Conf::DERECHO_P2P_WINDOW_SIZE),
                                total_num_messages,
                                msec, thp_gbps},
                     "data_derecho_p2p_bw");

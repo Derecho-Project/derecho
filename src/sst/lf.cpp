@@ -147,10 +147,10 @@ static void load_configuration() {
 
     // provider:
     g_ctxt.hints->fabric_attr->prov_name = crash_if_nullptr("strdup provider name.",
-                                                            strdup, derecho::getConfString(CONF_RDMA_PROVIDER).c_str());
+                                                            strdup, derecho::getConfString(derecho::Conf::RDMA_PROVIDER).c_str());
     // domain:
     g_ctxt.hints->domain_attr->name = crash_if_nullptr("strdup domain name.",
-                                                       strdup, derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
+                                                       strdup, derecho::getConfString(derecho::Conf::RDMA_DOMAIN).c_str());
     if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) || (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)) {
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
@@ -165,8 +165,8 @@ static void load_configuration() {
     // g_ctxt.rx_depth = DEFAULT_RX_DEPTH;
 
     // tx_depth
-    g_ctxt.hints->tx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_TX_DEPTH);
-    g_ctxt.hints->rx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_RX_DEPTH);
+    g_ctxt.hints->tx_attr->size = derecho::Conf::get()->getInt32(derecho::Conf::RDMA_TX_DEPTH);
+    g_ctxt.hints->rx_attr->size = derecho::Conf::get()->getInt32(derecho::Conf::RDMA_RX_DEPTH);
 }
 
 std::shared_mutex _resources::oob_mrs_mutex;
@@ -658,7 +658,7 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
     struct timeval  cur_time;
     gettimeofday(&cur_time, NULL);
     start_time_msec = (cur_time.tv_sec*1e3)+(cur_time.tv_usec/1e3);
-    uint64_t        poll_cq_timeout_ms = derecho::getConfUInt64(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS);
+    uint64_t        poll_cq_timeout_ms = derecho::getConfUInt64(derecho::Conf::DERECHO_SST_POLL_CQ_TIMEOUT_MS);
 
     while (true) {
         ce = util::polling_data.get_completion_entry(tid);
@@ -1004,7 +1004,7 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& in
                    uint32_t node_id) {
     // Create SST logger, which must be done exactly once before any SST functions are called
     auto logger = LoggerFactory::createLogger(LoggerFactory::SST_LOGGER_NAME,
-                                              derecho::getConfString(CONF_LOGGER_SST_LOG_LEVEL));
+                                              derecho::getConfString(derecho::Conf::LOGGER_SST_LOG_LEVEL));
 
     // initialize derecho connection manager
     // May there be a better design?

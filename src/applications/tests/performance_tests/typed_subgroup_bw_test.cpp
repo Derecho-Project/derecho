@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
                                         + derecho::remote_invocation_utilities::header_space();
 
     const int num_nodes = std::stoi(argv[dashdash_pos + 1]);
-    const uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
+    const uint64_t max_msg_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
     const uint32_t count = std::stoi(argv[dashdash_pos + 2]);
     const uint32_t num_senders_selector = std::stoi(argv[dashdash_pos + 3]);
 
@@ -232,7 +232,7 @@ int main(int argc, char* argv[]) {
 
     if(node_rank == 0) {
         log_results(exp_result{num_nodes, num_senders_selector, max_msg_size,
-                               derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), count,
+                               derecho::getConfUInt32(derecho::Conf::SUBGROUP_DEFAULT_WINDOW_SIZE), count,
                                avg_msec, avg_gbps},
                     "data_derecho_typed_subgroup_bw");
     }

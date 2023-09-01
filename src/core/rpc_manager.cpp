@@ -25,11 +25,11 @@ thread_local node_id_t RPCManager::rpc_caller_id;
 
 RPCManager::RPCManager(ViewManager& group_view_manager,
                        const std::vector<DeserializationContext*>& deserialization_context)
-        : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
-          rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(CONF_LOGGER_RPC_LOG_LEVEL))),
+        : nid(getConfUInt32(Conf::DERECHO_LOCAL_ID)),
+          rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(Conf::LOGGER_RPC_LOG_LEVEL))),
           receivers(new std::decay_t<decltype(*receivers)>()),
           view_manager(group_view_manager),
-          busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
+          busy_wait_before_sleep_ms(getConfUInt64(Conf::DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
     RpcLoggerPtr::initialize();
     for(const auto& deserialization_context_ptr : deserialization_context) {
         rdv.push_back(deserialization_context_ptr);
@@ -60,10 +60,10 @@ void RPCManager::report_failure(const node_id_t who) {
 void RPCManager::create_connections() {
     connections = std::make_unique<sst::P2PConnectionManager>(sst::P2PParams{
             nid,
-            getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
+            getConfUInt32(Conf::DERECHO_P2P_WINDOW_SIZE),
             view_manager.view_max_rpc_window_size,
-            getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
-            getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
+            getConfUInt64(Conf::DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
+            getConfUInt64(Conf::DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
             view_manager.view_max_rpc_reply_payload_size + sizeof(header),
             false,
             [this](const uint32_t node_id) { report_failure(node_id); }});

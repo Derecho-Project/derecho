@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
 
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
-    const uint64_t msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    const uint64_t msg_size = getConfUInt64(Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     // used by the sending nodes to track time of delivery of messages
     vector<struct timespec> start_times(num_messages), end_times(num_messages);
@@ -225,7 +225,7 @@ int main(int argc, char* argv[]) {
     // log the result at the leader node
     if(my_rank == 0) {
         log_results(exp_result{num_nodes, num_senders_selector, msg_size,
-                               getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), num_messages,
+                               getConfUInt32(Conf::SUBGROUP_DEFAULT_WINDOW_SIZE), num_messages,
                                delivery_mode, avg_latency, avg_std_dev},
                     "data_latency");
     }

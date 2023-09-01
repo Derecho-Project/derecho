@@ -140,18 +140,18 @@ static void default_context() {
 
     /** Set the provider, can be verbs|psm|sockets|usnic */
     g_ctxt.hints->fabric_attr->prov_name = crash_if_nullptr("strdup provider name.",
-                                                            strdup, derecho::getConfString(CONF_RDMA_PROVIDER).c_str());
+                                                            strdup, derecho::getConfString(derecho::Conf::RDMA_PROVIDER).c_str());
     /** Set the domain */
     g_ctxt.hints->domain_attr->name = crash_if_nullptr("strdup domain name.",
-                                                       strdup, derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
+                                                       strdup, derecho::getConfString(derecho::Conf::RDMA_DOMAIN).c_str());
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
     if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) ||
        (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)) {
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
         /** Set the sizes of the tx and rx queues */
-        g_ctxt.hints->tx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_TX_DEPTH);
-        g_ctxt.hints->rx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_RX_DEPTH);
+        g_ctxt.hints->tx_attr->size = derecho::Conf::get()->getInt32(derecho::Conf::RDMA_TX_DEPTH);
+        g_ctxt.hints->rx_attr->size = derecho::Conf::get()->getInt32(derecho::Conf::RDMA_RX_DEPTH);
         if(g_ctxt.hints->tx_attr->size == 0 || g_ctxt.hints->rx_attr->size == 0) {
             dbg_default_error("Configuration error! RDMA TX and RX depth must be nonzero.");
             std::cerr << "Configuration error! RDMA TX and RX depth must be nonzero." << std::endl;

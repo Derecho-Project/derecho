@@ -24,13 +24,13 @@ std::string read_string(socket& s) {
 std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> initialize(const uint32_t num_nodes) {
     // Get conf file parameters
     // Global information
-    const std::string leader_ip = getConfString(CONF_DERECHO_LEADER_IP);
-    const uint16_t leader_gms_port = getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT);
+    const std::string leader_ip = getConfString(Conf::DERECHO_LEADER_IP);
+    const uint16_t leader_gms_port = getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT);
     // Local information
-    const uint32_t local_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    const std::string local_ip = getConfString(CONF_DERECHO_LOCAL_IP);
-    const uint16_t sst_port = getConfUInt16(CONF_DERECHO_SST_PORT);
-    const uint16_t gms_port = getConfUInt16(CONF_DERECHO_GMS_PORT);
+    const uint32_t local_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
+    const std::string local_ip = getConfString(Conf::DERECHO_LOCAL_IP);
+    const uint16_t sst_port = getConfUInt16(Conf::DERECHO_SST_PORT);
+    const uint16_t gms_port = getConfUInt16(Conf::DERECHO_GMS_PORT);
 
     bool is_leader = (leader_ip == local_ip && leader_gms_port == gms_port);
 

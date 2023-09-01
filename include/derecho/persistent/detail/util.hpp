@@ -27,14 +27,14 @@
 // #define DEFAULT_FILE_PERSIST_PATH (".plog")
 // #define DEFAULT_RAMDISK_PATH ("/dev/shm/volatile_t")
 inline std::string getPersRamdiskPath() {
-    std::string path = derecho::getConfString(CONF_PERS_RAMDISK_PATH);
+    std::string path = derecho::getConfString(derecho::Conf::PERS_RAMDISK_PATH);
     std::stringstream pid_ss;
     pid_ss << getpid();
     return path + pid_ss.str();
 }
 
 inline std::string getPersFilePath() {
-    return std::string(derecho::getConfString(CONF_PERS_FILE_PATH));
+    return std::string(derecho::getConfString(derecho::Conf::PERS_FILE_PATH));
 }
 
 // verify the existence of a folder

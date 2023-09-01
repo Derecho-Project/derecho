@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
     auto members_order = group.get_members();
     uint32_t node_rank = group.get_my_rank();
 
-    long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    long long unsigned int max_msg_size = getConfUInt64(Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     // this function sends all the messages
     auto send_fast = [&]() {
@@ -196,7 +196,7 @@ int main(int argc, char* argv[]) {
     // log the result at the leader node
     if(node_rank == 0) {
         log_results(exp_result{num_nodes, num_slow_senders_selector, max_msg_size,
-                               getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), num_messages,
+                               getConfUInt32(Conf::SUBGROUP_DEFAULT_WINDOW_SIZE), num_messages,
                                wait_time, avg_bw},
                     "data_sender_delay_test");
     }

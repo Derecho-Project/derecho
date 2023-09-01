@@ -236,7 +236,7 @@ public:
     SST(DerivedSST* derived_class_pointer, const SSTParams& params)
             : derived_this(derived_class_pointer),
               thread_shutdown(false),
-              poll_cq_timeout_ms(derecho::getConfUInt32(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS)),
+              poll_cq_timeout_ms(derecho::getConfUInt32(derecho::Conf::DERECHO_SST_POLL_CQ_TIMEOUT_MS)),
               members(params.members),
               num_members(members.size()),
               all_indices(num_members),

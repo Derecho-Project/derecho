@@ -29,7 +29,7 @@ PersistenceManager::PersistenceManager(
         throw derecho_exception("Cannot initialize persistent_request_sem:errno=" + std::to_string(errno));
     }
     if(any_signed_objects) {
-        openssl::EnvelopeKey signing_key = openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE));
+        openssl::EnvelopeKey signing_key = openssl::EnvelopeKey::from_pem_private(getConfString(Conf::PERS_PRIVATE_KEY_FILE));
         signature_size = signing_key.get_max_size();
         //The Verifier only needs the public key, but we loaded both public and private components from the private key file
         signature_verifier = std::make_unique<openssl::Verifier>(signing_key, openssl::DigestAlgorithm::SHA256);

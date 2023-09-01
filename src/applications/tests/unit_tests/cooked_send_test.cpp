@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
 
     cout << "Finished constructing/joining the group" << endl;
     auto group_members = group.get_members();
-    uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    uint32_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
     uint32_t my_rank = -1;
     cout << "Members are" << endl;
     for(uint i = 0; i < group_members.size(); ++i) {
@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
     while(!done) {
     }
     if(my_rank == 0) {
-        uint32_t max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+        uint32_t max_msg_size = getConfUInt64(Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
         uint32_t num_entries = max_msg_size / sizeof(pair<uint, uint>) - 50;
         if(num_entries < 0) {
             cout << "Error: Maximum message size too small!" << endl;

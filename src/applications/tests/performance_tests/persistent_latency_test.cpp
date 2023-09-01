@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
 
     const std::size_t rpc_header_size = sizeof(std::size_t) + sizeof(std::size_t)
                                         + derecho::remote_invocation_utilities::header_space();
-    uint64_t msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
+    uint64_t msg_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
 
     bool is_sending = true;
     uint32_t node_rank = -1;

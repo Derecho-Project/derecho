@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
     uint32_t num_nodes = atoi(argv[1]);
     uint32_t window_size = atoi(argv[2]);
     int num_senders_selector = atoi(argv[3]);
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const uint32_t node_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
     const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports = initialize(num_nodes);
 
     // initialize the rdma resources
