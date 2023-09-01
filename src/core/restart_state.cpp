@@ -127,8 +127,14 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
                 continue;
             }
             JoinRequest join_request;
-            client_socket->read(join_request);
-            client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
+            try {
+                client_socket->read(join_request);
+                client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
+            } catch(tcp::socket_error& ex) {
+                dbg_debug(vm_logger, "Client at {} disconnected before completing initial handshake", client_socket->get_remote_ip());
+                dbg_trace(vm_logger, "Exception description: {}", ex.what());
+                continue;
+            }
             dbg_debug(vm_logger, "Node {} rejoined", join_request.joiner_id);
             if(join_request.is_external) {
                 dbg_debug(vm_logger, "Rejected request from external client {} during total restart", join_request.joiner_id);
@@ -136,19 +142,30 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             }
             rejoined_node_ids.emplace(join_request.joiner_id);
             //Receive and process the joining node's logs of the last known View and RaggedTrim
-            receive_joiner_logs(join_request.joiner_id, *client_socket);
+            bool received = receive_joiner_logs(join_request.joiner_id, *client_socket);
+            if(!received) {
+                rejoined_node_ids.erase(join_request.joiner_id);
+                continue;
+            }
 
             //Receive the joining node's ports - this is part of the standard join logic
             uint16_t joiner_gms_port = 0;
-            client_socket->read(joiner_gms_port);
             uint16_t joiner_state_transfer_port = 0;
-            client_socket->read(joiner_state_transfer_port);
             uint16_t joiner_sst_port = 0;
-            client_socket->read(joiner_sst_port);
             uint16_t joiner_rdmc_port = 0;
-            client_socket->read(joiner_rdmc_port);
             uint16_t joiner_external_port = 0;
-            client_socket->read(joiner_external_port);
+            try {
+                client_socket->read(joiner_gms_port);
+                client_socket->read(joiner_state_transfer_port);
+                client_socket->read(joiner_sst_port);
+                client_socket->read(joiner_rdmc_port);
+                client_socket->read(joiner_external_port);
+            } catch(tcp::socket_error& ex) {
+                dbg_debug(vm_logger, "Node {} disconnected while sending its port information", join_request.joiner_id);
+                dbg_trace(vm_logger, "Exception in socket connected to node {}: {}", join_request.joiner_id, ex.what());
+                rejoined_node_ids.erase(join_request.joiner_id);
+                continue;
+            }
             const ip_addr_t& joiner_ip = client_socket->get_remote_ip();
             rejoined_node_ips_and_ports[join_request.joiner_id] = {joiner_ip, joiner_gms_port,
                                                                    joiner_state_transfer_port, joiner_sst_port,
@@ -177,6 +194,7 @@ bool RestartLeaderState::has_restart_quorum() {
                           last_known_view_members.begin(), last_known_view_members.end(),
                           std::inserter(intersection_of_ids, intersection_of_ids.end()));
     if(intersection_of_ids.size() < (last_known_view_members.size() / 2) + 1 || !contains_at_least_one_member_per_subgroup(rejoined_node_ids, *curr_view)) {
+        dbg_trace(vm_logger, "No restart quorum yet. {} nodes out of {} from last known view have connected. contains_at_least_one_member_per_subgroup = {}", intersection_of_ids.size(), last_known_view_members.size(), contains_at_least_one_member_per_subgroup(rejoined_node_ids, *curr_view));
         return false;
     }
     //If we have a sufficient number of members, attempt to compute a restart view
@@ -185,17 +203,24 @@ bool RestartLeaderState::has_restart_quorum() {
     return compute_restart_view();
 }
 
-void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::socket& client_socket) {
+bool RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::socket& client_socket) {
     //Receive the joining node's saved View
-    std::size_t size_of_view;
-    client_socket.read(size_of_view);
-    uint8_t view_buffer[size_of_view];
-    client_socket.read(view_buffer, size_of_view);
-    std::unique_ptr<View> client_view = mutils::from_bytes<View>(nullptr, view_buffer);
+    std::unique_ptr<View> client_view;
+    try {
+        std::size_t size_of_view;
+        client_socket.read(size_of_view);
+        uint8_t view_buffer[size_of_view];
+        client_socket.read(view_buffer, size_of_view);
+        client_view = mutils::from_bytes<View>(nullptr, view_buffer);
+    } catch(tcp::socket_error& ex) {
+        dbg_debug(vm_logger, "Node {} disconnected before sending its view", joiner_id);
+        dbg_trace(vm_logger, "Exception in socket to node {}: {}", joiner_id, ex.what());
+        return false;
+    }
 
     if(client_view->vid > curr_view->vid) {
         dbg_trace(vm_logger, "Node {} had newer view {}, replacing view {} and discarding ragged trim",
-                          joiner_id, client_view->vid, curr_view->vid);
+                  joiner_id, client_view->vid, curr_view->vid);
         //The joining node has a newer View, so discard any ragged trims that are not longest-log records
         for(auto& subgroup_to_map : restart_state.logged_ragged_trim) {
             auto trim_map_iterator = subgroup_to_map.second.begin();
@@ -210,15 +235,28 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
     }
     //Receive the joining node's RaggedTrims
     std::size_t num_of_ragged_trims;
-    client_socket.read(num_of_ragged_trims);
+    try {
+        client_socket.read(num_of_ragged_trims);
+    } catch(tcp::socket_error& ex) {
+        dbg_debug(vm_logger, "Node {} disconnected before sending its ragged trims", joiner_id);
+        dbg_trace(vm_logger, "Exception in socket to node {}: {}", joiner_id, ex.what());
+        return false;
+    }
     for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
-        std::size_t size_of_ragged_trim;
-        client_socket.read(size_of_ragged_trim);
-        uint8_t buffer[size_of_ragged_trim];
-        client_socket.read(buffer, size_of_ragged_trim);
-        std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
+        std::unique_ptr<RaggedTrim> ragged_trim;
+        try {
+            std::size_t size_of_ragged_trim;
+            client_socket.read(size_of_ragged_trim);
+            uint8_t buffer[size_of_ragged_trim];
+            client_socket.read(buffer, size_of_ragged_trim);
+            ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
+        } catch(tcp::socket_error& ex) {
+            dbg_debug(vm_logger, "Node {} disconnected while sending its ragged trims", joiner_id);
+            dbg_trace(vm_logger, "Exception in socket to node {}: {}", joiner_id, ex.what());
+            return false;
+        }
         dbg_trace(vm_logger, "Received ragged trim for subgroup {}, shard {} from node {}",
-                          ragged_trim->subgroup_id, ragged_trim->shard_num, joiner_id);
+                  ragged_trim->subgroup_id, ragged_trim->shard_num, joiner_id);
         /* If the joining node has an obsolete View, we only care about the
          * "ragged trims" if they are actually longest-log records and from
          * a newer view than any ragged trims we have for this subgroup. */
@@ -231,7 +269,7 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
         persistent::version_t ragged_trim_log_version = RestartState::ragged_trim_to_latest_version(ragged_trim->vid, ragged_trim->max_received_by_sender);
         if(ragged_trim_log_version > longest_log_versions[ragged_trim->subgroup_id][ragged_trim->shard_num]) {
             dbg_trace(vm_logger, "Latest logged persistent version for subgroup {}, shard {} is now {}, which is at node {}",
-                              ragged_trim->subgroup_id, ragged_trim->shard_num, ragged_trim_log_version, joiner_id);
+                      ragged_trim->subgroup_id, ragged_trim->shard_num, ragged_trim_log_version, joiner_id);
             longest_log_versions[ragged_trim->subgroup_id][ragged_trim->shard_num] = ragged_trim_log_version;
             nodes_with_longest_log[ragged_trim->subgroup_id][ragged_trim->shard_num] = joiner_id;
         }
@@ -240,7 +278,7 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
             auto existing_ragged_trim = restart_state.logged_ragged_trim[ragged_trim->subgroup_id].find(ragged_trim->shard_num);
             if(existing_ragged_trim == restart_state.logged_ragged_trim[ragged_trim->subgroup_id].end()) {
                 dbg_trace(vm_logger, "Adding node {}'s ragged trim to map, because we don't have one for shard ({}, {})",
-                                  joiner_id, ragged_trim->subgroup_id, ragged_trim->shard_num);
+                          joiner_id, ragged_trim->subgroup_id, ragged_trim->shard_num);
                 //operator[] is intentional: Default-construct an inner std::map if one doesn't exist at this ID
                 restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num,
                                                                                    std::move(ragged_trim));
@@ -261,6 +299,7 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
         last_known_view_members.clear();
         last_known_view_members.insert(curr_view->members.begin(), curr_view->members.end());
     }
+    return true;
 }
 
 bool RestartLeaderState::compute_restart_view() {

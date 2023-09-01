@@ -139,8 +139,10 @@ private:
      * logged_ragged_trim if the joiner has newer information.
      * @param joiner_id The ID of the rejoining node
      * @param client_socket The TCP socket connected to the rejoining node
+     * @return True if the logs were received successfully, false if the client
+     * disconnected (crashed) while sending them
      */
-    void receive_joiner_logs(const node_id_t& joiner_id, tcp::socket& client_socket);
+    bool receive_joiner_logs(const node_id_t& joiner_id, tcp::socket& client_socket);
 
     /**
      * Recomputes the restart view based on the current set of nodes that have
