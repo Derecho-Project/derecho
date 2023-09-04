@@ -82,13 +82,13 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(LOGGER_PERSISTENCE_LOG_LEVEL),
         {0, 0, 0, 0}};
 
-void Conf::initialize(int argc, char* argv[], const char* conf_file) {
+void Conf::initialize(int argc, char* argv[], const char* conf_file, const char* node_conf_file) {
     uint32_t expected = CONF_UNINITIALIZED;
     // if not initialized(0), set the flag to under initialization ...
     if(Conf::singleton_initialized_flag.compare_exchange_strong(
                expected, CONF_INITIALIZING, std::memory_order_acq_rel)) {
-        // 1 - get configuration file path
-        std::string real_conf_file;
+        // 1 - determine configuration file path, if possible, or leave real_conf_file "empty"
+        std::optional<std::string> real_conf_file;
         struct stat buffer;
         if(conf_file)
             real_conf_file = conf_file;
@@ -99,16 +99,21 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
             if(S_ISREG(buffer.st_mode) && (S_IRUSR | buffer.st_mode)) {
                 real_conf_file = default_conf_file;
             }
-        } else
-            real_conf_file.clear();
+        }
+        // 1.5 - same path detection but for node_conf_file
+        std::optional<std::string> real_node_conf_file;
+        if(node_conf_file) {
+            real_node_conf_file = node_conf_file;
+        } else if(std::getenv("DERECHO_NODE_CONF_FILE")) {
+            real_node_conf_file = std::getenv("DERECHO_NODE_CONF_FILE");
+        } else if(stat(default_node_conf_file, &buffer) == 0) {
+            if(S_ISREG(buffer.st_mode) && (S_IRUSR | buffer.st_mode)) {
+                real_node_conf_file = default_node_conf_file;
+            }
+        }
 
         // 2 - load configuration
-        getpot::GetPot* cfg = nullptr;
-        if(!real_conf_file.empty()) {
-            cfg = new getpot::GetPot(real_conf_file);
-        }
-        Conf::singleton = std::make_unique<Conf>(argc, argv, cfg);
-        delete cfg;
+        Conf::singleton = std::make_unique<Conf>(argc, argv, real_conf_file, real_node_conf_file);
 
         // 3 - set optional log-level keys to equal the default log level if they are not present
         const std::string& default_log_level = Conf::singleton->getString(LOGGER_DEFAULT_LOG_LEVEL);
@@ -160,6 +165,46 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
     }
 }
 
+void Conf::loadFromFile(const std::string& file_name) {
+    getpot::GetPot file_parser(file_name);
+    for(const std::string& key : file_parser.get_variable_names()) {
+        this->config[key] = file_parser(key, "");
+    }
+}
+
+Conf::Conf(int argc, char* argv[], std::optional<std::string> group_conf_file,
+         std::optional<std::string> node_conf_file) noexcept {
+    // 1 - load configuration from configuration file
+    if(group_conf_file) {
+        loadFromFile(group_conf_file.value());
+    }
+    if(node_conf_file) {
+        loadFromFile(node_conf_file.value());
+    }
+    // 2 - load configuration from the command line
+    int c;
+    while(1) {
+        int option_index = 0;
+
+        c = getopt_long(argc, argv, "", long_options, &option_index);
+        if(c == -1) {
+            break;
+        }
+
+        switch(c) {
+            case 0:
+                this->config[long_options[option_index].name] = optarg;
+                break;
+
+            case '?':
+                break;
+
+            default:
+                std::cerr << "ignore unknown commandline code:" << c << std::endl;
+        }
+    }
+}
+
 // should we force the user to call Conf::initialize() by throw an expcetion
 // for uninitialized configuration?
 const Conf* Conf::get() noexcept(true) {
@@ -169,6 +214,39 @@ const Conf* Conf::get() noexcept(true) {
     }
     return Conf::singleton.get();
 }
+
+void Conf::loadExtraFile(const std::string& default_file_name, const char* env_var_name) {
+    std::string real_file_name;
+    // Use the file named in the environment variable if it exists and is readable
+    if(env_var_name) {
+        const char* env_filename = std::getenv(env_var_name);
+        struct stat stat_buffer;
+        if(env_filename && stat(env_filename, &stat_buffer) == 0) {
+            if(S_ISREG(stat_buffer.st_mode) && (S_IRUSR | stat_buffer.st_mode)) {
+                real_file_name = env_filename;
+            }
+        }
+    }
+    // If that didn't work, see if the default file name works
+    if(real_file_name.empty()) {
+        struct stat stat_buffer;
+        if(stat(default_file_name.c_str(), &stat_buffer) == 0) {
+            if(S_ISREG(stat_buffer.st_mode) && (S_IRUSR | stat_buffer.st_mode)) {
+                real_file_name = default_file_name;
+            }
+        }
+    }
+    // If both the environment variable and the default don't exist, throw an error
+    if(real_file_name.empty()) {
+        throw std::runtime_error("Could not open configuration file " + default_file_name);
+    }
+    while(Conf::singleton_initialized_flag.load(std::memory_order_acquire) != CONF_INITIALIZED) {
+        char* empty_arg[1] = {nullptr};
+        Conf::initialize(0, empty_arg, nullptr);
+    }
+    singleton->loadFromFile(real_file_name);
+}
+
 
 const std::string& getConfString(const std::string& key) {
     return Conf::get()->getString(key);

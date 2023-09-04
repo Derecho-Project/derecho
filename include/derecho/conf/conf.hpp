@@ -7,7 +7,9 @@
 #include <inttypes.h>
 #include <map>
 #include <memory>
+#include <optional>
 #include <stdio.h>
+#include <string>
 #include <unistd.h>
 
 namespace derecho {
@@ -135,43 +137,37 @@ public:
      * The name of the default configuration file that will be loaded if none is specified
      */
     static constexpr const char* default_conf_file = "derecho.cfg";
+    /**
+     * The name of the default node-local configuration file that will be loaded
+     * if none is specified
+     */
+    static constexpr const char* default_node_conf_file = "derecho_node.cfg";
 
-    /** Constructor:
-   *  Conf can read configure from multiple sources
-   *  - the command line argument has the highest priority, then,
-   *  - the configuration files
-   *  - the default values.
-   **/
-    Conf(int argc, char* argv[], getpot::GetPot* getpotcfg = nullptr) noexcept(true) {
-        // 1 - load configuration from configuration file
-        if(getpotcfg != nullptr) {
-            for(const std::string& key : getpotcfg->get_variable_names()) {
-                this->config[key] = (*getpotcfg)(key, "");
-            }
-        }
-        // 2 - load configuration from the command line
-        int c;
-        while(1) {
-            int option_index = 0;
+    /**
+     * Constructor:
+     * Conf can read configuration from multiple sources
+     *  - the command line argument has the highest priority, then,
+     *  - the "group" configuration file
+     *  - the "node" (local) configuration file
+     *  - the default values.
+     **/
+    Conf(int argc, char* argv[], std::optional<std::string> group_conf_file,
+         std::optional<std::string> node_conf_file) noexcept(true);
 
-            c = getopt_long(argc, argv, "", long_options, &option_index);
-            if(c == -1) {
-                break;
-            }
+    /**
+     * Loads configuration options from a file and adds them to the
+     * configuration table. If the file contains options that were already
+     * present in the in-memory configuration table, they will overwrite the
+     * values in memory. This method can be called after initialization, but
+     * it is not thread-safe, so the caller must ensure it is only called once.
+     * Also, this method does not check if the file exists before attempting to
+     * parse it with GetPot, so it may fail with an exception from GetPot if
+     * called with a nonexistant file.
+     *
+     * @param file_name The name/path of the file to read
+     */
+    void loadFromFile(const std::string& file_name);
 
-            switch(c) {
-                case 0:
-                    this->config[long_options[option_index].name] = optarg;
-                    break;
-
-                case '?':
-                    break;
-
-                default:
-                    std::cerr << "ignore unknown commandline code:" << c << std::endl;
-            }
-        }
-    }
     /** get configuration **/
     const std::string& getString(const std::string& key) const {
         return this->config.at(key);
@@ -208,18 +204,45 @@ public:
     const bool hasCustomizedKey(const std::string& key) const {
         return (this->config.find(key) != this->config.end());
     }
-    // Initialize the singleton from the command line and the configuration file.
-    // The command line has higher priority than the configuration file
-    // The process we find the configuration file:
-    // 1) if conf_file is not null, use it, otherwise,
-    // 2) try DERECHO_CONF_FILE environment, otherwise,
-    // 3) use "derecho.cfg" at local, otherwise,
-    // 4) use all default settings.
-    // Note: initialize will be called on the first 'get()' if it is not called
-    // before.
+    /**
+     * Initialize the singleton from the command line and the configuration files.
+     * The command line has higher priority than the configuration files, and the
+     * node-local configuration file has higher priority than the group
+     * configuration file. The process for finding the group configuration file
+     * and node-local configuration file is:
+     * 1) if conf_file/node_conf_file is not null, use it, otherwise,
+     * 2) try DERECHO_CONF_FILE environment variable, otherwise,
+     * 3) use default_conf_file if it exists, otherwise,
+     * 4) use all default settings.
+     * Note: initialize will be called on the first 'get()' if it is not called
+     * before.
+     */
     static void initialize(int argc, char* argv[],
-                           const char* conf_file = nullptr);
+                           const char* conf_file = nullptr,
+                           const char* node_conf_file = nullptr);
+    /** Gets a const pointer to the singleton instance, initializing it if necessary. */
     static const Conf* get() noexcept(true);
+    /**
+     * Loads an additional configuration file into the Conf object, besides the
+     * two standard Derecho configuration files. Options set in the new config
+     * file have higher priority than (will overwrite) any options already set
+     * in the first initialization. If the optional env_var_name parameter is
+     * provided (non-null), it will be used as the name of an environment
+     * variable to check for the name of the file, and this filename will be
+     * used in preference to the file_name parameter if it exists. This function
+     * should be called after initialization, but unlike initialize() it is not
+     * thread-safe, so the caller must ensure it is only called once.
+     *
+     * @param default_file_name The "default" name of the configuration file to
+     * load. This is the file that will be loaded if env_var_name is not
+     * provided, is not set, or is set but points to a nonexistant file.
+     * @param env_var_name The name of an environment variable to check for a
+     * non-default file name
+     * @throw A std::runtime_error if the file could not be found after checking
+     * both the environment variable and the default file name.
+     */
+    static void loadExtraFile(const std::string& default_file_name,
+                              const char* env_var_name = nullptr);
 
     // Defines fields used for loading subgroup profiles in multicast_group.h
     static const std::vector<std::string> subgroupProfileFields;
