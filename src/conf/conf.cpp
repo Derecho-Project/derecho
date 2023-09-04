@@ -103,9 +103,9 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
             real_conf_file.clear();
 
         // 2 - load configuration
-        GetPot* cfg = nullptr;
+        getpot::GetPot* cfg = nullptr;
         if(!real_conf_file.empty()) {
-            cfg = new GetPot(real_conf_file);
+            cfg = new getpot::GetPot(real_conf_file);
         }
         Conf::singleton = std::make_unique<Conf>(argc, argv, cfg);
         delete cfg;

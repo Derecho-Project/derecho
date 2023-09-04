@@ -142,7 +142,7 @@ public:
    *  - the configuration files
    *  - the default values.
    **/
-    Conf(int argc, char* argv[], GetPot* getpotcfg = nullptr) noexcept(true) {
+    Conf(int argc, char* argv[], getpot::GetPot* getpotcfg = nullptr) noexcept(true) {
         // 1 - load configuration from configuration file
         if(getpotcfg != nullptr) {
             for(const std::string& key : getpotcfg->get_variable_names()) {
