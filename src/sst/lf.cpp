@@ -12,6 +12,7 @@
 #include "derecho/sst/detail/sst_impl.hpp"
 #include "derecho/tcp/tcp.hpp"
 #include "derecho/utils/logger.hpp"
+#include "derecho/utils/time.h"
 #include "derecho/core/derecho_exception.hpp"
 
 #include <arpa/inet.h>
@@ -178,7 +179,8 @@ void _resources::global_release() {
         fail_if_nonzero_retry_on_eagain("close oob memory region", REPORT_ON_FAILURE,
                                         fi_close, &oob_mr.second.mr->fid);
     }
-    _resources::oob_mrs.clear();
+    // -Why will this cause double free?
+    // _resources::oob_mrs.clear();
     wr_lck.unlock();
 }
 
@@ -304,6 +306,22 @@ void _resources::connect_endpoint(bool is_lf_server) {
         nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
             dbg_error(sst_logger, "failed to connect remote.");
+            /* retrieve more error information */
+            struct fi_eq_err_entry errbuf;
+            ssize_t nErr = fi_eq_readerr(this->eq,&errbuf,0);
+            if (nErr > 0) {
+                dbg_error(sst_logger, "{} bytes of error read.", nErr);
+                dbg_error(sst_logger, "\terror.context={:p}",errbuf.context);
+                dbg_error(sst_logger, "\terror.data={}",errbuf.data);
+                dbg_error(sst_logger, "\terror.err={}",errbuf.err);
+                dbg_error(sst_logger, "\terror.prov_errno={}",errbuf.prov_errno);
+                dbg_error(sst_logger, "\terror.err_data={:p}",errbuf.err_data);
+                dbg_error(sst_logger, "\terror.err_data_size={}",errbuf.err_data_size);
+                char buf[4096];
+                dbg_error(sst_logger, "\tstrerror={}",fi_eq_strerror(this->eq,errbuf.prov_errno,errbuf.err_data,buf,4096));
+            } else {
+                dbg_error(sst_logger, "Cannot read error info.");
+            }
             crash_with_message("failed to connect remote. nRead=%ld.\n", nRead);
         }
         dbg_debug(sst_logger, "{}:{} entry.fid={},this->ep->fid={}", __FILE__, __func__, (void*)entry.fid, (void*)&(this->ep->fid));
@@ -392,7 +410,7 @@ _resources::~_resources() {
 }
 
 int _resources::post_remote_send(
-        lf_sender_ctxt* ctxt,
+        lf_completion_entry_ctxt* ctxt,
         const long long int offset,
         const long long int size,
         const int op,
@@ -497,15 +515,15 @@ void _resources::register_oob_memory(void* addr, size_t size) {
     mr.mr = oob_mr;
     oob_mrs.emplace(reinterpret_cast<uint64_t>(addr),mr);
 
-    dbg_default_warn("OOB memory registered with \n"
-                     "\taddr = {:p}\n"
-                     "\tsize = {:x}\n"
-                     "\tdesc = {:x}\n"
-                     "\trkey = {:x}\n",
-                     addr, size, reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)), fi_mr_key(oob_mr));
+    dbg_default_trace("OOB memory registered with \n"
+                      "\taddr = {:p}\n"
+                      "\tsize = {:x}\n"
+                      "\tdesc = {:x}\n"
+                      "\trkey = {:x}\n",
+                      addr, size, reinterpret_cast<uint64_t>(fi_mr_desc(oob_mr)), fi_mr_key(oob_mr));
 }
 
-void _resources::unregister_oob_memory(void* addr) {
+void _resources::deregister_oob_memory(void* addr) {
     std::shared_lock rd_lck(oob_mrs_mutex);
     if (oob_mrs.find(reinterpret_cast<uint64_t>(addr)) == oob_mrs.end()) {
         throw derecho::derecho_exception(std::string("oob memory region@") + std::to_string(reinterpret_cast<uint64_t>(addr)) + " is not found.");
@@ -515,7 +533,7 @@ void _resources::unregister_oob_memory(void* addr) {
     struct fid_mr* oob_mr = oob_mrs.at(reinterpret_cast<uint64_t>(addr)).mr;
     oob_mrs.erase(reinterpret_cast<uint64_t>(addr));
     wr_lock.unlock();
-    fail_if_nonzero_retry_on_eagain("unregister write mr", REPORT_ON_FAILURE,
+    fail_if_nonzero_retry_on_eagain("deregister write mr", REPORT_ON_FAILURE,
                                     fi_close, &oob_mr->fid);
 }
 
@@ -549,6 +567,7 @@ uint64_t _resources::get_oob_mr_key(void* addr) {
     throw derecho::derecho_exception("get_oob_mr_key():address does not fall in memory region");
 }
 
+
 void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
     std::shared_lock rd_lck(oob_mrs_mutex);
     // STEP 1: check if io vector is valid
@@ -561,126 +580,136 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         }
         iov_tot_sz += iov[i].iov_len;
     }
-    if (iov_tot_sz > size) {
+    if (iov_tot_sz > size && 
+        (op == OOB_OP_READ || op == OOB_OP_WRITE)) {
         throw derecho::derecho_exception("oob_remote_write(): remote buffer is smaller than data.");
     }
 
-    // STEP 2: do one-sided RDMA transfer
-    struct fi_rma_iov rma_iov;
-    struct fi_msg_rma msg;
-
-    rma_iov.addr = ((LF_USE_VADDR) ? reinterpret_cast<uint64_t>(remote_dest_addr) : 0);
-    rma_iov.len = size;
-    rma_iov.key = rkey;
-
-    msg.msg_iov = iov;
-    msg.iov_count = iovcnt;
-    msg.desc = desc;
-    msg.addr = 0; // not used for a connection endpoint
-    msg.rma_iov = &rma_iov;
-    msg.rma_iov_count = 1;
-    msg.data = 0l; // not used
-
-    // set up completion entry.
+    // STEP 2: 
+    // - set up completion entry.
     const auto tid = std::this_thread::get_id();
     uint32_t ce_idx = util::polling_data.get_index(tid);
     util::polling_data.set_waiting(tid);
-    lf_sender_ctxt sctxt;
-    sctxt.set_remote_id(remote_id);
-    sctxt.set_ce_idx(ce_idx);
-    msg.context = (void*)&sctxt;
-    dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(&sctxt));
-
-    dbg_warn(sst_logger, "{}: op = {:d}, msg.context = {:p}\n"
-                         "\tmsg.msg_iov.iov_base     = {:p}\n"
-                         "\tmsg.msg_iov.iov_len      = {:x}\n"
-                         "\tmsg.iov_count            = {}\n"
-                         "\tmsg.desc[0]              = {:x}\n"
-                         "\tmsg.rma_iov->addr        = {:x}\n"
-                         "\tmsg.rma_iov->len         = {:x}\n"
-                         "\tmsg.rma_iov->key         = {:x}\n"
-                         "\tmsg.rma_iov_count        = {}\n"
-                         "\tmsg.data                 = {}\n",
-             __func__, op, static_cast<void*>(&sctxt),
-             msg.msg_iov->iov_base,
-             msg.msg_iov->iov_len,
-             msg.iov_count,
-             reinterpret_cast<uint64_t>(msg.desc[0]),
-             msg.rma_iov->addr,
-             msg.rma_iov->len,
-             msg.rma_iov->key,
-             msg.rma_iov_count,
-             msg.data);
+    lf_completion_entry_ctxt* ce_ctxt_ptr = new lf_completion_entry_ctxt(false);
+    ce_ctxt_ptr->set_remote_id(remote_id);
+    ce_ctxt_ptr->set_ce_idx(ce_idx);
 
     int ret = -1;
-    if (op == OOB_OP_WRITE) {
-        // STEP 3: According to the IBTA Spec, we need to put a barrier (atomic operation) after the data has been written.
-        // Cited from IBTA spec o9-20:
-        // """
-        // An application shall not depend on the contents of an RDMA WRITE buffer at the responder until one of the
-        // following has occurred:
-        // - Arrival and Completion of the last RDMA WRTIE request packet when used with Immediate data.
-        // - Arrival and completion of a subsequent SEND message.
-        // - Update of a memory element by a subsequent ATOMIC operation.
-        // """
-        // However, SST assumes that the contents will be visible to the responder in the order it appears. The CMU FaRM
-        // uses the same assumption. It sounds plausible but more implementation dependent. We have many other RDMA
-        // implementations too. We need to re-check this later.
-        //
-        // So far, we wait for the completion.
-        ret = retry_on_eagain_unless("fi_writemsg failed.",
-                                     [this](){return remote_failed.load();},
-                                     fi_writemsg,
-                                     this->ep,
-                                     &msg, FI_COMPLETION);
-    } else if (op == OOB_OP_READ) {
-        // STEP 3: According to the IBTA Spec, we need wait for the completion before we can use this data.
-        // Cited from IBTA spec o9-21:
-        // """
-        // An application shall not depend on the contents of an RDMA READ target buffer at the requestor until the completion of the corresponding WQE
-        // """
-        //
-        ret = retry_on_eagain_unless("fi_readmsg failed.",
-                                     [this](){return remote_failed.load();},
-                                     fi_readmsg,
-                                     this->ep,
-                                     &msg, FI_COMPLETION);
+    if (op == OOB_OP_READ || op == OOB_OP_WRITE) {
+        // do one-sided RDMA transfer
+        struct fi_rma_iov rma_iov;
+        struct fi_msg_rma msg;
+    
+        rma_iov.addr = ((LF_USE_VADDR) ? reinterpret_cast<uint64_t>(remote_dest_addr) : 0);
+        rma_iov.len = size;
+        rma_iov.key = rkey;
+    
+        msg.msg_iov = iov;
+        msg.iov_count = iovcnt;
+        msg.desc = desc;
+        msg.addr = 0; // not used for a connection endpoint
+        msg.rma_iov = &rma_iov;
+        msg.rma_iov_count = 1;
+        msg.data = 0l; // not used
+    
+        // set up completion entry.
+        msg.context = static_cast<void*>(ce_ctxt_ptr);
+        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(ce_ctxt_ptr));
+    
+        if (op == OOB_OP_WRITE) {
+            // STEP 3: According to the IBTA Spec, we need to put a barrier (atomic operation) after the data has been written.
+            // Cited from IBTA spec o9-20:
+            // """
+            // An application shall not depend on the contents of an RDMA WRITE buffer at the responder until one of the
+            // following has occurred:
+            // - Arrival and Completion of the last RDMA WRTIE request packet when used with Immediate data.
+            // - Arrival and completion of a subsequent SEND message.
+            // - Update of a memory element by a subsequent ATOMIC operation.
+            // """
+            // However, SST assumes that the contents will be visible to the responder in the order it appears. The CMU FaRM
+            // uses the same assumption. It sounds plausible but more implementation dependent. We have many other RDMA
+            // implementations too. We need to re-check this later.
+            //
+            // So far, we wait for the completion.
+            ret = retry_on_eagain_unless("fi_writemsg failed.",
+                                         [this](){return remote_failed.load();},
+                                         fi_writemsg,
+                                         this->ep,
+                                         &msg, FI_COMPLETION);
+        } else if (op == OOB_OP_READ) {
+            // STEP 3: According to the IBTA Spec, we need wait for the completion before we can use this data.
+            // Cited from IBTA spec o9-21:
+            // """
+            // An application shall not depend on the contents of an RDMA READ target buffer at the requestor until the completion of the corresponding WQE
+            // """
+            //
+            ret = retry_on_eagain_unless("fi_readmsg failed.",
+                                         [this](){return remote_failed.load();},
+                                         fi_readmsg,
+                                         this->ep,
+                                         &msg, FI_COMPLETION);
+        }
+    } else if (op == OOB_OP_SEND || op == OOB_OP_RECV) {
+        // do two-sided RDMA transfer
+        struct fi_msg msg;
+
+        msg.msg_iov = iov;
+        msg.iov_count = iovcnt;
+        msg.desc = desc;
+        msg.addr = 0; // not used
+        msg.data = 0; // not used
+
+        msg.context = static_cast<void*>(ce_ctxt_ptr);
+        dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(ce_ctxt_ptr));
+    
+        if (op == OOB_OP_SEND) {
+            ret = retry_on_eagain_unless("fi_sendmsg failed.",
+                                         [this](){return remote_failed.load();},
+                                         fi_sendmsg,
+                                         this->ep,
+                                         &msg, FI_COMPLETION); // TODO: FI_INJECT_COMPLETE|FI_TRANSMIT_COMPLETE|FI_DELIVERY_COMPLETE?
+        } else if (op == OOB_OP_RECV) {
+            ret = retry_on_eagain_unless("fi_recvmsg failed.",
+                                         [this](){return remote_failed.load();},
+                                         fi_recvmsg,
+                                         this->ep,
+                                         &msg, FI_COMPLETION); // TODO: FI_INJECT_COMPLETE|FI_TRANSMIT_COMPLETE|FI_DELIVERY_COMPLETE?
+        }
+    } else {
+        throw derecho::derecho_exception("oob_remote_op() failed with unknown operation: " + std::to_string(op));
     }
 
     if (ret != 0) {
         throw derecho::derecho_exception("oob_remote_op() failed with " + std::to_string(ret));
     }
+}
 
-    // STEP 4: wait for completion
-    std::optional<std::pair<int32_t, int32_t>> ce;
-    uint64_t        start_time_msec;
-    uint64_t        cur_time_msec;
-    struct timeval  cur_time;
-    gettimeofday(&cur_time, NULL);
-    start_time_msec = (cur_time.tv_sec*1e3)+(cur_time.tv_usec/1e3);
-    uint64_t        poll_cq_timeout_ms = derecho::getConfUInt64(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS);
+void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_us) {
+    std::optional<int32_t> result;
+    uint64_t start_time_us;
+    uint64_t cur_time_us;
+    start_time_us = get_time()/1e3;
+    const auto tid = std::this_thread::get_id();
 
-    while (true) {
-        ce = util::polling_data.get_completion_entry(tid);
-        if (ce) {
-            break;
+    while (num_entries) {
+        result = util::polling_data.get_completion_entry(tid,remote_id);
+        if (result) {
+            if (result.value() != 1) {
+                throw derecho::derecho_exception("completion event reports failure.");
+            }
+            num_entries --;
+            continue;
         }
-        gettimeofday(&cur_time, NULL);
-        cur_time_msec = (cur_time.tv_sec*1e3) + (cur_time.tv_usec/1e3);
-        if ((cur_time_msec - start_time_msec) >= poll_cq_timeout_ms) {
+        cur_time_us = get_time()/1e3;
+        if ((cur_time_us - start_time_us) >= timeout_us) {
             //timeout
             break;
         }
     }
 
-    if (!ce) {
+    if (!result) {
         // timeout or failed.
-        throw derecho::derecho_exception("oob_remote_op() with node:" + std::to_string(remote_id) + " timeout.");
-    }
-
-    auto ce_v = ce.value();
-    if ((ce_v.first != remote_id) || (ce_v.second != 1)) {
-        throw derecho::derecho_exception("oob_remote_op() with node:" + std::to_string(remote_id) + " failed with unknown error.");
+        throw derecho::derecho_exception("waiting for completion event from node:" + std::to_string(remote_id) + " timeout.");
     }
 }
 
@@ -689,7 +718,26 @@ void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* rem
 }
 
 void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size) {
-    oob_remote_op(OOB_OP_READ, iov,iovcnt,remote_src_addr,rkey,size);
+    oob_remote_op(OOB_OP_READ, iov, iovcnt, remote_src_addr, rkey, size);
+}
+
+void _resources::oob_send(const struct iovec* iov, int iovcnt) {
+    oob_remote_op(OOB_OP_SEND, iov, iovcnt, 0, 0, 0);
+}
+
+void _resources::oob_recv(const struct iovec* iov, int iovcnt) {
+    oob_remote_op(OOB_OP_RECV, iov, iovcnt, 0, 0, 0);
+}
+
+void _resources::wait_for_oob_op(uint32_t op, uint64_t timeout_us) {
+    switch(op){
+    case OOB_OP_READ:
+    case OOB_OP_WRITE:
+    case OOB_OP_SEND:
+    case OOB_OP_RECV:
+    default:
+        wait_for_thread_local_completion_entries(1, timeout_us);
+    }
 }
 
 void resources::report_failure() {
@@ -728,7 +776,7 @@ void resources::post_remote_write(const long long int offset, long long int size
     }
 }
 
-void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size) {
+void resources::post_remote_write_with_completion(lf_completion_entry_ctxt* ctxt, const long long int size) {
     int return_code = post_remote_send(ctxt, 0, size, 1, true);
     if(return_code != 0) {
         dbg_error(sst_logger, "post_remote_write(3) failed with return code {}", return_code);
@@ -736,7 +784,7 @@ void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const lo
     }
 }
 
-void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources::post_remote_write_with_completion(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size) {
     int return_code = post_remote_send(ctxt, offset, size, 1, true);
     if(return_code != 0) {
         dbg_error(sst_logger, "post_remote_write(4) failed with return code {}", return_code);
@@ -772,35 +820,35 @@ void resources_two_sided::post_two_sided_send(const long long int offset, const 
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(lf_completion_entry_ctxt* ctxt, const long long int size) {
     int rc = post_remote_send(ctxt, 0, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(ctxt, offset, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_id is" << ctxt->remote_id() << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int size) {
+void resources_two_sided::post_two_sided_receive(lf_completion_entry_ctxt* ctxt, const long long int size) {
     int rc = post_receive(ctxt, 0, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_receive(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_receive(ctxt, offset, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
-int resources_two_sided::post_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+int resources_two_sided::post_receive(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size) {
     struct iovec msg_iov;
     struct fi_msg msg;
     int ret;
@@ -880,7 +928,7 @@ void polling_loop() {
             // check if the system has been inactive for enough time to induce sleep
             double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
                                         + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
-            if(time_elapsed_in_ms > 1) {
+            if(time_elapsed_in_ms > 100) {
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
             }
@@ -910,7 +958,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         // check if the system has been inactive for enough time to induce sleep
         double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
                                     + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
-        if(time_elapsed_in_ms > 1) {
+        if(time_elapsed_in_ms > 100) {
             using namespace std::chrono_literals;
             std::this_thread::sleep_for(1ms);
         }
@@ -938,9 +986,12 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             dbg_error(g_ctxt.sst_logger, "\top_context:NULL");
         } else {
 #ifndef NOLOG
-            lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
+            lf_completion_entry_ctxt* ce_ctxt = (lf_completion_entry_ctxt*)eentry.op_context;
 #endif
-            dbg_error(g_ctxt.sst_logger, "\top_context:ce_idx={},remote_id={}", sctxt->ce_idx(), sctxt->remote_id());
+            dbg_error(g_ctxt.sst_logger, "\top_context:ce_idx={},remote_id={}", ce_ctxt->ce_idx(), ce_ctxt->remote_id());
+            if (!ce_ctxt->is_managed()) {
+                delete ce_ctxt;
+            }
         }
 #ifdef DEBUG_FOR_RELEASE
         printf("\tflags=%x\n", eentry.flags);
@@ -975,8 +1026,8 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         /**
          * Since eentry.op_context is unreliable, we ignore it with returning a generic error.
         if(eentry.op_context != NULL) {
-            lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
-            return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
+            lf_completion_entry_ctxt* ce_ctxt = (lf_completion_entry_ctxt*)eentry.op_context;
+            return {ce_ctxt->ce_idx(), {ce_ctxt->remote_id(), -1}};
         } else {
             dbg_error(g_ctxt.sst_logger, "\tFailed polling the completion queue");
             fprintf(stderr, "Failed polling the completion queue");
@@ -986,13 +1037,18 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         return {(uint32_t)0xFFFFFFFF, {0, -1}};  // we don't know who sent the message.
     }
     if(!shutdown) {
-        lf_sender_ctxt* sctxt = (lf_sender_ctxt*)entry.op_context;
-        if(sctxt == NULL) {
+        lf_completion_entry_ctxt* ce_ctxt = (lf_completion_entry_ctxt*)entry.op_context;
+        if(ce_ctxt == NULL) {
             dbg_debug(g_ctxt.sst_logger, "WEIRD: we get an entry with op_context = NULL.");
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!
         } else {
-            //dbg_trace(g_ctxt.sst_logger, "Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
-            return {sctxt->ce_idx(), {sctxt->remote_id(), 1}};
+            
+            // dbg_trace(g_ctxt.sst_logger, "Normal: we get an entry with op_context = {:p}.", static_cast<void*>(ce_ctxt));
+            std::pair<uint32_t,std::pair<int32_t,int32_t>> ret = {ce_ctxt->ce_idx(), {ce_ctxt->remote_id(), 1}};
+            if (!ce_ctxt->is_managed()) {
+                delete ce_ctxt;
+            }
+            return ret;
         }
     } else {  // shutdown return a bad entry
         return {0, {0, 0}};
@@ -1043,8 +1099,29 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& in
 
     //dbg_default_info(fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
     // STEP 2: initialize fabric, domain, and completion queue
+    struct fi_info* info_candidates = nullptr;
     fail_if_nonzero_retry_on_eagain("fi_getinfo()", CRASH_ON_FAILURE,
-                                    fi_getinfo, LF_VERSION, nullptr, nullptr, 0, g_ctxt.hints, &(g_ctxt.fi));
+                                    fi_getinfo, LF_VERSION, nullptr, nullptr, 0, g_ctxt.hints, &(info_candidates));
+
+    // TOOD: this is a bug in libfabric till at least v1.18.1:
+    // fi_getinfo() does not respect hints->domain_attr.
+    struct fi_info* info_candidate = info_candidates;
+    while (info_candidate != nullptr) {
+        assert(g_ctxt.hints->domain_attr->name);
+        if (strcmp(info_candidate->domain_attr->name,g_ctxt.hints->domain_attr->name)) {
+            info_candidate = info_candidate->next;
+        } else {
+            // found
+            g_ctxt.fi = fi_dupinfo(info_candidate);
+            break;
+        }
+    }
+
+    fi_freeinfo(info_candidates);
+    if (g_ctxt.fi == nullptr) {
+        crash_with_message("SST: failed to get an fi_info data structure.");
+    }
+
     dbg_trace(logger, "going to use virtual address?{}", LF_USE_VADDR);
     fail_if_nonzero_retry_on_eagain("fi_fabric()", CRASH_ON_FAILURE,
                                     fi_fabric, g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), nullptr);

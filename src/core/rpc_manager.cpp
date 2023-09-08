@@ -573,7 +573,8 @@ void RPCManager::p2p_receive_loop() {
                                         + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
             if(time_elapsed_in_ms > busy_wait_before_sleep_ms) {
                 using namespace std::chrono_literals;
-                std::this_thread::sleep_for(1ms);
+                // std::this_thread::sleep_for(1ms);
+                std::this_thread::yield();
             }
         }
     }
@@ -593,6 +594,19 @@ void RPCManager::oob_remote_write(const node_id_t& remote_node, const struct iov
 void RPCManager::oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size) {
     connections->oob_remote_read(remote_node, iov, iovcnt, remote_src_addr, rkey, size);
 }
+
+void RPCManager::oob_send(const node_id_t& remote_node, const struct iovec* iov, int iovcnt) {
+    connections->oob_send(remote_node, iov, iovcnt);
+}
+
+void RPCManager::oob_recv(const node_id_t& remote_node, const struct iovec* iov, int iovcnt) {
+    connections->oob_recv(remote_node, iov, iovcnt);
+}
+
+void RPCManager::wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us) {
+    connections->wait_for_oob_op(remote_node, op, timeout_us);
+}
+
 bool in_rpc_handler() {
     return _in_rpc_handler;
 }

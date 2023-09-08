@@ -79,17 +79,17 @@ int main() {
 
     // remotely write data from the write_buf
 #ifdef USE_VERBS_API
-    struct verbs_sender_ctxt sctxt;
+    struct verbs_sender_ctxt ce_ctxt;
 #else
-    struct lf_sender_ctxt sctxt;
+    lf_completion_entry_ctxt ce_ctxt;
 #endif
-    sctxt.set_remote_id(r_index);
-    sctxt.set_ce_idx(id);
-    res->post_remote_write_with_completion(&sctxt, ROWSIZE);
+    ce_ctxt.set_remote_id(r_index);
+    ce_ctxt.set_ce_idx(id);
+    res->post_remote_write_with_completion(&ce_ctxt, ROWSIZE);
     // poll for completion
     while(true)
     {
-      auto ce =  util::polling_data.get_completion_entry(tid);
+      auto ce =  util::polling_data.get_completion_entry(tid,r_index);
       if (ce) break;
     }
     sync(r_index);

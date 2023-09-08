@@ -1,7 +1,11 @@
+Derecho Documentation {#mainpage}
+=====================
+
 Full source documentation can be found at https://derecho-project.github.io/.
 
+# Derecho
+[![Build Status](https://travis-ci.com/Derecho-Project/derecho.svg?branch=master)](https://travis-ci.com/Derecho-Project/derecho)
 
-# Derecho [![Build Status](https://travis-ci.com/Derecho-Project/derecho.svg?branch=master)](https://travis-ci.com/Derecho-Project/derecho)
 This is the main repository for the Derecho project. It contains all of the Derecho library code, as well as several sample applications and test programs.
 
 # Table of Contents
@@ -514,8 +518,6 @@ Once the version vector is set up with Derecho, the application can query the va
 
 ###  Notes on Very Large Deployments
 We are committed to supporting Derecho with RDMA on 1000 (or even more) physical nodes, one application instance per node.  On a machine that actually allows some small number K of applications to share an RDMA NIC, we would even be happy to help get things working with k\*1000's of group members... eventually.  However, we do not recommend that Derecho developers start by trying to work at that scale before gaining experience at smaller scales.  Even launching a Derecho test program at that scale would be very challenging, and we will only be able to help if the team undertaking this has a good level of experience with the system at smaller scales.
-<details><summary>More on very large deployments</summary>
-<p>
 
 Moreover, "running Derecho" is a bit of a broad term.  For example, we view it as highly experimental to run with TCP on more than 16-32 nodes (we do want to scale over TCP, but it will take time).  So we would not recommend attempting to run Derecho on TCP at 1000-node scale, no matter how good your reasons: this very likely will be hard to engineer into our TCP layering, which actually runs over LibFabric, and would likely expose LibFabric scaling and performance issues.  Similarly, it is not wise to try and run 1000 Derecho application instances on, for example, 2 AWS servers, using AWS container virtualization (or the same comment with Azure, or Google, or IBM, or whatever as your provider).  That will never work, due to timeouts, and we will not try to support that sort of thing: it would be a waste of our time.   Container virtualization isn't capable of supporting this kind of application.
 
@@ -529,5 +531,3 @@ Our largest Derecho experiments have been on a Texas supercomputer, where we had
 
 So... the concept of Derecho at 1000's of nodes is something we definitely intend to support, in some specific situations where the goal makes sense, the underlying infrastructure should be able to do it, and where we have access to do debugging of our own RDMA layers during the startup.  But this isn't a sensible thing to do as your very first Derecho deployment!
 
-</p>
-</details>

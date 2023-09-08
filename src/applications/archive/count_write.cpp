@@ -141,7 +141,7 @@ int main() {
                     }
                 }
                 for(int i = 0; i < num_nodes; ++i) {
-                    util::polling_data.get_completion_entry(tid);
+                    util::polling_data.get_completion_entry(tid,i);
                 }
                 util::polling_data.reset_waiting(tid);
 
