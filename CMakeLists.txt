@@ -35,6 +35,11 @@ include(GetGitRevisionDescription)
 # libfabric_INCLUDE_DIRS
 # libfabric_LIBRARIES
 find_package(libfabric 1.12.1 REQUIRED)
+if(${libfabric_FOUND})
+    include_directories(${libfabric_INCLUDE_DIRS})
+else()
+    message(FATAL_ERROR "Required library LibFabric not found")
+endif()
 
 # These packages export their location information in the "new" way,
 # by providing an IMPORT-type CMake target that you can use as a
