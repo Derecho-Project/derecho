@@ -16,3 +16,4 @@ git checkout v3.11.1
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} .
 make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
 make install
+rm -rf ${WORKPATH}
