@@ -605,8 +605,8 @@ uint64_t Group<ReplicatedTypes...>::get_oob_memory_key(void* addr) {
 }
 
 template <typename... ReplicatedTypes>
-void Group<ReplicatedTypes...>::unregister_oob_memory(void* addr) {
-    sst::P2PConnection::unregister_oob_memory(addr);
+void Group<ReplicatedTypes...>::deregister_oob_memory(void* addr) {
+    sst::P2PConnection::deregister_oob_memory(addr);
 }
 
 } /* namespace derecho */

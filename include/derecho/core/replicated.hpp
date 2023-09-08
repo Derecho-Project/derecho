@@ -1,7 +1,6 @@
 /**
- * @file replicated.h
- *
- * @date Feb 3, 2017
+ * @file    replicated.hpp
+ * @brief   Declaration of the `Replicated<T>` class template.
  */
 
 #pragma once
@@ -439,8 +438,9 @@ public:
     virtual void register_persistent_member(const char* object_name,
                                             persistent::PersistentObject* member_pointer);
 
-    /*
-     * expose reference to the wrapped user object.
+    /**
+     * @brief   Expose reference to the wrapped user object.
+     *
      * IMPORTANT NOTICE: predicate thread keeps changing the user object, you might read inconsistent data if the
      * function you called is not thread-safe. This is a dilemma because we don't want any lock on the predicate thread
      * to slow it down. Plesae always use light-weighted and lockless synchronization primitives.
@@ -449,29 +449,87 @@ public:
      */
     virtual const T& get_ref() const;
 
-    /*
-     * write to remote OOB memory
-     * @param remote_node       remote node id
-     * @param iov               gather of local memory regions
-     * @param iovcnt
-     * @param remote_dest_addr  the address of the remote memory region
-     * @param rkey              the access key for remote memory
-     * @param size              the size of the remote memory region
+    /**
+     * @brief   One-sided RDMA write to remote OOB memory.
+     *
+     * Write to remote OOB memory, a following `wait_for_oob_op(remote_node, OOB_OP_WRITE, timeout)`
+     * MUST be called in the same thread.
+     *
+     * @param[in]   remote_node     Remote node id
+     * @param[in]   iov             Local memory regions
+     * @param[in]   iovcnt          The number of gatter entries in iov.
+     * @param[in]   remote_dest_addr
+     *                              The address of the remote memory region
+     * @param[in]   rkey            The access key for remote memory
+     * @param[in]   size            The size of the remote memory region
+     *
      * @throw                   derecho::derecho_exception on error
      */
-    virtual void oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, uint64_t rkey, size_t size);
+    virtual void oob_remote_write(
+            const node_id_t& remote_node,
+            const struct iovec* iov, int iovcnt, 
+            uint64_t remote_dest_addr, uint64_t rkey, size_t size);
 
-    /*
-     * read from remote OOB memory
-     * @param remote_node       remote node id
-     * @param iov               scatter of local memory regions
-     * @param iovcnt
-     * @param remote_src_addr   the address of the remote memory region
-     * @param rkey              the access key for remote memory
-     * @param size              the size of the remote memory region
+    /**
+     * @brief   One-sided RDMA read from remote OOB memory.
+     *
+     * Read from remote OOB memory, a following `wait_for_oob_op(remote_node, OOB_OP_READ, timeout)`
+     * MUST be called in the same thread.
+     *
+     * @param[in]   remote_node     Remote node id.
+     * @param[in]   iov             Local memory regions.
+     * @param[in]   iovcnt          The number of scatter entries in iov.
+     * @param[in]   remote_src_addr The address of the remote memory region
+     * @param[in]   rkey            The access key for remote memory
+     * @param[in]   size            The size of the remote memory region
+     *
      * @throw                   derecho::derecho_exception on error
      */
-    virtual void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size);
+    virtual void oob_remote_read(
+            const node_id_t& remote_node,
+            const struct iovec* iov, int iovcnt,
+            uint64_t remote_src_addr, uint64_t rkey, size_t size);
+
+    /**
+     * @brief   Two-sided RDMA send a local OOB buffer.
+     *
+     * Send data in buffer(s) to remote, a following `wait_for_oob_op(remote_node, OOB_OP_SEND, timeout)`
+     * MUST be called in the same thread.
+     *
+     * @param[in]   remote_node     Remote node id.
+     * @param[in]   iov             Local memory regions.
+     * @param[in]   iovcnt          The number of gather entries in iov.
+     *
+     * @throw                   derecho::derecho_exception on error
+     */
+    virtual void oob_send(const node_id_t& remote_node, const struct iovec* iov, int iovcnt);
+
+    /**
+     * @brief   Two-sided RDMA receive to a local OOB buffer.
+     *
+     * Receive remote data to local buffers, a following `wait_for_oob_op(remote_node, OOB_OP_RECV, timeout)`
+     * MUST be called in the same thread.
+     *
+     * @param[in]   remote_node     Remote node id.
+     * @param[in]   iov             Local memory regions for receiving.
+     * @param[in]   iovcnt          The number of scatter entries in iov.
+     *
+     * @throw                   derecho::derecho_exception on error
+     */
+    virtual void oob_recv(const node_id_t& remote_node, const struct iovec* iov, int iovcnt);
+
+    /**
+     * @brief   Wait for non-blocking OOB operation.
+     *
+     * Wait for a certain type of non-blocking OOB operation to finish.
+     *
+     * @param[in]   remote_node     Remote node id
+     * @param[in]   op              The operation to wait for
+     * @param[in]   timeout_us      Timeout settings in microseconds.
+     *
+     * @throw                   derecho::derecho_exception on error
+     */
+    virtual void wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us);
 };
 
 template <typename T>

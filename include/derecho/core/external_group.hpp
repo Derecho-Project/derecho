@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file    external_group.hpp
+ * @brief   This file contains the APIs for external clients.
+ */
+
 #include "derecho/conf/conf.hpp"
 #include "detail/connection_manager.hpp"
 #include "detail/p2p_connection_manager.hpp"
@@ -301,11 +306,11 @@ public:
     void register_oob_memory(void* addr, size_t size);
 
     /**
-     * Unregister Out-of-band memory region
+     * Deregister Out-of-band memory region
      * @param addr      The address of the memory region, which has been used for register_oob_memory
      * @throw           derecho::derecho_exception on failure
      */
-    void unregister_oob_memory(void* addr);
+    void deregister_oob_memory(void* addr);
 };
 }  // namespace derecho
 

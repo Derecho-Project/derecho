@@ -167,9 +167,9 @@ void P2PConnectionManager::check_failures_loop() {
 
         util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API
-        std::map<uint32_t, verbs_sender_ctxt> sctxt;
+        std::map<uint32_t, verbs_sender_ctxt> ce_ctxt;
 #else
-        std::map<uint32_t, lf_sender_ctxt> sctxt;
+        std::map<uint32_t, lf_completion_entry_ctxt> ce_ctxt;
 #endif
 
         for(node_id_t node_id = 0; node_id < p2p_connections.size(); ++node_id) {
@@ -184,10 +184,10 @@ void P2PConnectionManager::check_failures_loop() {
                 continue;
             }
             p2p_connections[node_id].second->num_rdma_writes = 0;
-            sctxt[node_id].set_remote_id(node_id);
-            sctxt[node_id].set_ce_idx(ce_idx);
+            ce_ctxt[node_id].set_remote_id(node_id);
+            ce_ctxt[node_id].set_ce_idx(ce_idx);
 
-            p2p_connections[node_id].second->get_res()->post_remote_write_with_completion(&sctxt[node_id],
+            p2p_connections[node_id].second->get_res()->post_remote_write_with_completion(&ce_ctxt[node_id],
                                                                                           p2p_buf_size - sizeof(bool),
                                                                                           sizeof(bool));
             posted_write_to.insert(node_id);
@@ -198,7 +198,7 @@ void P2PConnectionManager::check_failures_loop() {
 
         // track which nodes respond successfully
         std::unordered_set<node_id_t> polled_successfully_from;
-        std::vector<node_id_t> failed_node_indexes;
+        std::vector<node_id_t> failed_nodes;
 
         /** Completion Queue poll timeout in millisec */
         const unsigned int MAX_POLL_CQ_TIMEOUT = derecho::getConfUInt32(derecho::Conf::DERECHO_SST_POLL_CQ_TIMEOUT_MS);
@@ -210,12 +210,12 @@ void P2PConnectionManager::check_failures_loop() {
         gettimeofday(&cur_time, NULL);
         start_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
 
-        for(unsigned int i = 0; i < posted_write_to.size(); i++) {
-            std::optional<std::pair<int32_t, int32_t>> ce;
+        for (node_id_t nid :  posted_write_to) {
+            std::optional<int32_t> result;
             while(true) {
                 // check if polling result is available
-                ce = util::polling_data.get_completion_entry(tid);
-                if(ce) {
+                result = util::polling_data.get_completion_entry(tid,nid);
+                if(result) {
                     break;
                 }
                 gettimeofday(&cur_time, NULL);
@@ -225,30 +225,17 @@ void P2PConnectionManager::check_failures_loop() {
                     break;
                 }
             }
-            // if waiting for a completion entry timed out
-            if(!ce) {
-                // mark all nodes that have not yet responded as failed
-                for(const node_id_t& posted_id : posted_write_to) {
-                    if(polled_successfully_from.find(posted_id) != polled_successfully_from.end()) {
-                        continue;
-                    }
-                    failed_node_indexes.push_back(posted_id);
-                }
-                break;
-            }
 
-            auto ce_v = ce.value();
-            int remote_id = ce_v.first;
-            int result = ce_v.second;
-            if(result == 1) {
-                polled_successfully_from.insert(remote_id);
-            } else if(result == -1) {
-                failed_node_indexes.push_back(remote_id);
+            if (result && result.value() == 1) {
+                polled_successfully_from.insert(nid);
+            } else {
+                failed_nodes.push_back(nid);
             }
         }
+
         util::polling_data.reset_waiting(tid);
 
-        for(auto nid : failed_node_indexes) {
+        for(auto nid : failed_nodes) {
             dbg_debug(rpc_logger, "p2p_connection_manager detected failure/timeout on node {}", nid);
             {
                 std::lock_guard<std::mutex> connection_lock(p2p_connections[nid].first);
@@ -333,6 +320,40 @@ void P2PConnectionManager::oob_remote_read(const node_id_t& remote_node, const s
         throw derecho::derecho_exception("oob read from inactive node:" + std::to_string(remote_node));
     }
     p2p_connections[remote_node].second->oob_remote_read(iov,iovcnt,reinterpret_cast<void*>(remote_src_addr),rkey,size);
+}
+
+void P2PConnectionManager::oob_send(const node_id_t& remote_node, const struct iovec* iov, int iovcnt) {
+    std::lock_guard lck(p2p_connections[remote_node].first);
+    if (p2p_connections[remote_node].second == nullptr) {
+        throw derecho::derecho_exception("oob read from unconnected node:" + std::to_string(remote_node));
+    }
+    if (active_p2p_connections[remote_node] == false) {
+        throw derecho::derecho_exception("oob read from inactive node:" + std::to_string(remote_node));
+    }
+    p2p_connections[remote_node].second->oob_send(iov,iovcnt);
+}
+
+void P2PConnectionManager::oob_recv(const node_id_t& remote_node, const struct iovec* iov, int iovcnt) {
+    std::lock_guard lck(p2p_connections[remote_node].first);
+    if (p2p_connections[remote_node].second == nullptr) {
+        throw derecho::derecho_exception("oob read from unconnected node:" + std::to_string(remote_node));
+    }
+    if (active_p2p_connections[remote_node] == false) {
+        throw derecho::derecho_exception("oob read from inactive node:" + std::to_string(remote_node));
+    }
+    p2p_connections[remote_node].second->oob_recv(iov,iovcnt);
+}
+
+void P2PConnectionManager::wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us) {
+    // TODO: probably it's better to expose wait_for_oob_op as a static function to avoid the lock here.
+    std::lock_guard lck(p2p_connections[remote_node].first);
+    if (p2p_connections[remote_node].second == nullptr) {
+        throw derecho::derecho_exception("oob read from unconnected node:" + std::to_string(remote_node));
+    }
+    if (active_p2p_connections[remote_node] == false) {
+        throw derecho::derecho_exception("oob read from inactive node:" + std::to_string(remote_node));
+    }
+    p2p_connections[remote_node].second->wait_for_oob_op(op,timeout_us);
 }
 
 }  // namespace sst

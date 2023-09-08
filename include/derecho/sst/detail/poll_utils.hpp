@@ -11,14 +11,8 @@
 namespace sst {
 namespace util {
 class PollingData {
-    // static std::vector<std::list<std::pair<int32_t, int32_t>>> completion_entries;
-    // static std::map<std::thread::id, uint32_t> tid_to_index;
-    // static std::vector<bool> if_waiting;
-    // static std::condition_variable poll_cv;
-    // static std::mutex poll_mutex;
-    // static bool check_waiting();
-
-    std::vector<std::list<std::pair<int32_t, int32_t>>> completion_entries;
+    // map:node_id->[list of return values]
+    std::vector<std::map<int32_t, std::list<int32_t>>> completion_entries;
     std::map<std::thread::id, uint32_t> tid_to_index;
     std::vector<bool> if_waiting;
     std::condition_variable poll_cv;
@@ -27,7 +21,8 @@ class PollingData {
 public:
     void insert_completion_entry(uint32_t index, std::pair<int32_t, int32_t> ce);
 
-    std::optional<std::pair<int32_t, int32_t>> get_completion_entry(const std::thread::id id);
+    // std::optional<std::pair<int32_t, int32_t>> get_completion_entry(const std::thread::id id);
+    std::optional<int32_t> get_completion_entry(const std::thread::id tid, const int nid);
 
     uint32_t get_index(const std::thread::id id);
 

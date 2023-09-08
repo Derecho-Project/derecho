@@ -1,7 +1,6 @@
 /**
- * @file derecho_exception.h
- *
- * @date Feb 13, 2017
+ * @file    derecho_exception.hpp
+ * @brief   This file defines the exception types in Derecho.
  */
 
 #pragma once

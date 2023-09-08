@@ -22,24 +22,32 @@ bool PollingData::check_waiting() {
 
 void PollingData::insert_completion_entry(uint32_t index, std::pair<int32_t, int32_t> ce) {
     std::lock_guard<std::mutex> lk(poll_mutex);
-    completion_entries[index].push_back(ce);
+    int32_t nid     = ce.first;
+    int32_t result  = ce.second;
+    if (completion_entries[index].find(nid) == completion_entries[index].end()) {
+        completion_entries[index].emplace(std::pair<int32_t,std::list<int32_t>>{nid,{}});
+    }
+    completion_entries[index][nid].push_back(result);
 }
 
-std::optional<std::pair<int32_t, int32_t>> PollingData::get_completion_entry(const std::thread::id id) {
+std::optional<int32_t> PollingData::get_completion_entry(const std::thread::id tid, const int nid) {
     std::lock_guard<std::mutex> lk(poll_mutex);
-    auto index = tid_to_index[id];
-    if(completion_entries[index].empty()) {
+    auto index = tid_to_index[tid];
+    if(completion_entries[index].find(nid)==completion_entries[index].end()) {
         return {};
     }
-    auto ce = completion_entries[index].front();
-    completion_entries[index].pop_front();
-    return ce;
+    if(completion_entries[index][nid].empty()) {
+        return {};
+    }
+    int32_t result = completion_entries[index][nid].front();
+    completion_entries[index][nid].pop_front();
+    return result;
 }
 
 uint32_t PollingData::get_index(const std::thread::id id) {
     std::lock_guard<std::mutex> lk(poll_mutex);
     if(tid_to_index.find(id) == tid_to_index.end()) {
-        completion_entries.push_back(std::list<std::pair<int32_t, int32_t>>());
+        completion_entries.push_back(std::map<int32_t,std::list<int32_t>>());
         tid_to_index[id] = completion_entries.size() - 1;
         if_waiting.push_back(false);
     }

@@ -406,6 +406,7 @@ public:
      * Get the id of the latest rpc caller.
      */
     static node_id_t get_rpc_caller_id();
+
     /**
      * write to remote OOB memory
      * @param remote_node       remote node id
@@ -414,9 +415,13 @@ public:
      * @param remote_dest_addr  the address of the remote memory region
      * @param rkey              the access key for remote memory
      * @param size              the size of the remote memory region
+     *
      * @throw                   derecho::derecho_exception on error
      */
-    void oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, uint64_t rkey, size_t size);
+    void oob_remote_write(
+            const node_id_t& remote_node, const struct iovec* iov, int iovcnt,
+            uint64_t remote_dest_addr, uint64_t rkey, size_t size);
+
     /**
      * read from remote OOB memory
      * @param remote_node       remote node id
@@ -425,9 +430,42 @@ public:
      * @param remote_src_addr   the address of the remote memory region
      * @param rkey              the access key for remote memory
      * @param size              the size of the remote memory region
+     *
      * @throw                   derecho::derecho_exception on error
      */
-    void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size);
+    void oob_remote_read(
+            const node_id_t& remote_node, const struct iovec* iov, int iovcnt,
+            uint64_t remote_src_addr, uint64_t rkey, size_t size);
+
+    /**
+     * send data in local buffer to remote
+     * @param remote_node       remote node id
+     * @param iov               scatter of local memory regions
+     * @param iovcnt
+     *
+     * @throw                   derecho::derecho_exception on error
+     */
+    void oob_send(const node_id_t& remote_node, const struct iovec* iov, int iovcnt);
+
+    /**
+     * receive remote data to local buffer
+     * @param remote_node       remote node id
+     * @param iov               scatter of local memory regions
+     * @param iovcnt
+     *
+     * @throw                   derecho::derecho_exception on error
+     */
+    void oob_recv(const node_id_t& remote_node, const struct iovec* iov, int iovcnt);
+
+    /**
+     * wait for a non-blocking event.
+     * @param remote_node       remote node id
+     * @param op                the operation
+     * @param timeout_us        timeout settings in microseconds
+     *
+     * @throw                   derecho::derecho_exception on error
+     */
+    void wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us);
 };
 
 // Now that RPCManager is finished being declared, we can declare these convenience types

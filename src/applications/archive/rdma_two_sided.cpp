@@ -27,8 +27,8 @@ void initialize(int node_rank, const map<uint32_t, std::pair<string, uint16_t>> 
 #endif
 }
 
-void wait_for_completion(std::thread::id tid) {
-    std::optional<std::pair<int32_t, int32_t>> ce;
+void wait_for_completion(std::thread::id tid,int32_t nid) {
+    std::optional<int32_t> cr;
 
     unsigned long start_time_msec;
     unsigned long cur_time_msec;
@@ -40,18 +40,18 @@ void wait_for_completion(std::thread::id tid) {
 
     while(true) {
         // check if polling result is available
-        ce = util::polling_data.get_completion_entry(tid);
-        if(ce) {
+        cr = util::polling_data.get_completion_entry(tid,nid);
+        if(cr) {
             break;
         }
         gettimeofday(&cur_time, NULL);
-	cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
+        cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
         if((cur_time_msec - start_time_msec) >= 2000) {
             break;
         }
     }
     // if waiting for a completion entry timed out
-    if(!ce) {
+    if(!cr) {
         std::cerr << "Failed to get recv completion" << std::endl;
     }
 }
@@ -99,12 +99,12 @@ int main() {
 
     util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API
-    struct verbs_sender_ctxt sctxt;
+    struct verbs_sender_ctxt ce_ctxt;
 #else
-    struct lf_sender_ctxt sctxt;
+    lf_completion_entry_ctxt ce_ctxt;
 #endif
-    sctxt.set_remote_id(r_index);
-    sctxt.set_ce_idx(id);
+    ce_ctxt.set_remote_id(r_index);
+    ce_ctxt.set_ce_idx(id);
 
     if(node_rank == 0) {
         // wait for random time
@@ -116,10 +116,10 @@ int main() {
         a = 1;
         res->post_two_sided_send(sizeof(int));
         util::polling_data.set_waiting(tid);
-        res->post_two_sided_receive(&sctxt, sizeof(int));
+        res->post_two_sided_receive(&ce_ctxt, sizeof(int));
 
         cout << "Receive buffer posted" << endl;
-        wait_for_completion(tid);
+        wait_for_completion(tid,r_index);
         util::polling_data.reset_waiting(tid);
         cout << "Data received" << endl;
 
@@ -129,9 +129,9 @@ int main() {
 
     else {
         util::polling_data.set_waiting(tid);
-        res->post_two_sided_receive(&sctxt, sizeof(int));
+        res->post_two_sided_receive(&ce_ctxt, sizeof(int));
         cout << "Receive buffer posted" << endl;
-        wait_for_completion(tid);
+        wait_for_completion(tid,r_index);
         util::polling_data.reset_waiting(tid);
         cout << "Data received" << endl;
         while(b == 0) {
