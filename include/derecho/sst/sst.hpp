@@ -170,8 +170,8 @@ private:
     void init_SSTFields(Fields&... fields) {
         rowLen = 0;
         compute_rowLen(rowLen, fields...);
-	void* mem_ptr = new uint8_t[rowLen * num_members];
-	bzero(mem_ptr,rowLen * num_members);
+        void* mem_ptr = new uint8_t[rowLen * num_members];
+        memset(mem_ptr, 0, rowLen * num_members);
         rows = (volatile uint8_t*)mem_ptr;
         // snapshot = new uint8_t[rowLen * num_members];
         volatile uint8_t* base = rows;

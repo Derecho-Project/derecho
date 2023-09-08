@@ -544,7 +544,7 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, cons
         // ObjectType does not support Delta, logging the whole current state.
         auto size = mutils::bytes_size(v);
         uint8_t* buf = new uint8_t[size];
-        bzero(buf, size);
+        memset(buf, 0, size);
         mutils::to_bytes(v, buf);
         this->m_pLog->append((void*)buf, size, ver, mhlc);
         delete[] buf;

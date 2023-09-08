@@ -180,7 +180,7 @@ memory_region::memory_region(uint8_t* buf, size_t s) : buffer(buf), size(s) {
     const int mr_access = FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE;
 
     /** touch the memory region before register it, because some libfabric providers might not do that in fi_mr_reg **/
-    bzero(reinterpret_cast<void*>(buffer),size);
+    memset(reinterpret_cast<void*>(buffer), 0, size);
 
     /** Register the memory, use it to construct a smart pointer */
     fid_mr* raw_mr;

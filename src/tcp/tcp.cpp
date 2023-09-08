@@ -33,8 +33,7 @@ socket::socket(std::string server_ip, uint16_t server_port, bool retry)
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(server_port);
-    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,
-          server->h_length);
+    memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
 
     int optval = 1;
     if(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval))) {
@@ -75,7 +74,7 @@ socket::~socket() {
     if(sock >= 0) close(sock);
 }
 
-bool socket::is_empty() const { return sock == -1; }
+bool socket::is_empty() const noexcept { return sock == -1; }
 
 int socket::try_connect(std::string servername, uint16_t port, int timeout_ms) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -94,8 +93,7 @@ int socket::try_connect(std::string servername, uint16_t port, int timeout_ms) {
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
-    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,
-          server->h_length);
+    memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
 
     //Temporarily set socket to nonblocking in order to connect with a timeout
     int sock_flags = fcntl(sock, F_GETFL, 0);
@@ -176,7 +174,7 @@ ssize_t socket::read_partial(uint8_t* buffer, size_t max_size) {
     ssize_t bytes_read = ::read(sock, buffer, max_size);
     return bytes_read;
 }
-bool socket::probe() {
+bool socket::probe() const noexcept {
     int count;
     ioctl(sock, FIONREAD, &count);
     return count > 0;
@@ -205,11 +203,13 @@ void socket::write(const uint8_t* buffer, size_t size) {
     }
 }
 
-std::string socket::get_self_ip() {
+std::string socket::get_self_ip() const {
     struct sockaddr_storage my_addr_info;
     socklen_t len = sizeof my_addr_info;
 
-    getsockname(sock, (struct sockaddr*)&my_addr_info, &len);
+    if(getsockname(sock, (struct sockaddr*)&my_addr_info, &len) < 0) {
+        throw socket_io_error(errno, "get_self_ip(): getsockname failed with error " + std::to_string(errno) + ":" + strerror(errno));
+    }
     char my_ip_cstr[INET6_ADDRSTRLEN + 1];
     if(my_addr_info.ss_family == AF_INET) {
         struct sockaddr_in* s = (struct sockaddr_in*)&my_addr_info;
@@ -280,7 +280,7 @@ socket connection_listener::accept() {
     return socket(sock, std::string(client_ip_cstr), client_port);
 }
 
-std::optional<socket> connection_listener::try_accept(int timeout_ms) {
+std::optional<socket> connection_listener::try_accept(int timeout_ms) noexcept {
     //Temporarily set server socket to nonblocking
     int socket_flags = fcntl(*fd, F_GETFL, 0);
     socket_flags |= O_NONBLOCK;

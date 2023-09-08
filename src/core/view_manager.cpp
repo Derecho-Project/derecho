@@ -237,7 +237,26 @@ bool ViewManager::receive_initial_view() {
 
     in_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
     if(in_total_restart) {
-        dbg_info(vm_logger, "Logged state found on disk. Restarting in recovery mode.");
+        dbg_info(vm_logger, "Connected to leader in recovery mode.");
+        if(!curr_view) {
+            dbg_debug(vm_logger, "No logged View found, but leader is in recovery mode. Sending an invalid view.");
+            curr_view = std::make_unique<View>(-1, std::vector<node_id_t>{}, std::vector<IpAndPorts>{},
+                                               std::vector<char>{}, std::vector<node_id_t>{},
+                                               std::vector<node_id_t>{}, 0, 0,
+                                               std::vector<std::type_index>{});
+            // Initialize restart_state, which wasn't created in first_init() because we had no logged View
+            restart_state = std::make_unique<RestartState>();
+            restart_state->restart_leader_ips = split_string(getConfString(CONF_DERECHO_RESTART_LEADERS));
+            restart_state->restart_leader_ports = [&]() {
+                auto port_list = split_string(getConfString(CONF_DERECHO_RESTART_LEADER_PORTS));
+                std::vector<uint16_t> ports;
+                for(const auto& port_str : port_list) {
+                    ports.emplace_back((uint16_t)std::stoi(port_str));
+                }
+                return ports;
+            }();
+            restart_state->num_leader_failures = 0;
+        }
         dbg_debug(vm_logger, "Sending view {} to leader", curr_view->vid);
         auto leader_socket_write = [this](const uint8_t* bytes, std::size_t size) {
             leader_connection->write(bytes, size);

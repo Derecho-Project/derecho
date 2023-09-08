@@ -237,7 +237,7 @@ int main(int argc, char* argv[]) {
 
     if(is_sending) {
         uint8_t* bbuf = new uint8_t[msg_size];
-        bzero(bbuf, msg_size);
+        memset(bbuf, 0, msg_size);
         Bytes bs(bbuf, msg_size);
 
         try {
