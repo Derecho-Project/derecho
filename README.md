@@ -4,7 +4,6 @@ Derecho Documentation {#mainpage}
 Full source documentation can be found at https://derecho-project.github.io/.
 
 # Derecho
-[![Build Status](https://travis-ci.com/Derecho-Project/derecho.svg?branch=master)](https://travis-ci.com/Derecho-Project/derecho)
 
 This is the main repository for the Derecho project. It contains all of the Derecho library code, as well as several sample applications and test programs.
 
