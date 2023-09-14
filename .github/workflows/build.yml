@@ -33,7 +33,7 @@ jobs:
       - run:  export LIBRARY_PATH=$PREFIX/lib/:$PREFIX/lib64/
       - run:  export LD_LIBRARY_PATH=$PREFIX/lib/:$PREFIX/lib64/
       - run:  cd ${{ github.workspace }}
-      - run:  mkdir build-Release cd build-Release
+      - run:  mkdir build-Release; cd build-Release
       - run:  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_INSTALL_PREFIX=${PREFIX} ..
       - run:  make install
       - run:  echo "The job's status is ${{ job.status }}."
