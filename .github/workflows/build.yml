@@ -19,13 +19,13 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - name: Install libfabric
-        run:  ${{ github.workspace }}/scripts/prerequisite/install-libfabric.sh ${{ github.repository }}/opt
+        run:  ${{ github.workspace }}/scripts/prerequisites/install-libfabric.sh ${{ github.repository }}/opt
       - name: Install json library
-        run:  ${{ github.workspace }}/scripts/prerequisite/install-json.sh ${{ github.repository }}/opt
+        run:  ${{ github.workspace }}/scripts/prerequisites/install-json.sh ${{ github.repository }}/opt
       - name: Install mutils
-        run:  ${{ github.workspace }}/scripts/prerequisite/install-mutils.sh ${{ github.workspace }}/opt
+        run:  ${{ github.workspace }}/scripts/prerequisites/install-mutils.sh ${{ github.workspace }}/opt
       - name: Install mutils-containers
-        run:  ${{ github.workspace }}/scripts/prerequisite/install-mutils-containers.sh ${{ github.workspace }}/opt
+        run:  ${{ github.workspace }}/scripts/prerequisites/install-mutils-containers.sh ${{ github.workspace }}/opt
       - run:  export PREFIX=${{ github.workspace }}/opt
       - run:  export CMAKE_PREFIX_PATH=$PREFIX
       - run:  export C_INCLUDE_PATH=$PREFIX/include/
