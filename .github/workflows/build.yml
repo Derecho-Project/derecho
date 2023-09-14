@@ -5,7 +5,7 @@ jobs:
   Placeholder:
     runs-on: ubuntu-latest
     steps:
-      - run:  echo "The job is automatically triggered by a ${{ github.event_name }} event.
+      - run:  echo "The job is automatically triggered by a ${{ github.event_name }} event."
       - run:  g++ --version
       - run:  cmake --version 
       - run:  dpkg -l | grep libibverbs-dev
