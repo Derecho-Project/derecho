@@ -1,6 +1,4 @@
 /**
- * @file ViewManager.cpp
- *
  * @date Feb 6, 2017
  */
 

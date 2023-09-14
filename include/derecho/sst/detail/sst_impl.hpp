@@ -1,5 +1,5 @@
 /**
- * @file sst_impl.h
+ * @file sst_impl.hpp
  *
  * @date Oct 28, 2016
  */

@@ -92,6 +92,7 @@ public:
      * blocking until the connection succeeds.
      * @param server_ip The IP address of the remote host, as a string
      * @param server_port The port to connect to on the remote host
+     * @param retry
      * @throw connection_failure if local socket construction or IP address
      * lookup fails.
      */

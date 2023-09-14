@@ -13,7 +13,9 @@
 #ifndef NDEBUG
 #undef NOLOG
 #endif
-
+/**
+ * @brief Logger factory class
+ */
 class LoggerFactory {
 private:
     static std::atomic<uint32_t> _initialize_state;
@@ -30,11 +32,11 @@ private:
 
 public:
     /** create a logger
-     * @PARAM logger_name
+     * @param logger_name
      *     Name of the logger. This name can be used in later calls to spdlog::get().
-     * @PARAM log_level
+     * @param log_level
      *     The level of the logger.
-     * @RETURN
+     * @return
      *     The created logger.
      */
     static std::shared_ptr<spdlog::logger> createLogger(

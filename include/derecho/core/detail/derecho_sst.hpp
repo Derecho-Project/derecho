@@ -177,8 +177,13 @@ public:
     /**
      * Constructs an SST, and initializes the GMS fields to "safe" initial values
      * (0, false, etc.). Initializing the MulticastGroup fields is left to MulticastGroup.
-     * @param parameters The SST parameters, which will be forwarded to the
-     * standard SST constructor.
+     * @param   parameters          The SST parameters, which will be forwarded to the
+     *                      standard SST constructor.
+     * @param   num_subgroups       Number of the subgroups
+     * @param   signature_size      Size of the signature
+     * @param   num_received_size   
+     * @param   slot_size
+     * @param   index_field_size
      */
     DerechoSST(const sst::SSTParams& parameters, uint32_t num_subgroups, uint32_t signature_size, uint32_t num_received_size, uint64_t slot_size, uint32_t index_field_size)
             : sst::SST<DerechoSST>(this, parameters),

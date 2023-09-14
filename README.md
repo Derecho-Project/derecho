@@ -98,10 +98,9 @@ Above, we noted that we hope to support Derecho on DPDK.  DPDK, like LibFabrics,
 * [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.3.1 or newer. On Ubuntu 19.04 and later this can be installed with the package `libspdlog-dev`. The version of spdlog in Ubuntu 18.04's repositories is too old, but if you are running Ubuntu 18.04 you can download the `libspdlog-dev` package [here](http://old-releases.ubuntu.com/ubuntu/pool/universe/s/spdlog/libspdlog-dev_1.3.1-1_amd64.deb) and install it manually with no other dependencies needed.
 * The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). Since this library's interface changes significantly between versions, please install `v1.12.1` from source rather than any packaged version. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
 * Lohmann's [JSON for Modern C++](https://github.com/nlohmann/json) library, v3.9 or newer. This library is not packaged for Ubuntu, but can easily be installed with our [installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-json.sh).
-* @mpmilano's C++ utilities, which are all CMake libraries that can be installed with "make install":
+* \@mpmilano's C++ utilities, which are all CMake libraries that can be installed with "make install":
   - [`mutils`](https://github.com/mpmilano/mutils) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils.sh))
   - [`mutils-containers`](https://github.com/mpmilano/mutils-containers) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-containers.sh))
-  - [`mutils-tasks`](https://github.com/mpmilano/mutils-tasks) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-tasks.sh))
 
 ### Getting Started
 To download the project, run
@@ -150,7 +149,7 @@ Three message-size options control the memory footprint and performance of Derec
 
 The options are named **max_payload_size**, **max_smc_payload_size**, **block_size**, **max_p2p_request_payload_size**, and **max_p2p_reply_payload_size**.
 
-No message bigger than **max_payload_size** will be sent by Derecho multicast(`Replicated<>::send()`). No message bigger than **max_p2p_request_payload_size** will be sent by Derecho p2p send(`Replicated<>::p2p_send()` or `ExternalClientCaller<>::p2p_send()`). No reply bigger than **max_p2p_reply_payload_size** will be sent to carry the return values any multicast or p2p send.
+No message bigger than **max_payload_size** will be sent by Derecho multicast(`derecho::Replicated::send`). No message bigger than **max_p2p_request_payload_size** will be sent by Derecho p2p send(`derecho::Replicated::p2p_send` or `derecho::ExternalClientCaller::p2p_send`). No reply bigger than **max_p2p_reply_payload_size** will be sent to carry the return values any multicast or p2p send.
 
 To understand the other two options, it helps to remember that internally, Derecho makes use of two sub-protocols when it transmits your data.  One sub-protocol is optimized for small messages, and is called SMC.  Messages equal to or smaller than **max_smc_payload_size** will be sent using SMC.  Normally **max_smc_payload_size** is set to a small value, like 1K, but we have tested with values up to 10K.  This limit should not be made much larger: performance will suffer and memory would bloat.
 

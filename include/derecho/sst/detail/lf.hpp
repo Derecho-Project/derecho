@@ -2,7 +2,7 @@
 #define LF_HPP
 
 /**
- * @file lf.h
+ * @file lf.hpp
  * Contains declarations needed for working with RDMA using LibFabric libraries,
  * including the Resources class and global setup functions.
  */
@@ -85,12 +85,15 @@ protected:
     /**
      * post read/write request
      *
-     * @param ctxt - pointer to the sender context, caller should maintain the
+     * @param ctxt      pointer to the sender context, caller should maintain the
      *     ownership of this context until completion.
-     * @param offset - The offset within the remote buffer to read/write
-     * @param size - The number of bytes to read/write
-     * @param op - 0 for read and 1 for write
-     * @param return the return code for operation.
+     * @param offset    The offset within the remote buffer to read/write
+     * @param size      The number of bytes to read/write
+     * @param op        0 for read and 1 for write
+     * @param completion
+     *
+     * @return the return code for operation.
+     *
      */
     int post_remote_send(lf_completion_entry_ctxt* ctxt, const long long int offset, const long long int size,
                          const int op, const bool completion);
@@ -150,7 +153,7 @@ public:
      * Important: it assumes shared lock on oob_mrs_mutex.
      * If iov does not fall into an oob memory region, it fails with nullptr.
      *
-     * @param iov
+     * @param addr
      *
      * @return the descriptor of type void*, or nullptr in case of failure.
      * @throw   derecho::derecho_exception if not found.
@@ -378,6 +381,7 @@ bool remove_node(uint32_t node_id);
  * Blocks the current thread until both this node and a remote node reach this
  * function, which exchanges some trivial data over a TCP connection.
  * @param r_id - ID of the node to exchange data with.
+ * @return true/false
  */
 bool sync(uint32_t r_id);
 /**

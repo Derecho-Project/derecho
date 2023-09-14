@@ -11,7 +11,9 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <iomanip>
-
+/**
+ * @cond DoxygenSuppressed
+ */
 using namespace persistent;
 using namespace mutils;
 using std::cout;
@@ -631,3 +633,7 @@ void test_hlc() {
     cout << "h1<=h2\t" << (h1 <= h2) << endl;
     cout << "h1==h2\t" << (h1 == h2) << endl;
 }
+
+/**
+ * @endcond
+ */

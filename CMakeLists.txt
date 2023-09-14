@@ -153,6 +153,12 @@ install(FILES
 # Build applications
 add_subdirectory(src/applications)
 
+set (DOXYGEN_EXCLUDE src/applications include/derecho/conf/getpot src/mutils-serialization include/derecho/rdmc src/core/rdmc)
+set (DOXYGEN_PROJECT_NUMBER  ${derecho_VERSION})
+set (DOXYGEN_TAB_SIZE 4)
+set (DOXYGEN_WARNINGS NO)
+set (DOXYGEN_WARN_IF_UNDOCUMENTED NO)
+set (DOXYGEN_WARN_NO_PARAMDOC NO)
 if (DOXYGEN_FOUND)
     # create docs
     doxygen_add_docs(docs

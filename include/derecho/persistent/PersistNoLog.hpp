@@ -44,7 +44,8 @@ void saveNoLogObjectInMem(
 
 /**
  * load data from file
- * @param object_name
+ * @param   object_name object name
+ * @param   dm          Pointer to the deserialization manager
  */
 template <typename ObjectType, StorageType storageType = ST_FILE>
 std::unique_ptr<ObjectType> loadNoLogObjectFromFile(

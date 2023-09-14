@@ -2,7 +2,7 @@
 #define VERBS_HPP
 
 /**
- * @file verbs.h
+ * @file verbs.hpp
  * Contains declarations needed for working with RDMA using InfiniBand Verbs,
  * including the Resources class and global setup functions.
  */
@@ -71,8 +71,14 @@ private:
 
 protected:
     std::atomic<bool> remote_failed;
-    /** Post a remote RDMA operation. */
-    int post_remote_send(verbs_sender_ctxt* ce_ctxt, const long long int offset, const long long int size, const int op, const bool completion);
+    /** Post a remote RDMA operation. 
+     * @param   sctxt       sender context pointer
+     * @param   offset      offset
+     * @param   size        size to send
+     * @param   op          operation
+     * @param   completion  completion
+     */
+    int post_remote_send(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size, const int op, const bool completion);
 
 public:
     /** Index of the remote node. */
@@ -158,12 +164,16 @@ public:
 bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 bool remove_node(uint32_t node_id);
-/**
- * Blocks the current thread until both this node and a remote node reach this
- * function, which exchanges some trivial data over a TCP connection.
- * @param r_index The node rank of the node to exchange data with.
+
+/*
+ * Blocks the current rehad until both this node and a remote node reach this function.
+ *
+ * @param r_index
+ *
+ * @return
  */
 bool sync(uint32_t r_index);
+
 /**
  * Compares the set of external client connections to a list of known live nodes and
  * removes any connections to nodes not in that list. This is used to filter out

@@ -1,6 +1,4 @@
 /**
- * @file persistence_manager.h
- *
  * @date Jun 20, 2017
  */
 #include "derecho/core/detail/persistence_manager.hpp"
@@ -226,7 +224,6 @@ void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
 }
 
 /** shutdown the thread
- * @wait - wait till the thread finished or not.
  */
 void PersistenceManager::shutdown(bool wait) {
     // if(replicated_objects == nullptr) return;  //skip for raw subgroups - NO DON'T

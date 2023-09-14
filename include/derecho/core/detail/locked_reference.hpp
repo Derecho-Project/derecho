@@ -1,5 +1,5 @@
 /**
- * @file locked_reference.h
+ * @file locked_reference.hpp
  *
  * @date Mar 13, 2017
  */

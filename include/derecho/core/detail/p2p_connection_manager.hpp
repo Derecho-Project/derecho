@@ -155,7 +155,7 @@ public:
      *
      * @throw                   derecho::derecho_exception on error
      */
-    void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_srcaddr, uint64_t rkey, size_t size);
+    void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size);
 
     /**
      * send to data in local buffer to remote

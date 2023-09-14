@@ -1,5 +1,5 @@
 /**
- * @file container_template_functions.h
+ * @file container_template_functions.hpp
  *
  * Contains implementations of some useful functions on STL containers, most of
  * which add standard-but-missing functionality.

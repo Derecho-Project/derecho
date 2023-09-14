@@ -4,38 +4,69 @@
 #include <pthread.h>
 #include <sys/types.h>
 
+/**
+ * @brief Hybrid Logical clock
+ */
 class HLC {
 private:
+    /**
+     * The Hybrid clock
+     */
     pthread_spinlock_t m_oLck;  // spinlock
 
 public:
-    uint64_t m_rtc_us;  // real-time clock in microseconds
-    uint64_t m_logic;   // logic clock
+    /**
+     * The real-time clock component (in microseconds)
+     */
+    uint64_t m_rtc_us;
+    /**
+     * The logic clock component
+     */
+    uint64_t m_logic;
 
-    // constructors
-    HLC()
-   ;
+    /**
+     * Default constructor
+     */
+    HLC();
 
+    /**
+     * Constructor
+     */
     HLC(uint64_t _r, uint64_t _l);
 
-    // destructors
+    /**
+     * Destructor
+     */
     virtual ~HLC() noexcept(false);
 
-    // ticking method - thread safe
+    /**
+     * Local tick
+     */
     virtual void tick(bool thread_safe = true);
+
+    /**
+     * Tick with incoming message
+     */
     virtual void tick(const HLC& msgHlc, bool thread_safe = true);
 
-    // comparators
+    /**
+     * Comparators
+     */
     virtual bool operator>(const HLC& hlc) const noexcept(true);
     virtual bool operator<(const HLC& hlc) const noexcept(true);
     virtual bool operator==(const HLC& hlc) const noexcept(true);
     virtual bool operator>=(const HLC& hlc) const noexcept(true);
     virtual bool operator<=(const HLC& hlc) const noexcept(true);
 
-    // evaluator
+    /**
+     * Evaluator
+     */
     virtual void operator=(const HLC& hlc) noexcept(true);
 };
 
+/**
+ * @cond DoxygenSuppressed
+ */
 #define HLC_EXP(errcode, usercode) \
     ((((errcode)&0xffffffffull) << 32) | ((usercode)&0xffffffffull))
 #define HLC_EXP_USERCODE(x) ((uint32_t)((x)&0xffffffffull))
@@ -48,4 +79,7 @@ public:
 // read the rtc clock in microseconds
 uint64_t read_rtc_us();
 
+/**
+ * @endcond
+ */
 #endif  //HLC_HPP
