@@ -1,7 +1,7 @@
 /**
  * @file oob_rdma.cpp
  *
- * This test creates one subgroup demonstrating OOB mechanism 
+ * This test creates one subgroup demonstrating OOB mechanism
  * - between external clients and a group member, and
  * - between derecho members
  */
@@ -66,7 +66,7 @@ public:
      * @param size          the size of the data
      *
      * @return true for success, otherwise false.
-     */ 
+     */
     bool get(const uint64_t& callee_addr, const uint64_t& caller_addr, const uint64_t rkey, const uint64_t size) const;
 
     /**
@@ -76,7 +76,7 @@ public:
     Bytes inband_get() const;
 
     // constructors
-    OOBRDMA(void* _oob_mr_ptr, size_t _oob_mr_size, size_t inband_data_size) : 
+    OOBRDMA(void* _oob_mr_ptr, size_t _oob_mr_size, size_t inband_data_size) :
         oob_mr_ptr(_oob_mr_ptr),
         oob_mr_size(_oob_mr_size) {
         uint8_t *buffer = new uint8_t[inband_data_size];
@@ -137,7 +137,7 @@ Bytes OOBRDMA::inband_get() const {
 
 bool OOBRDMA::get(const uint64_t& callee_addr, const uint64_t& caller_addr, const uint64_t rkey, const uint64_t size) const {
     // STEP 1 - validate the memory size
-    if( (callee_addr < reinterpret_cast<uint64_t>(oob_mr_ptr)) || 
+    if( (callee_addr < reinterpret_cast<uint64_t>(oob_mr_ptr)) ||
         ((callee_addr+size) > reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_mr_size)) {
         std::cerr << "callee address:0x" << std::hex << callee_addr << " or size " << size << " is invalid." << std::dec << std::endl;
         return false;
@@ -155,11 +155,11 @@ bool OOBRDMA::get(const uint64_t& callee_addr, const uint64_t& caller_addr, cons
 template <typename P2PCaller>
 void perf_test (
         P2PCaller& p2p_caller,
-        node_id_t nid, 
-        uint64_t rkey, 
-        void* put_buffer_laddr, 
-        void* get_buffer_laddr, 
-        size_t oob_data_size, 
+        node_id_t nid,
+        uint64_t rkey,
+        void* put_buffer_laddr,
+        void* get_buffer_laddr,
+        size_t oob_data_size,
         size_t duration_sec,
         size_t nround = 1,
         bool   inband = false) {
@@ -171,8 +171,8 @@ void perf_test (
     uint64_t* ts_log = new uint64_t[MAX_OPS*duration_sec];
     const std::size_t rpc_header_size = sizeof(std::size_t) + sizeof(std::size_t) +
                                         derecho::remote_invocation_utilities::header_space();
-    const uint64_t max_rep_size = derecho::getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) - rpc_header_size;
-    const uint64_t max_req_size   = derecho::getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) - rpc_header_size;
+    const uint64_t max_rep_size = derecho::getConfUInt64(derecho::Conf::DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) - rpc_header_size;
+    const uint64_t max_req_size   = derecho::getConfUInt64(derecho::Conf::DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) - rpc_header_size;
     if (inband && (max_rep_size < oob_data_size)) {
         throw derecho::derecho_exception("max_reply_size (" + std::to_string(max_rep_size) + ") is smaller than data size(" + std::to_string(oob_data_size));
     }
@@ -350,23 +350,23 @@ int main(int argc, char** argv) {
     {
         // Read configurations from the command line options as well as the default config file
         derecho::Conf::initialize(argc, argv);
-    
+
         // Define subgroup member ship using the default subgroup allocator function.
         // When constructed using make_subgroup_allocator with no arguments, this will check the config file
         // for either the json_layout or json_layout_file options, and use whichever one is present to define
         // the mapping from types to subgroup allocation parameters.
         derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<OOBRDMA>()};
-    
+
         // oobrdma_factory
         auto oobrdma_factory = [&oob_mr_ptr,&oob_mr_size,&oob_data_size](persistent::PersistentRegistry*, derecho::subgroup_id_t) {
             return std::make_unique<OOBRDMA>(oob_mr_ptr,oob_mr_size,oob_data_size);
         };
-    
+
         // group
-        derecho::Group<OOBRDMA> group(derecho::UserMessageCallbacks{}, subgroup_function, 
+        derecho::Group<OOBRDMA> group(derecho::UserMessageCallbacks{}, subgroup_function,
                                       {&dsm},
                                       std::vector<derecho::view_upcall_t>{}, oobrdma_factory);
-    
+
         std::cout << "Finished constructing/joining Group." << std::endl;
         memset(oob_mr_ptr,'A',oob_mr_size);
         group.register_oob_memory(oob_mr_ptr, oob_mr_size);

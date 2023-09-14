@@ -9,7 +9,7 @@ namespace persistent {
 PersistLog::PersistLog(const std::string& name, bool enable_signatures) noexcept(true)
         : m_sName(name),
           signature_size(enable_signatures
-                                 ? openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE)).get_max_size()
+                                 ? openssl::EnvelopeKey::from_pem_private(derecho::getConfString(derecho::Conf::PERS_PRIVATE_KEY_FILE)).get_max_size()
                                  : 0) {
 }
 

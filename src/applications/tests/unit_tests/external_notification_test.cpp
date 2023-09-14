@@ -87,8 +87,8 @@ bool TestPersistentObject::set_data(const std::string& new_data) const {
 }
 
 void run_nonpersistent_test(uint32_t external_node_id, int num_senders, int num_nodes, uint32_t num_messages) {
-    node_id_t my_id = derecho::getConfUInt64(CONF_DERECHO_LOCAL_ID);
-    uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    node_id_t my_id = derecho::getConfUInt64(derecho::Conf::DERECHO_LOCAL_ID);
+    uint64_t max_msg_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     if(external_node_id != my_id) {
         // Put each node in its own subgroup, which has 1 shard with 1 member
@@ -152,8 +152,8 @@ void run_nonpersistent_test(uint32_t external_node_id, int num_senders, int num_
 }
 
 void run_persistent_test(uint32_t external_node_id, int num_senders, int num_nodes, uint32_t num_messages) {
-    node_id_t my_id = derecho::getConfUInt64(CONF_DERECHO_LOCAL_ID);
-    uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    node_id_t my_id = derecho::getConfUInt64(derecho::Conf::DERECHO_LOCAL_ID);
+    uint64_t max_msg_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     if(external_node_id != my_id) {
         // Put each node in its own subgroup, which has 1 shard with 1 member

@@ -194,7 +194,7 @@ int main(int argc, char* argv[]) {
     Conf::initialize(argc, argv);
 
     srand(time(NULL));
-    node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    node_id_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
 
     auto state_membership_function = [&tests](
             const std::vector<std::type_index>& subgroup_type_order,

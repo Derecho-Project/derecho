@@ -55,9 +55,9 @@ int main(int argc, char** argv) {
     const uint is_external = std::stoi(argv[argc-4]);
     const uint is_sender = std::stoi(argv[argc-3]);
     int num_of_nodes = std::stoi(argv[argc-2]);
-    uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    uint64_t max_msg_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     const uint count = std::stoi(argv[argc-1]);
-    node_id_t my_id = derecho::getConfUInt64(CONF_DERECHO_LOCAL_ID);
+    node_id_t my_id = derecho::getConfUInt64(derecho::Conf::DERECHO_LOCAL_ID);
 
     if (!is_external) {
         derecho::SubgroupInfo subgroup_info{[num_of_nodes](

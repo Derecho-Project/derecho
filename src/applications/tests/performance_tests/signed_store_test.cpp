@@ -350,7 +350,7 @@ int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
     const std::size_t rpc_header_size = sizeof(std::size_t) + sizeof(std::size_t)
                                         + derecho::remote_invocation_utilities::header_space();
-    const std::size_t update_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
+    const std::size_t update_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
     steady_clock::time_point begin_time, batch_complete_time;
     //This atomic flag will be shared with the SignatureStore or ObjectStore subgroup,
     //if this node ends up in that group
@@ -386,7 +386,7 @@ int main(int argc, char** argv) {
             signature_subgroup_factory);
 
     //Figure out which subgroup this node got assigned to
-    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    uint32_t my_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
     int32_t my_storage_shard = group.get_my_shard<ObjectStore>();
     int32_t my_signature_shard = group.get_my_shard<SignatureStore>();
     int32_t my_client_shard = group.get_my_shard<ClientTier>();

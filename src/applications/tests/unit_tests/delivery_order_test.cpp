@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
 
     Conf::initialize(argc, argv);
 
-    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    uint32_t node_id = derecho::getConfUInt32(Conf::DERECHO_LOCAL_ID);
 
     SubgroupInfo subgroup_info([num_nodes](const std::vector<std::type_index>& subgroup_type_order,
                                            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
 
     std::unique_ptr<Group<RawObject>> group;
     uint32_t my_rank;
-    uint64_t max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    uint64_t max_msg_size = getConfUInt64(Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     volatile bool done = false;
     auto delivery_callback = [&, num_received_msgs_map = std::map<node_id_t, uint32_t>(),
                               received_msgs_index_map = std::map<node_id_t, uint32_t>(),

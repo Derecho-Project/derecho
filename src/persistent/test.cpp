@@ -250,7 +250,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     //If the private key file exists, assume signatures should be enabled
-    bool use_signature = checkRegularFile(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE));
+    bool use_signature = checkRegularFile(derecho::getConfString(derecho::Conf::PERS_PRIVATE_KEY_FILE));
 
     PersistentRegistry pr(nullptr, typeid(ReplicatedT), 123, 321);
     Persistent<X> px1([]() { return std::make_unique<X>(); }, "PersistentXObject", &pr, use_signature);
@@ -274,7 +274,7 @@ int main(int argc, char** argv) {
 
     if (use_signature) {
         prikey = std::make_unique<openssl::EnvelopeKey>(
-                openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE)));
+                openssl::EnvelopeKey::from_pem_private(derecho::getConfString(derecho::Conf::PERS_PRIVATE_KEY_FILE)));
         signer = std::make_unique<openssl::Signer>(*prikey, openssl::DigestAlgorithm::SHA256);
         verifier = std::make_unique<openssl::Verifier>(*prikey, openssl::DigestAlgorithm::SHA256);
         signer->init();

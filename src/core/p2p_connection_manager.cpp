@@ -18,8 +18,8 @@ namespace sst {
 P2PConnectionManager::P2PConnectionManager(const P2PParams params)
         : my_node_id(params.my_node_id),
           rpc_logger(spdlog::get(LoggerFactory::RPC_LOGGER_NAME)),
-          p2p_connections(derecho::getConfUInt32(CONF_DERECHO_MAX_NODE_ID)),
-          active_p2p_connections(new char[derecho::getConfUInt32(CONF_DERECHO_MAX_NODE_ID)]),
+          p2p_connections(derecho::getConfUInt32(derecho::Conf::DERECHO_MAX_NODE_ID)),
+          active_p2p_connections(new char[derecho::getConfUInt32(derecho::Conf::DERECHO_MAX_NODE_ID)]),
           failure_upcall(params.failure_upcall) {
     // HARD-CODED. Adding another request type will break this
 
@@ -30,7 +30,7 @@ P2PConnectionManager::P2PConnectionManager(const P2PParams params)
     request_params.max_msg_sizes[P2P_REQUEST] = params.max_p2p_request_size;
     request_params.max_msg_sizes[RPC_REPLY] = params.max_rpc_reply_size;
 
-    for(uint32_t i = 0; i < derecho::getConfUInt32(CONF_DERECHO_MAX_NODE_ID); ++i) {
+    for(uint32_t i = 0; i < derecho::getConfUInt32(derecho::Conf::DERECHO_MAX_NODE_ID); ++i) {
         active_p2p_connections[i] = false;
     }
 
@@ -152,8 +152,8 @@ void P2PConnectionManager::send(node_id_t node_id, MESSAGE_TYPE type, uint64_t s
 void P2PConnectionManager::check_failures_loop() {
     pthread_setname_np(pthread_self(), "p2p_timeout");
 
-    // using CONF_DERECHO_HEARTBEAT_MS from derecho.cfg
-    uint32_t heartbeat_ms = derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
+    // using Conf::DERECHO_HEARTBEAT_MS from derecho.cfg
+    uint32_t heartbeat_ms = derecho::getConfUInt32(derecho::Conf::DERECHO_HEARTBEAT_MS);
     const auto tid = std::this_thread::get_id();
     // get id first
     uint32_t ce_idx = util::polling_data.get_index(tid);
@@ -201,7 +201,7 @@ void P2PConnectionManager::check_failures_loop() {
         std::vector<node_id_t> failed_nodes;
 
         /** Completion Queue poll timeout in millisec */
-        const unsigned int MAX_POLL_CQ_TIMEOUT = derecho::getConfUInt32(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS);
+        const unsigned int MAX_POLL_CQ_TIMEOUT = derecho::getConfUInt32(derecho::Conf::DERECHO_SST_POLL_CQ_TIMEOUT_MS);
         unsigned long start_time_msec;
         unsigned long cur_time_msec;
         struct timeval cur_time;

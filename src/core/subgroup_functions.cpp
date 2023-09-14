@@ -675,16 +675,16 @@ DefaultSubgroupAllocator::DefaultSubgroupAllocator(std::vector<std::type_index> 
 DefaultSubgroupAllocator::DefaultSubgroupAllocator(std::vector<std::type_index> subgroup_types) {
     //It's not possible to delegate to a different constructor based on a boolean,
     //so I have to copy and paste from the other two constructors
-    if(hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT)) {
-        json layout_array = json::parse(getConfString(CONF_LAYOUT_JSON_LAYOUT));
+    if(hasCustomizedConfKey(Conf::LAYOUT_JSON_LAYOUT)) {
+        json layout_array = json::parse(getConfString(Conf::LAYOUT_JSON_LAYOUT));
         for(std::size_t subgroup_type_index = 0; subgroup_type_index < subgroup_types.size(); ++subgroup_type_index) {
             policies.emplace(subgroup_types[subgroup_type_index],
                              parse_json_subgroup_policy(layout_array[subgroup_type_index], all_reserved_node_ids));
         }
-    } else if(hasCustomizedConfKey(CONF_LAYOUT_JSON_LAYOUT_FILE)) {
+    } else if(hasCustomizedConfKey(Conf::LAYOUT_JSON_LAYOUT_FILE)) {
         json layout_array;
 
-        std::string json_layout_file_path = getAbsoluteFilePath(getConfString(CONF_LAYOUT_JSON_LAYOUT_FILE));
+        std::string json_layout_file_path = getAbsoluteFilePath(getConfString(Conf::LAYOUT_JSON_LAYOUT_FILE));
 
         std::ifstream json_file_stream(json_layout_file_path);
         if(!json_file_stream) {

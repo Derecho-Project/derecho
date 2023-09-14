@@ -148,9 +148,9 @@ struct DerechoParams : public mutils::ByteRepresentable {
         uint64_t max_smc_payload_size = getConfUInt64(prefix + Conf::subgroupProfileFields[2]);
         uint64_t block_size = getConfUInt64(prefix + Conf::subgroupProfileFields[3]);
         uint32_t window_size = getConfUInt32(prefix + Conf::subgroupProfileFields[4]);
-        uint32_t timeout_ms = getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
+        uint32_t timeout_ms = getConfUInt32(Conf::DERECHO_HEARTBEAT_MS);
         const std::string& algorithm = getConfString(prefix + Conf::subgroupProfileFields[5]);
-        uint32_t state_transfer_port = getConfUInt32(CONF_DERECHO_STATE_TRANSFER_PORT);
+        uint32_t state_transfer_port = getConfUInt32(Conf::DERECHO_STATE_TRANSFER_PORT);
 
         return DerechoParams{
                 max_payload_size,

@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
                                           thing_factory);
     std::cout << "Successfully joined group" << std::endl;
     Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const uint32_t node_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
     //Node 3 will rejoin as node 4
     if(node_id == 4) {
         std::cout << "Printing initial Persistent log" << std::endl;

@@ -111,7 +111,7 @@ RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, Restart
 
 void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
     bool ready_to_restart = false;
-    int time_remaining_ms = getConfUInt32(CONF_DERECHO_RESTART_TIMEOUT_MS);
+    int time_remaining_ms = getConfUInt32(Conf::DERECHO_RESTART_TIMEOUT_MS);
     while(time_remaining_ms > 0) {
         using namespace std::chrono;
         auto start_time = high_resolution_clock::now();
@@ -181,7 +181,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             }
         } else if(!ready_to_restart) {
             //Accept timed out, but we haven't heard from enough nodes yet, so reset the timer
-            time_remaining_ms = getConfUInt32(CONF_DERECHO_RESTART_TIMEOUT_MS);
+            time_remaining_ms = getConfUInt32(Conf::DERECHO_RESTART_TIMEOUT_MS);
         }
     }
 }
@@ -453,12 +453,12 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
     //Ensure the restart leader itself will be in the next view
     if(curr_view->rank_of(my_id) == -1) {
         nodes_to_add_in_next_view.emplace_back(my_id);
-        ips_and_ports_to_add_in_next_view.emplace_back(getConfString(CONF_DERECHO_LOCAL_IP),
-                                                       getConfUInt16(CONF_DERECHO_GMS_PORT),
-                                                       getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT),
-                                                       getConfUInt16(CONF_DERECHO_SST_PORT),
-                                                       getConfUInt16(CONF_DERECHO_RDMC_PORT),
-                                                       getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
+        ips_and_ports_to_add_in_next_view.emplace_back(getConfString(Conf::DERECHO_LOCAL_IP),
+                                                       getConfUInt16(Conf::DERECHO_GMS_PORT),
+                                                       getConfUInt16(Conf::DERECHO_STATE_TRANSFER_PORT),
+                                                       getConfUInt16(Conf::DERECHO_SST_PORT),
+                                                       getConfUInt16(Conf::DERECHO_RDMC_PORT),
+                                                       getConfUInt16(Conf::DERECHO_EXTERNAL_PORT));
     }
     //Mark any nodes from the last view that haven't yet responded as failed
     for(std::size_t rank = 0; rank < curr_view->members.size(); ++rank) {
@@ -517,7 +517,7 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
     //Initialize my_rank in next_view
     //Note that the restart leader might not be a member of curr_view, so we can't use curr_view->my_rank
     int32_t my_new_rank = -1;
-    const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const uint32_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
     for(int i = 0; i < next_num_members; ++i) {
         if(members[i] == my_id) {
             my_new_rank = i;

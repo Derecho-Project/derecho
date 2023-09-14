@@ -60,10 +60,10 @@ int main(int argc, char *argv[]) {
 
         Conf::initialize(argc, argv);
 
-        uint64_t max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+        uint64_t max_msg_size = getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
         uint32_t num_messages = ((max_msg_size < 20000) ? 10000 : 1000);
 
-        uint32_t node_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+        uint32_t node_id = getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
 
         // will resize it as and when convenient
         uint32_t subgroup_size = std::stoi(argv[2]);

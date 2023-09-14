@@ -30,7 +30,7 @@ std::shared_ptr<spdlog::logger> LoggerFactory::_create_logger(
     spdlog::level::level_enum log_level) {
     std::vector<spdlog::sink_ptr> log_sinks;
     log_sinks.push_back(_file_sink);
-    if(derecho::getConfBoolean(CONF_LOGGER_LOG_TO_TERMINAL)) {
+    if(derecho::getConfBoolean(derecho::Conf::LOGGER_LOG_TO_TERMINAL)) {
         log_sinks.push_back(_stdout_sink);
     }
     std::shared_ptr<spdlog::logger> log = std::make_shared<spdlog::async_logger>(
@@ -57,12 +57,12 @@ void LoggerFactory::_initialize() {
         spdlog::init_thread_pool(1L<<20, 1); // 1MB buffer, 1 thread
         _thread_pool_holder = spdlog::thread_pool();
         // 2 - initialize the sink objects that will be shared by all loggers
-        std::string default_logger_name = derecho::getConfString(CONF_LOGGER_DEFAULT_LOG_NAME);
+        std::string default_logger_name = derecho::getConfString(derecho::Conf::LOGGER_DEFAULT_LOG_NAME);
         _file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-            default_logger_name + ".log", 1L<<20, derecho::getConfUInt32(CONF_LOGGER_LOG_FILE_DEPTH));
+            default_logger_name + ".log", 1L<<20, derecho::getConfUInt32(derecho::Conf::LOGGER_LOG_FILE_DEPTH));
         _stdout_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         // 3 - initialize the default Logger
-        std::string default_log_level = derecho::getConfString(CONF_LOGGER_DEFAULT_LOG_LEVEL);
+        std::string default_log_level = derecho::getConfString(derecho::Conf::LOGGER_DEFAULT_LOG_LEVEL);
         _default_logger = _create_logger(default_logger_name,
             spdlog::level::from_str(default_log_level));
         // 3 - change state to initialized

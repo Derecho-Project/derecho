@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
 
     cout << "Finished constructing/joining Group" << endl;
 
-    const uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const uint32_t my_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
     std::vector<node_id_t> foo_members = group.get_subgroup_members<Foo>(0)[0];
     std::vector<node_id_t> cache_members = group.get_subgroup_members<Cache>(0)[0];
     auto find_in_foo_results = std::find(foo_members.begin(), foo_members.end(), my_id);

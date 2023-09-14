@@ -37,7 +37,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
     if constexpr(has_signed_fields_v<T>) {
         // Attempt to load the private key and create a Signer
         // This will crash with a file_error if the private key doesn't actually exist
-        signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
+        signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(Conf::PERS_PRIVATE_KEY_FILE)),
                                                    openssl::DigestAlgorithm::SHA256);
         signature_size = signer->get_max_signature_size();
     }
@@ -64,7 +64,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
     if constexpr(has_signed_fields_v<T>) {
         // Attempt to load the private key and create a Signer
         // This will crash with a file_error if the private key doesn't actually exist
-        signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
+        signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(Conf::PERS_PRIVATE_KEY_FILE)),
                                                    openssl::DigestAlgorithm::SHA256);
         signature_size = signer->get_max_signature_size();
     }
@@ -106,7 +106,7 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) const {
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
                 // Invoke the sending function with a buffer-allocator that uses the P2P request buffers
                 [this, &dest_node, &message_seq_num](std::size_t size) -> uint8_t* {
-                    const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
+                    const std::size_t max_p2p_request_payload_size = getConfUInt64(Conf::DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_p2p_request_payload_size) {
                         auto buffer_handle = group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                                   sst::MESSAGE_TYPE::P2P_REQUEST);
@@ -413,7 +413,7 @@ auto ExternalClientCallback<T>::p2p_send(node_id_t dest_node, Args&&... args) {
         uint64_t message_seq_num;
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
                 [this, &dest_node, &message_seq_num](size_t size) -> uint8_t* {
-                    const std::size_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
+                    const std::size_t max_payload_size = getConfUInt64(Conf::DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_payload_size) {
                         auto buffer_handle = group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                                   sst::MESSAGE_TYPE::P2P_REQUEST);

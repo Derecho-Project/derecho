@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
     const uint32_t num_nodes = std::stoi(argv[1]);
     const uint32_t num_params = std::stoi(argv[1]);
 
-    uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    uint32_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
 
     // input the ip addresses
     std::map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
