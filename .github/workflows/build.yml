@@ -19,9 +19,9 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - name: Install libfabric
-        run:  ${{ github.workspace }}/scripts/prerequisites/install-libfabric.sh ${{ github.repository }}/opt
+        run:  ${{ github.workspace }}/scripts/prerequisites/install-libfabric.sh ${{ github.workspace }}/opt
       - name: Install json library
-        run:  ${{ github.workspace }}/scripts/prerequisites/install-json.sh ${{ github.repository }}/opt
+        run:  ${{ github.workspace }}/scripts/prerequisites/install-json.sh ${{ github.workspace }}/opt
       - name: Install mutils
         run:  ${{ github.workspace }}/scripts/prerequisites/install-mutils.sh ${{ github.workspace }}/opt
       - name: Install mutils-containers
