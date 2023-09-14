@@ -21,7 +21,7 @@ void saveNoLogObjectInFile(
     // 2 - serialize
     auto size = mutils::bytes_size(obj);
     uint8_t* buf = new uint8_t[size];
-    bzero(buf, size);
+    memset(buf, 0, size);
     mutils::to_bytes(obj, buf);
     // 3 - write to tmp file
     int fd = open(tmpfilepath, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP | S_IROTH);

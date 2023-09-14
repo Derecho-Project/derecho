@@ -57,7 +57,7 @@ struct incomplete_read_error : public socket_error {
  * errno value ECONNRESET.
  */
 struct connection_reset_error : public socket_io_error {
-    connection_reset_error(const std::string& message = "") : socket_io_error(ECONNRESET, message) {};
+    connection_reset_error(const std::string& message = "") : socket_io_error(ECONNRESET, message){};
 };
 
 /**
@@ -67,7 +67,7 @@ struct connection_reset_error : public socket_io_error {
  * of socket_io_error with the errno value EPIPE.
  */
 struct remote_closed_connection_error : public socket_io_error {
-    remote_closed_connection_error(const std::string& message = "") : socket_io_error(EPIPE, message) {};
+    remote_closed_connection_error(const std::string& message = "") : socket_io_error(EPIPE, message){};
 };
 
 class socket {
@@ -88,13 +88,15 @@ public:
      */
     socket() : sock(-1), remote_ip(), remote_port(0) {}
     /**
-     * Constructs a socket connected to the specified address and port,
-     * blocking until the connection succeeds.
+     * Constructs a socket connected to the specified address and port
      * @param server_ip The IP address of the remote host, as a string
      * @param server_port The port to connect to on the remote host
-     * @param retry
+     * @param retry Whether to keep retrying until the connection succeeds.
+     * If false, throws connection_failure if the first attempt to connect
+     * does not succeed.
      * @throw connection_failure if local socket construction or IP address
-     * lookup fails.
+     * lookup fails, or if retry = false and there was an error connecting
+     * to the remote host.
      */
     socket(std::string server_ip, uint16_t server_port, bool retry = true);
     socket(socket&& s);
@@ -103,11 +105,25 @@ public:
     socket& operator=(socket&& s);
 
     ~socket();
-
-    bool is_empty() const;
-    std::string get_self_ip();
-    std::string get_remote_ip() const { return remote_ip; }
-    uint16_t get_remote_port() const { return remote_port; }
+    /**
+     * @return True if the socket is empty (not connected), false otherwise
+     */
+    bool is_empty() const noexcept;
+    /**
+     * @return The local IP address this socket is bound to.
+     * @throw socket_io_error if getsockname() fails.
+     */
+    std::string get_self_ip() const;
+    /**
+     * @return The IP address of the remote peer that this socket is connected
+     * to (or an empty string if this socket is unconnected).
+     */
+    std::string get_remote_ip() const noexcept { return remote_ip; }
+    /**
+     * @return The TCP port on the remote peer that this socket is connected to
+     * (or 0 if this socket is unconnected).
+     */
+    uint16_t get_remote_port() const noexcept { return remote_port; }
 
     /**
      * Attempts to connect the socket to the specified address and port, but
@@ -147,11 +163,12 @@ public:
      * the result of the read
      * @param max_size The number of bytes to attempt to read
      * @return The number of bytes actually read, or -1 if there was an error
+     * @throw socket_closed_error if the socket is closed.
      */
     ssize_t read_partial(uint8_t* buffer, size_t max_size);
 
     /** Returns true if there is any data available to be read from the socket. */
-    bool probe();
+    bool probe() const noexcept;
 
     /**
      * Writes size bytes from the given buffer to the socket.
@@ -169,9 +186,13 @@ public:
     /**
      * Convenience method for sending a single POD object (e.g. an int) over
      * the socket.
+     * @param obj A POD object that can be sent by simply copying its memory
+     * @throw A subclass of socket_error if there was an error while writing
+     * to the socket.
      */
     template <typename T>
     void write(const T& obj) {
+        static_assert(std::is_pod<T>::value, "Can't use simple socket::write on non-POD types");
         write(reinterpret_cast<const uint8_t*>(&obj), sizeof(obj));
     }
 
@@ -180,23 +201,31 @@ public:
      * writing it over a local value of that type. Hides the ugly cast to uint8_t*.
      * @param obj A local value of type T, which will be overwritten by a value
      * of the same size read from the socket.
+     * @throw A subclass of socket_error if there was an error while attempting
+     * to read from the socket.
      */
     template <typename T>
     void read(T& obj) {
+        static_assert(std::is_pod<T>::value, "Can't use simple socket::read on non-POD types");
         read(reinterpret_cast<uint8_t*>(&obj), sizeof(obj));
     }
 
+    /**
+     * Convenience method that combines a read of a POD-type object with a write
+     * of the same type. Used when exchanging ints or other simple values.
+     * @tparam T The type of POD that will be read and written
+     * @param local A local value of type T that will be sent over the socket
+     * @param remote A reference to a value of type T that will be overwritten
+     * by a read from the socket.
+     * @throw A subclass of socket_error if there was an error during either the
+     * read or the write
+     */
     template <class T>
     void exchange(T local, T& remote) {
-        static_assert(std::is_pod<T>::value,
-                      "Can't send non-pod type over TCP");
+        static_assert(std::is_pod<T>::value, "Can't use socket::exchange on non-POD types");
 
-        if(sock < 0) {
-            throw socket_closed_error("Attempted to write to closed socket");
-        }
-
-        write((uint8_t*)&local, sizeof(T));
-        read((uint8_t*)&remote, sizeof(T));
+        write(reinterpret_cast<uint8_t*>(&local), sizeof(T));
+        read(reinterpret_cast<uint8_t*>(&remote), sizeof(T));
     }
 };
 
@@ -214,12 +243,16 @@ public:
      */
     explicit connection_listener(uint16_t port, int queue_depth = 50);
 
-    uint16_t get_listening_port() const { return port; }
+    /**
+     * @return The local port that this connection listener is bound to.
+     */
+    uint16_t get_listening_port() const noexcept { return port; }
 
     /**
      * Blocks until a remote client makes a connection to this connection
      * listener, then returns a new socket connected to that client.
      * @return A socket connected to a remote client.
+     * @throw connection_failure if the socket's accept operation fails
      */
     socket accept();
 
@@ -232,6 +265,6 @@ public:
      * @return A socket connected to a remote client, or nullopt if the
      * timeout expired
      */
-    std::optional<socket> try_accept(int timeout_ms);
+    std::optional<socket> try_accept(int timeout_ms) noexcept;
 };
 }  // namespace tcp
