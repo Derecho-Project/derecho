@@ -2,7 +2,7 @@ name: Build Check
 run-name: ${{ github.actor }} is running build check.
 on:  [push]
 jobs:
-  Placeholder:
+  build-check:
     runs-on: ubuntu-latest
     steps:
       - run:  echo "The job is automatically triggered by a ${{ github.event_name }} event."
