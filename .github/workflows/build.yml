@@ -26,14 +26,17 @@ jobs:
         run:  ${{ github.workspace }}/scripts/prerequisites/install-mutils.sh ${{ github.workspace }}/opt
       - name: Install mutils-containers
         run:  ${{ github.workspace }}/scripts/prerequisites/install-mutils-containers.sh ${{ github.workspace }}/opt
-      - run:  export PREFIX=${{ github.workspace }}/opt
-      - run:  export CMAKE_PREFIX_PATH=$PREFIX
-      - run:  export C_INCLUDE_PATH=$PREFIX/include/
-      - run:  export CPLUS_INCLUDE_PATH=$PREFIX/include/
-      - run:  export LIBRARY_PATH=$PREFIX/lib/:$PREFIX/lib64/
-      - run:  export LD_LIBRARY_PATH=$PREFIX/lib/:$PREFIX/lib64/
       - run:  cd ${{ github.workspace }}
-      - run:  mkdir build-Release; cd build-Release
-      - run:  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_INSTALL_PREFIX=${PREFIX} ..
-      - run:  make install
+      - run:  mkdir build-Release
+      - name: Build Derecho
+        run:  >
+              cd build-Release;
+              export PREFIX=${{ github.workspace }}/opt;
+              export CMAKE_PREFIX_PATH=$PREFIX;
+              export C_INCLUDE_PATH=$PREFIX/include/;
+              export CPLUS_INCLUDE_PATH=$PREFIX/include/;
+              export LIBRARY_PATH=$PREFIX/lib/:$PREFIX/lib64/;
+              export LD_LIBRARY_PATH=$PREFIX/lib/:$PREFIX/lib64/;
+              cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_INSTALL_PREFIX=${PREFIX} ..
+              make install
       - run:  echo "The job's status is ${{ job.status }}."
