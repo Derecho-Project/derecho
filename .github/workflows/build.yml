@@ -5,7 +5,13 @@ jobs:
   Placeholder:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "The job is automatically triggered by a ${{ github.event_name }} event"
+      - run:  echo "The job is automatically triggered by a ${{ github.event_name }} event.
+      - run:  g++ --version
+      - run:  cmake --version 
+      - run:  dpkg -l | grep libibverbs-dev
+      - run:  lscpu
+      - run:  df -ha
+      - run:  cat /proc/meminfo
       - name: Checkout repository code
         uses: actions/checkout@v3
       - run: echo "The ${{ github.repository }} repository has been cloned to the runner."
