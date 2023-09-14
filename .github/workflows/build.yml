@@ -37,6 +37,7 @@ jobs:
               export CPLUS_INCLUDE_PATH=$PREFIX/include/;
               export LIBRARY_PATH=$PREFIX/lib/:$PREFIX/lib64/;
               export LD_LIBRARY_PATH=$PREFIX/lib/:$PREFIX/lib64/;
-              cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_INSTALL_PREFIX=${PREFIX} ..
+              cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_INSTALL_PREFIX=${PREFIX} ..;
+              make -j;
               make install
       - run:  echo "The job's status is ${{ job.status }}."
