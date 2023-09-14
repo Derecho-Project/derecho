@@ -1,0 +1,15 @@
+name: Build Check
+run-name: ${{ github.actor }} is running build check.
+on:  [push]
+jobs:
+  Placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "The job is automatically triggered by a ${{ github.event_name }} event"
+      - name: Checkout repository code
+        uses: actions/checkout@v3
+      - run: echo "The ${{ github.repository }} repository has been cloned to the runner."
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+      - run: echo "The job's status is ${{ job.status }}."
