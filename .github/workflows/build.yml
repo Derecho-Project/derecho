@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run:  echo "The job is automatically triggered by a ${{ github.event_name }} event."
-      - run:  apt update; apt install libssl-dev librdmacm-dev libibverbs-dev libspdlog-dev -y
+      - run:  sudo apt update; sudo apt install libssl-dev librdmacm-dev libibverbs-dev libspdlog-dev -y
       - run:  g++ --version
       - run:  cmake --version 
       - run:  lscpu
