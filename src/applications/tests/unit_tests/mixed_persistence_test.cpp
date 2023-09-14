@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
         std::cout << "Last ordered_put got version " << last_version << ". Press enter to call to add_map_entry." << std::endl;
         std::cin.get();
         subgroup_handle.ordered_send<RPC_NAME(add_map_entry)>(
-                std::to_string(derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID)) + "_last_version", last_version);
+                std::to_string(derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID)) + "_last_version", last_version);
     }
     std::cout << "Press enter when finished with test." << std::endl;
     std::cin.get();

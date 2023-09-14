@@ -173,7 +173,7 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
                                  const std::vector<DeserializationContext*>& deserialization_context,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
-        : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
+        : my_id(getConfUInt32(Conf::DERECHO_LOCAL_ID)),
           user_deserialization_context(deserialization_context),
           persistence_manager(objects_by_subgroup_id,
                               std::disjunction_v<has_signed_fields<ReplicatedTypes>...>,
@@ -230,7 +230,7 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
             // This will wait for a new view to be sent if the view was aborted
             // It must be called even in the non-restart case, since the initial view could still be aborted
             view_manager.check_view_committed(initial_view_confirmed, restart_leader_failed);
-            if(restart_leader_failed && !(in_total_restart && getConfBoolean(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS))) {
+            if(restart_leader_failed && !(in_total_restart && getConfBoolean(Conf::DERECHO_ENABLE_BACKUP_RESTART_LEADERS))) {
                 throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
             }
         }

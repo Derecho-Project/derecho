@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
     if(strcmp(argv[dashdash_pos + 1], "half") == 0) sender_selector = PartialSendMode::HALF_SENDERS;
     if(strcmp(argv[dashdash_pos + 1], "one") == 0) sender_selector = PartialSendMode::ONE_SENDER;
     const int num_of_nodes = atoi(argv[dashdash_pos + 2]);
-    const int msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
+    const int msg_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
     const int num_msgs = atoi(argv[dashdash_pos + 3]);
 
     if((argc - dashdash_pos) > 4) {

@@ -43,7 +43,7 @@
     // GetPot in a particular namespace. Or, the definition of the macro
     // might also happen before including this file.
 
-    // #define GETPOT_SETTING_NAMESPACE GetPotSpace
+    #define GETPOT_SETTING_NAMESPACE getpot
 #endif
 
 /* Strings used by GetPot; Adaptation for Non-English may happen here. */

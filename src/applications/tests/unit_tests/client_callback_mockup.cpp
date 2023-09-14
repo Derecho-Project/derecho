@@ -128,7 +128,7 @@ std::pair<persistent::version_t, uint64_t> InternalClientNode::submit_update(uin
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<StorageNode>();
 
     const node_id_t storage_node_to_contact = storage_members[0][0];
-    node_id_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    node_id_t my_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
 
     //Submit the update to the chosen storage node
     dbg_default_debug("Submitting update number {} to node {}", update_counter, storage_node_to_contact);
@@ -392,7 +392,7 @@ int main(int argc, char** argv) {
     const std::size_t rpc_header_size = sizeof(std::size_t) + sizeof(std::size_t)
                                         + derecho::remote_invocation_utilities::header_space();
     //An update plus the two other parameters must fit in the available payload size
-    const std::size_t update_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE)
+    const std::size_t update_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE)
                                     - rpc_header_size - sizeof(node_id_t) - sizeof(uint32_t);
     //For generating random updates
     const std::string characters("abcdefghijklmnopqrstuvwxyz");
@@ -428,7 +428,7 @@ int main(int argc, char** argv) {
             storage_subgroup_factory);
 
     //Figure out which subgroup this node got assigned to
-    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    uint32_t my_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
     std::vector<node_id_t> storage_members = group.get_subgroup_members<StorageNode>(0)[0];
     std::vector<std::vector<node_id_t>> client_tier_shards = group.get_subgroup_members<InternalClientNode>(0);
     if(member_of_shards(my_id, client_tier_shards)) {

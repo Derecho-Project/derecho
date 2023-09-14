@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
     derecho::Group<ConstTest, ReferenceTest, MapTest> group(derecho::UserMessageCallbacks{}, subgroup_function, {},
                                                             std::vector<derecho::view_upcall_t>{},
                                                             const_test_factory, reference_test_factory, map_test_factory);
-    int my_id = derecho::getConfInt32(CONF_DERECHO_LOCAL_ID);
+    int my_id = derecho::getConfInt32(derecho::Conf::DERECHO_LOCAL_ID);
     const std::vector<node_id_t> const_test_group_members = group.get_subgroup_members<ConstTest>()[0];
     bool in_const_test_group = std::find(const_test_group_members.begin(),
                                          const_test_group_members.end(), my_id)

@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
                                        std::vector<derecho::view_upcall_t>{},
                                        string_object_factory);
 
-    int my_id = derecho::getConfInt32(CONF_DERECHO_LOCAL_ID);
+    int my_id = derecho::getConfInt32(derecho::Conf::DERECHO_LOCAL_ID);
     derecho::Replicated<StringObject>& rpc_handle = group.get_subgroup<StringObject>();
 
     using namespace derecho::rpc;

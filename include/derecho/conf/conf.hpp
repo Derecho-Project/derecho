@@ -17,127 +17,132 @@ namespace derecho {
 // It's declared here so that it can be compared to the supplied config options
 constexpr std::size_t DERECHO_MIN_RPC_RESPONSE_SIZE = 128;
 
-#define CONF_ENTRY_INTEGER(name, section, string)
-
 /** The single configuration file for derecho **/
 class Conf {
-private:
+public:
     //String constants for config options
-#define CONF_DERECHO_LEADER_IP "DERECHO/leader_ip"
-#define CONF_DERECHO_LEADER_GMS_PORT "DERECHO/leader_gms_port"
-#define CONF_DERECHO_LEADER_EXTERNAL_PORT "DERECHO/leader_external_port"
-#define CONF_DERECHO_RESTART_LEADERS "DERECHO/restart_leaders"
-#define CONF_DERECHO_RESTART_LEADER_PORTS "DERECHO/restart_leader_ports"
-#define CONF_DERECHO_LOCAL_ID "DERECHO/local_id"
-#define CONF_DERECHO_LOCAL_IP "DERECHO/local_ip"
-#define CONF_DERECHO_GMS_PORT "DERECHO/gms_port"
-#define CONF_DERECHO_STATE_TRANSFER_PORT "DERECHO/state_transfer_port"
-#define CONF_DERECHO_SST_PORT "DERECHO/sst_port"
-#define CONF_DERECHO_RDMC_PORT "DERECHO/rdmc_port"
-#define CONF_DERECHO_EXTERNAL_PORT "DERECHO/external_port"
-#define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
-#define CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS "DERECHO/p2p_loop_busy_wait_before_sleep_ms"
-#define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
-#define CONF_DERECHO_RESTART_TIMEOUT_MS "DERECHO/restart_timeout_ms"
-#define CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS "DERECHO/enable_backup_restart_leaders"
-#define CONF_DERECHO_DISABLE_PARTITIONING_SAFETY "DERECHO/disable_partitioning_safety"
-#define CONF_DERECHO_MAX_NODE_ID "DERECHO/max_node_id"
+    static constexpr const char* DERECHO_LEADER_IP = "DERECHO/leader_ip";
+    static constexpr const char* DERECHO_LEADER_GMS_PORT = "DERECHO/leader_gms_port";
+    static constexpr const char* DERECHO_LEADER_EXTERNAL_PORT = "DERECHO/leader_external_port";
+    static constexpr const char* DERECHO_RESTART_LEADERS = "DERECHO/restart_leaders";
+    static constexpr const char* DERECHO_RESTART_LEADER_PORTS = "DERECHO/restart_leader_ports";
+    static constexpr const char* DERECHO_LOCAL_ID = "DERECHO/local_id";
+    static constexpr const char* DERECHO_LOCAL_IP = "DERECHO/local_ip";
+    static constexpr const char* DERECHO_GMS_PORT = "DERECHO/gms_port";
+    static constexpr const char* DERECHO_STATE_TRANSFER_PORT = "DERECHO/state_transfer_port";
+    static constexpr const char* DERECHO_SST_PORT = "DERECHO/sst_port";
+    static constexpr const char* DERECHO_RDMC_PORT = "DERECHO/rdmc_port";
+    static constexpr const char* DERECHO_EXTERNAL_PORT = "DERECHO/external_port";
+    static constexpr const char* DERECHO_HEARTBEAT_MS = "DERECHO/heartbeat_ms";
+    static constexpr const char* DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS = "DERECHO/p2p_loop_busy_wait_before_sleep_ms";
+    static constexpr const char* DERECHO_SST_POLL_CQ_TIMEOUT_MS = "DERECHO/sst_poll_cq_timeout_ms";
+    static constexpr const char* DERECHO_RESTART_TIMEOUT_MS = "DERECHO/restart_timeout_ms";
+    static constexpr const char* DERECHO_ENABLE_BACKUP_RESTART_LEADERS = "DERECHO/enable_backup_restart_leaders";
+    static constexpr const char* DERECHO_DISABLE_PARTITIONING_SAFETY = "DERECHO/disable_partitioning_safety";
+    static constexpr const char* DERECHO_MAX_NODE_ID = "DERECHO/max_node_id";
 
-#define CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE "DERECHO/max_p2p_request_payload_size"
-#define CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE "DERECHO/max_p2p_reply_payload_size"
-#define CONF_DERECHO_P2P_WINDOW_SIZE "DERECHO/p2p_window_size"
+    static constexpr const char* DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE = "DERECHO/max_p2p_request_payload_size";
+    static constexpr const char* DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE = "DERECHO/max_p2p_reply_payload_size";
+    static constexpr const char* DERECHO_P2P_WINDOW_SIZE = "DERECHO/p2p_window_size";
 
-#define CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE "SUBGROUP/DEFAULT/max_payload_size"
-#define CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE "SUBGROUP/DEFAULT/max_reply_payload_size"
-#define CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE "SUBGROUP/DEFAULT/max_smc_payload_size"
-#define CONF_SUBGROUP_DEFAULT_BLOCK_SIZE "SUBGROUP/DEFAULT/block_size"
-#define CONF_SUBGROUP_DEFAULT_WINDOW_SIZE "SUBGROUP/DEFAULT/window_size"
-#define CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM "SUBGROUP/DEFAULT/rdmc_send_algorithm"
+    static constexpr const char* SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE = "SUBGROUP/DEFAULT/max_payload_size";
+    static constexpr const char* SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE = "SUBGROUP/DEFAULT/max_reply_payload_size";
+    static constexpr const char* SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE = "SUBGROUP/DEFAULT/max_smc_payload_size";
+    static constexpr const char* SUBGROUP_DEFAULT_BLOCK_SIZE = "SUBGROUP/DEFAULT/block_size";
+    static constexpr const char* SUBGROUP_DEFAULT_WINDOW_SIZE = "SUBGROUP/DEFAULT/window_size";
+    static constexpr const char* SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM = "SUBGROUP/DEFAULT/rdmc_send_algorithm";
 
-#define CONF_RDMA_PROVIDER "RDMA/provider"
-#define CONF_RDMA_DOMAIN "RDMA/domain"
-#define CONF_RDMA_TX_DEPTH "RDMA/tx_depth"
-#define CONF_RDMA_RX_DEPTH "RDMA/rx_depth"
-#define CONF_PERS_FILE_PATH "PERS/file_path"
-#define CONF_PERS_RAMDISK_PATH "PERS/ramdisk_path"
-#define CONF_PERS_RESET "PERS/reset"
-#define CONF_PERS_MAX_LOG_ENTRY "PERS/max_log_entry"
-#define CONF_PERS_MAX_DATA_SIZE "PERS/max_data_size"
-#define CONF_PERS_PRIVATE_KEY_FILE "PERS/private_key_file"
-#define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
-#define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
-#define CONF_LOGGER_SST_LOG_LEVEL "LOGGER/sst_log_level"
-#define CONF_LOGGER_RPC_LOG_LEVEL "LOGGER/rpc_log_level"
-#define CONF_LOGGER_VIEWMANAGER_LOG_LEVEL "LOGGER/viewmanager_log_level"
-#define CONF_LOGGER_PERSISTENCE_LOG_LEVEL "LOGGER/persistence_log_level"
-#define CONF_LOGGER_LOG_TO_TERMINAL "LOGGER/log_to_terminal"
-#define CONF_LOGGER_LOG_FILE_DEPTH "LOGGER/log_file_depth"
+    static constexpr const char* RDMA_PROVIDER = "RDMA/provider";
+    static constexpr const char* RDMA_DOMAIN = "RDMA/domain";
+    static constexpr const char* RDMA_TX_DEPTH = "RDMA/tx_depth";
+    static constexpr const char* RDMA_RX_DEPTH = "RDMA/rx_depth";
+    static constexpr const char* PERS_FILE_PATH = "PERS/file_path";
+    static constexpr const char* PERS_RAMDISK_PATH = "PERS/ramdisk_path";
+    static constexpr const char* PERS_RESET = "PERS/reset";
+    static constexpr const char* PERS_MAX_LOG_ENTRY = "PERS/max_log_entry";
+    static constexpr const char* PERS_MAX_DATA_SIZE = "PERS/max_data_size";
+    static constexpr const char* PERS_PRIVATE_KEY_FILE = "PERS/private_key_file";
+    static constexpr const char* LOGGER_DEFAULT_LOG_NAME = "LOGGER/default_log_name";
+    static constexpr const char* LOGGER_DEFAULT_LOG_LEVEL = "LOGGER/default_log_level";
+    static constexpr const char* LOGGER_SST_LOG_LEVEL = "LOGGER/sst_log_level";
+    static constexpr const char* LOGGER_RPC_LOG_LEVEL = "LOGGER/rpc_log_level";
+    static constexpr const char* LOGGER_VIEWMANAGER_LOG_LEVEL = "LOGGER/viewmanager_log_level";
+    static constexpr const char* LOGGER_PERSISTENCE_LOG_LEVEL = "LOGGER/persistence_log_level";
+    static constexpr const char* LOGGER_LOG_TO_TERMINAL = "LOGGER/log_to_terminal";
+    static constexpr const char* LOGGER_LOG_FILE_DEPTH = "LOGGER/log_file_depth";
 
-#define CONF_LAYOUT_JSON_LAYOUT "LAYOUT/json_layout"
-#define CONF_LAYOUT_JSON_LAYOUT_FILE "LAYOUT/json_layout_file"
+    static constexpr const char* LAYOUT_JSON_LAYOUT = "LAYOUT/json_layout";
+    static constexpr const char* LAYOUT_JSON_LAYOUT_FILE = "LAYOUT/json_layout_file";
+
+private:
     // Configuration Table:
     // config name --> default value
     std::map<const std::string, std::string> config = {
             // [DERECHO]
-            {CONF_DERECHO_LEADER_IP, "127.0.0.1"},
-            {CONF_DERECHO_LEADER_GMS_PORT, "23580"},
-            {CONF_DERECHO_LEADER_EXTERNAL_PORT, "32645"},
-            {CONF_DERECHO_RESTART_LEADERS, "127.0.0.1"},
-            {CONF_DERECHO_RESTART_LEADER_PORTS, "23580"},
-            {CONF_DERECHO_LOCAL_ID, "0"},
-            {CONF_DERECHO_LOCAL_IP, "127.0.0.1"},
-            {CONF_DERECHO_GMS_PORT, "23580"},
-            {CONF_DERECHO_STATE_TRANSFER_PORT, "28366"},
-            {CONF_DERECHO_SST_PORT, "37683"},
-            {CONF_DERECHO_RDMC_PORT, "31675"},
-            {CONF_DERECHO_EXTERNAL_PORT, "32645"},
-            {CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM, "binomial_send"},
-            {CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS, "250"},
-            {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
-            {CONF_DERECHO_RESTART_TIMEOUT_MS, "2000"},
-            {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
-            {CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS, "false"},
-            {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
-            {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
-            {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
-            {CONF_DERECHO_MAX_NODE_ID, "1024"},
+            {DERECHO_LEADER_IP, "127.0.0.1"},
+            {DERECHO_LEADER_GMS_PORT, "23580"},
+            {DERECHO_LEADER_EXTERNAL_PORT, "32645"},
+            {DERECHO_RESTART_LEADERS, "127.0.0.1"},
+            {DERECHO_RESTART_LEADER_PORTS, "23580"},
+            {DERECHO_LOCAL_ID, "0"},
+            {DERECHO_LOCAL_IP, "127.0.0.1"},
+            {DERECHO_GMS_PORT, "23580"},
+            {DERECHO_STATE_TRANSFER_PORT, "28366"},
+            {DERECHO_SST_PORT, "37683"},
+            {DERECHO_RDMC_PORT, "31675"},
+            {DERECHO_EXTERNAL_PORT, "32645"},
+            {SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM, "binomial_send"},
+            {DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS, "250"},
+            {DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
+            {DERECHO_RESTART_TIMEOUT_MS, "2000"},
+            {DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
+            {DERECHO_ENABLE_BACKUP_RESTART_LEADERS, "false"},
+            {DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
+            {DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
+            {DERECHO_P2P_WINDOW_SIZE, "16"},
+            {DERECHO_MAX_NODE_ID, "1024"},
             // [SUBGROUP/<subgroupname>]
-            {CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE, "10240"},
-            {CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE, "10240"},
-            {CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE, "10240"},
-            {CONF_SUBGROUP_DEFAULT_BLOCK_SIZE, "1048576"},
-            {CONF_SUBGROUP_DEFAULT_WINDOW_SIZE, "16"},
-            {CONF_DERECHO_HEARTBEAT_MS, "1"},
+            {SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE, "10240"},
+            {SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE, "10240"},
+            {SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE, "10240"},
+            {SUBGROUP_DEFAULT_BLOCK_SIZE, "1048576"},
+            {SUBGROUP_DEFAULT_WINDOW_SIZE, "16"},
+            {DERECHO_HEARTBEAT_MS, "1"},
             // [RDMA]
-            {CONF_RDMA_PROVIDER, "sockets"},
-            {CONF_RDMA_DOMAIN, "eth0"},
-            {CONF_RDMA_TX_DEPTH, "256"},
-            {CONF_RDMA_RX_DEPTH, "256"},
+            {RDMA_PROVIDER, "sockets"},
+            {RDMA_DOMAIN, "eth0"},
+            {RDMA_TX_DEPTH, "256"},
+            {RDMA_RX_DEPTH, "256"},
             // [PERS]
-            {CONF_PERS_FILE_PATH, ".plog"},
-            {CONF_PERS_RAMDISK_PATH, "/dev/shm/volatile_t"},
-            {CONF_PERS_RESET, "false"},
-            {CONF_PERS_MAX_LOG_ENTRY, "1048576"},       // 1M log entries.
-            {CONF_PERS_MAX_DATA_SIZE, "549755813888"},  // 512G total data size.
-            {CONF_PERS_PRIVATE_KEY_FILE, "private_key.pem"},
+            {PERS_FILE_PATH, ".plog"},
+            {PERS_RAMDISK_PATH, "/dev/shm/volatile_t"},
+            {PERS_RESET, "false"},
+            {PERS_MAX_LOG_ENTRY, "1048576"},       // 1M log entries.
+            {PERS_MAX_DATA_SIZE, "549755813888"},  // 512G total data size.
+            {PERS_PRIVATE_KEY_FILE, "private_key.pem"},
             // [LOGGER]
-            {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
-            {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"},
-            {CONF_LOGGER_LOG_TO_TERMINAL, "true"},
-            {CONF_LOGGER_LOG_FILE_DEPTH, "3"}};
+            {LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
+            {LOGGER_DEFAULT_LOG_LEVEL, "info"},
+            {LOGGER_LOG_TO_TERMINAL, "true"},
+            {LOGGER_LOG_FILE_DEPTH, "3"}};
 
 public:
     // the option for parsing command line with getopt(not GetPot!!!)
     static struct option long_options[];
 
 public:
+    /**
+     * The name of the default configuration file that will be loaded if none is specified
+     */
+    static constexpr const char* default_conf_file = "derecho.cfg";
+
     /** Constructor:
    *  Conf can read configure from multiple sources
    *  - the command line argument has the highest priority, then,
    *  - the configuration files
    *  - the default values.
    **/
-    Conf(int argc, char* argv[], GetPot* getpotcfg = nullptr) noexcept(true) {
+    Conf(int argc, char* argv[], getpot::GetPot* getpotcfg = nullptr) noexcept(true) {
         // 1 - load configuration from configuration file
         if(getpotcfg != nullptr) {
             for(const std::string& key : getpotcfg->get_variable_names()) {

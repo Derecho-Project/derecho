@@ -18,7 +18,7 @@ void PersistLogger::initialize() {
     uint32_t expected = logger_uninitialized;
     if(initialize_state.compare_exchange_strong(expected, logger_initializing, std::memory_order_acq_rel)) {
         logger = LoggerFactory::createLogger(LoggerFactory::PERSISTENT_LOGGER_NAME,
-                                             derecho::getConfString(CONF_LOGGER_PERSISTENCE_LOG_LEVEL));
+                                             derecho::getConfString(derecho::Conf::LOGGER_PERSISTENCE_LOG_LEVEL));
         initialize_state.store(logger_initialized, std::memory_order_acq_rel);
     }
     while(initialize_state.load(std::memory_order_acquire) != logger_initialized) {

@@ -31,14 +31,14 @@ ViewManager::ViewManager(
         std::map<subgroup_id_t, ReplicatedObject*>& object_pointer_map,
         PersistenceManager& persistence_manager,
         std::vector<view_upcall_t> _view_upcalls)
-        : vm_logger(LoggerFactory::createIfAbsent(LoggerFactory::VIEWMANAGER_LOGGER_NAME, getConfString(CONF_LOGGER_VIEWMANAGER_LOG_LEVEL))),
-          server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
+        : vm_logger(LoggerFactory::createIfAbsent(LoggerFactory::VIEWMANAGER_LOGGER_NAME, getConfString(Conf::LOGGER_VIEWMANAGER_LOG_LEVEL))),
+          server_socket(getConfUInt16(Conf::DERECHO_GMS_PORT)),
           thread_shutdown(false),
-          disable_partitioning_safety(getConfBoolean(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY)),
+          disable_partitioning_safety(getConfBoolean(Conf::DERECHO_DISABLE_PARTITIONING_SAFETY)),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           subgroup_type_order(subgroup_type_order),
-          tcp_sockets(getConfUInt32(CONF_DERECHO_LOCAL_ID), getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT)),
+          tcp_sockets(getConfUInt32(Conf::DERECHO_LOCAL_ID), getConfUInt16(Conf::DERECHO_STATE_TRANSFER_PORT)),
           subgroup_objects(object_pointer_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager(persistence_manager) {
@@ -50,7 +50,7 @@ ViewManager::ViewManager(
 ViewManager::~ViewManager() {
     thread_shutdown = true;
     // force accept to return.
-    tcp::socket s{"localhost", getConfUInt16(CONF_DERECHO_GMS_PORT)};
+    tcp::socket s{"localhost", getConfUInt16(Conf::DERECHO_GMS_PORT)};
     if(client_listener_thread.joinable()) {
         client_listener_thread.join();
     }
@@ -72,10 +72,10 @@ bool ViewManager::first_init() {
     if(curr_view) {
         dbg_debug(vm_logger, "Found view {} on disk", curr_view->vid);
         restart_state = std::make_unique<RestartState>();
-        restart_state->restart_leader_ips = split_string(getConfString(CONF_DERECHO_RESTART_LEADERS));
+        restart_state->restart_leader_ips = split_string(getConfString(Conf::DERECHO_RESTART_LEADERS));
         restart_state->restart_leader_ports = [&]() {
             //"Apply std::stoi over the result of split_string(getConfString(...))"
-            auto port_list = split_string(getConfString(CONF_DERECHO_RESTART_LEADER_PORTS));
+            auto port_list = split_string(getConfString(Conf::DERECHO_RESTART_LEADER_PORTS));
             std::vector<uint16_t> ports;
             for(const auto& port_str : port_list) {
                 ports.emplace_back((uint16_t)std::stoi(port_str));
@@ -91,21 +91,21 @@ bool ViewManager::first_init() {
 }
 
 void ViewManager::startup_to_first_view() {
-    const ip_addr_t my_ip = getConfString(CONF_DERECHO_LOCAL_IP);
-    const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    const uint16_t my_gms_port = getConfUInt16(CONF_DERECHO_GMS_PORT);
+    const ip_addr_t my_ip = getConfString(Conf::DERECHO_LOCAL_IP);
+    const uint32_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
+    const uint16_t my_gms_port = getConfUInt16(Conf::DERECHO_GMS_PORT);
     in_total_restart = false;
     //Determine if I am the initial leader for a new group
-    if(my_ip == getConfString(CONF_DERECHO_LEADER_IP) && my_gms_port == getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT)) {
+    if(my_ip == getConfString(Conf::DERECHO_LEADER_IP) && my_gms_port == getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT)) {
         curr_view = std::make_unique<View>(
                 0, std::vector<node_id_t>{my_id},
                 std::vector<IpAndPorts>{
-                        {getConfString(CONF_DERECHO_LOCAL_IP),
-                         getConfUInt16(CONF_DERECHO_GMS_PORT),
-                         getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT),
-                         getConfUInt16(CONF_DERECHO_SST_PORT),
-                         getConfUInt16(CONF_DERECHO_RDMC_PORT),
-                         getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}},
+                        {getConfString(Conf::DERECHO_LOCAL_IP),
+                         getConfUInt16(Conf::DERECHO_GMS_PORT),
+                         getConfUInt16(Conf::DERECHO_STATE_TRANSFER_PORT),
+                         getConfUInt16(Conf::DERECHO_SST_PORT),
+                         getConfUInt16(Conf::DERECHO_RDMC_PORT),
+                         getConfUInt16(Conf::DERECHO_EXTERNAL_PORT)}},
                 std::vector<char>{0},
                 std::vector<node_id_t>{}, std::vector<node_id_t>{},
                 0, 0, subgroup_type_order);
@@ -115,8 +115,8 @@ void ViewManager::startup_to_first_view() {
     } else {
         active_leader = false;
         dbg_info(vm_logger, "Non-leader node {} initiating a join request at the leader", my_id);
-        leader_connection = std::make_unique<tcp::socket>(getConfString(CONF_DERECHO_LEADER_IP),
-                                                          getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT));
+        leader_connection = std::make_unique<tcp::socket>(getConfString(Conf::DERECHO_LEADER_IP),
+                                                          getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT));
         bool success = receive_initial_view();
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
@@ -126,10 +126,10 @@ void ViewManager::startup_to_first_view() {
 }
 
 bool ViewManager::restart_to_initial_view() {
-    const ip_addr_t my_ip = getConfString(CONF_DERECHO_LOCAL_IP);
-    const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    const uint16_t my_gms_port = getConfUInt16(CONF_DERECHO_GMS_PORT);
-    const bool enable_backup_restart_leaders = getConfBoolean(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS);
+    const ip_addr_t my_ip = getConfString(Conf::DERECHO_LOCAL_IP);
+    const uint32_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
+    const uint16_t my_gms_port = getConfUInt16(Conf::DERECHO_GMS_PORT);
+    const bool enable_backup_restart_leaders = getConfBoolean(Conf::DERECHO_ENABLE_BACKUP_RESTART_LEADERS);
 
     bool got_initial_view = false;
     while(!got_initial_view) {
@@ -155,7 +155,7 @@ bool ViewManager::restart_to_initial_view() {
             using namespace std::chrono;
             leader_connection = std::make_unique<tcp::socket>();
             //Heuristic: Wait for half the leader's restart timeout before concluding the leader isn't responding
-            int time_remaining_micro = getConfUInt32(CONF_DERECHO_RESTART_TIMEOUT_MS) * 1000 / 2;
+            int time_remaining_micro = getConfUInt32(Conf::DERECHO_RESTART_TIMEOUT_MS) * 1000 / 2;
             int connect_status = -1;
             //Annoyingly, try_connect will return immediately if the connection is refused,
             //which is the usual result while waiting for the leader to start up.
@@ -195,7 +195,7 @@ bool ViewManager::restart_to_initial_view() {
 
 bool ViewManager::receive_initial_view() {
     assert(leader_connection);
-    const node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const node_id_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
     JoinResponse leader_response;
     bool leader_redirect;
     do {
@@ -244,9 +244,9 @@ bool ViewManager::receive_initial_view() {
                                                std::vector<std::type_index>{});
             // Initialize restart_state, which wasn't created in first_init() because we had no logged View
             restart_state = std::make_unique<RestartState>();
-            restart_state->restart_leader_ips = split_string(getConfString(CONF_DERECHO_RESTART_LEADERS));
+            restart_state->restart_leader_ips = split_string(getConfString(Conf::DERECHO_RESTART_LEADERS));
             restart_state->restart_leader_ports = [&]() {
-                auto port_list = split_string(getConfString(CONF_DERECHO_RESTART_LEADER_PORTS));
+                auto port_list = split_string(getConfString(Conf::DERECHO_RESTART_LEADER_PORTS));
                 std::vector<uint16_t> ports;
                 for(const auto& port_str : port_list) {
                     ports.emplace_back((uint16_t)std::stoi(port_str));
@@ -286,11 +286,11 @@ bool ViewManager::receive_initial_view() {
         restart_state.reset();
     }
     try {
-        leader_connection->write(getConfUInt16(CONF_DERECHO_GMS_PORT));
-        leader_connection->write(getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT));
-        leader_connection->write(getConfUInt16(CONF_DERECHO_SST_PORT));
-        leader_connection->write(getConfUInt16(CONF_DERECHO_RDMC_PORT));
-        leader_connection->write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
+        leader_connection->write(getConfUInt16(Conf::DERECHO_GMS_PORT));
+        leader_connection->write(getConfUInt16(Conf::DERECHO_STATE_TRANSFER_PORT));
+        leader_connection->write(getConfUInt16(Conf::DERECHO_SST_PORT));
+        leader_connection->write(getConfUInt16(Conf::DERECHO_RDMC_PORT));
+        leader_connection->write(getConfUInt16(Conf::DERECHO_EXTERNAL_PORT));
     } catch(tcp::socket_error& e) {
         return false;
     }
@@ -338,7 +338,7 @@ bool ViewManager::receive_view_and_leaders() {
 
     //Set up non-serialized fields of curr_view
     curr_view->subgroup_type_order = subgroup_type_order;
-    curr_view->my_rank = curr_view->rank_of(getConfUInt32(CONF_DERECHO_LOCAL_ID));
+    curr_view->my_rank = curr_view->rank_of(getConfUInt32(Conf::DERECHO_LOCAL_ID));
     return true;
 }
 
@@ -363,7 +363,7 @@ void ViewManager::check_view_committed(bool& view_confirmed, bool& leader_failed
         //This checks if either the first or the second message was Abort
         if(commit_message == CommitMessage::ABORT) {
             dbg_debug(vm_logger, "Leader sent ABORT");
-            const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+            const uint32_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
             //Wait for a new initial view and ragged trim to be sent,
             //so that when this method returns we can try state transfer again
             leader_failed = !receive_view_and_leaders();
@@ -374,7 +374,7 @@ void ViewManager::check_view_committed(bool& view_confirmed, bool& leader_failed
         }
     } catch(tcp::socket_error&) {
         leader_failed = true;
-        if(restart_state && getConfBoolean(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS)) {
+        if(restart_state && getConfBoolean(Conf::DERECHO_ENABLE_BACKUP_RESTART_LEADERS)) {
             restart_state->num_leader_failures++;
             //Throw out the curr_view the leader sent and revert to the logged one on disk
             curr_view = persistent::loadObject<View>();
@@ -395,7 +395,7 @@ void ViewManager::truncate_logs() {
     }
     dbg_debug(vm_logger, "Truncating persistent logs to conform to leader's ragged trim");
 
-    const node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const node_id_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
 
     for(const auto& id_to_shard_map : restart_state->logged_ragged_trim) {
         subgroup_id_t subgroup_id = id_to_shard_map.first;
@@ -497,7 +497,7 @@ void ViewManager::send_logs() {
     const View& restart_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
     /* If we're in total restart mode, prior_view_shard_leaders is equal
      * to restart_state->restart_shard_leaders */
-    node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    node_id_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
     for(subgroup_id_t subgroup_id = 0; subgroup_id < prior_view_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < prior_view_shard_leaders[subgroup_id].size(); ++shard) {
             if(my_id == prior_view_shard_leaders[subgroup_id][shard]) {
@@ -552,8 +552,8 @@ bool ViewManager::is_starting_leader() const {
     if(in_total_restart) {
         return active_leader;
     } else {
-        return getConfString(CONF_DERECHO_LOCAL_IP) == getConfString(CONF_DERECHO_LEADER_IP)
-               && getConfUInt16(CONF_DERECHO_GMS_PORT) == getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT);
+        return getConfString(Conf::DERECHO_LOCAL_IP) == getConfString(Conf::DERECHO_LEADER_IP)
+               && getConfUInt16(Conf::DERECHO_GMS_PORT) == getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT);
     }
 }
 
@@ -564,7 +564,7 @@ void ViewManager::start() {
 
 void ViewManager::await_first_view() {
     dbg_info(vm_logger, "Group leader waiting for an initial adequate view");
-    const node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const node_id_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
     std::set<node_id_t> members_sent_view;
     curr_view->is_adequately_provisioned = false;
@@ -758,8 +758,8 @@ void ViewManager::initialize_rdmc_sst() {
     node_id_t my_id = curr_view->members[curr_view->my_rank];
     const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> self_ip_and_port_map = {
             {my_id,
-             {getConfString(CONF_DERECHO_LOCAL_IP),
-              getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}};
+             {getConfString(Conf::DERECHO_LOCAL_IP),
+              getConfUInt16(Conf::DERECHO_EXTERNAL_PORT)}}};
 
 #ifdef USE_VERBS_API
     sst::verbs_initialize(member_ips_and_sst_ports_map,
@@ -1064,9 +1064,9 @@ void ViewManager::external_join_handler(tcp::socket& client_socket, const node_i
     try {
         if(curr_view->rank_of(joiner_id) != -1) {
             // external can't have same id as any member
-            client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
+            client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, getConfUInt32(Conf::DERECHO_LOCAL_ID)});
         }
-        client_socket.write(JoinResponse{JoinResponseCode::OK, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
+        client_socket.write(JoinResponse{JoinResponseCode::OK, getConfUInt32(Conf::DERECHO_LOCAL_ID)});
         client_socket.read(request);
     } catch(tcp::socket_error& ex) {
         dbg_warn(vm_logger, "TCP connection to external client {} failed before it could send a request. Ignoring request.", joiner_id);
@@ -1642,7 +1642,7 @@ void ViewManager::construct_multicast_group(const UserMessageCallbacks& callback
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
             curr_view->gmsSST, callbacks, internal_callbacks, num_subgroups, subgroup_settings,
-            getConfUInt32(CONF_DERECHO_HEARTBEAT_MS),
+            getConfUInt32(Conf::DERECHO_HEARTBEAT_MS),
             persistence_manager, curr_view->failed);
 }
 

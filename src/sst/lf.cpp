@@ -148,10 +148,10 @@ static void load_configuration() {
 
     // provider:
     g_ctxt.hints->fabric_attr->prov_name = crash_if_nullptr("strdup provider name.",
-                                                            strdup, derecho::getConfString(CONF_RDMA_PROVIDER).c_str());
+                                                            strdup, derecho::getConfString(derecho::Conf::RDMA_PROVIDER).c_str());
     // domain:
     g_ctxt.hints->domain_attr->name = crash_if_nullptr("strdup domain name.",
-                                                       strdup, derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
+                                                       strdup, derecho::getConfString(derecho::Conf::RDMA_DOMAIN).c_str());
     if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) || (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)) {
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
@@ -166,8 +166,8 @@ static void load_configuration() {
     // g_ctxt.rx_depth = DEFAULT_RX_DEPTH;
 
     // tx_depth
-    g_ctxt.hints->tx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_TX_DEPTH);
-    g_ctxt.hints->rx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_RX_DEPTH);
+    g_ctxt.hints->tx_attr->size = derecho::Conf::get()->getInt32(derecho::Conf::RDMA_TX_DEPTH);
+    g_ctxt.hints->rx_attr->size = derecho::Conf::get()->getInt32(derecho::Conf::RDMA_RX_DEPTH);
 }
 
 std::shared_mutex _resources::oob_mrs_mutex;
@@ -580,12 +580,12 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         }
         iov_tot_sz += iov[i].iov_len;
     }
-    if (iov_tot_sz > size && 
+    if (iov_tot_sz > size &&
         (op == OOB_OP_READ || op == OOB_OP_WRITE)) {
         throw derecho::derecho_exception("oob_remote_write(): remote buffer is smaller than data.");
     }
 
-    // STEP 2: 
+    // STEP 2:
     // - set up completion entry.
     const auto tid = std::this_thread::get_id();
     uint32_t ce_idx = util::polling_data.get_index(tid);
@@ -599,11 +599,11 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         // do one-sided RDMA transfer
         struct fi_rma_iov rma_iov;
         struct fi_msg_rma msg;
-    
+
         rma_iov.addr = ((LF_USE_VADDR) ? reinterpret_cast<uint64_t>(remote_dest_addr) : 0);
         rma_iov.len = size;
         rma_iov.key = rkey;
-    
+
         msg.msg_iov = iov;
         msg.iov_count = iovcnt;
         msg.desc = desc;
@@ -611,11 +611,11 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
         msg.rma_iov = &rma_iov;
         msg.rma_iov_count = 1;
         msg.data = 0l; // not used
-    
+
         // set up completion entry.
         msg.context = static_cast<void*>(ce_ctxt_ptr);
         dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(ce_ctxt_ptr));
-    
+
         if (op == OOB_OP_WRITE) {
             // STEP 3: According to the IBTA Spec, we need to put a barrier (atomic operation) after the data has been written.
             // Cited from IBTA spec o9-20:
@@ -661,7 +661,7 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
 
         msg.context = static_cast<void*>(ce_ctxt_ptr);
         dbg_trace(sst_logger, "{}: op = {:d}, msg.context = {:p}",__func__,op,static_cast<void*>(ce_ctxt_ptr));
-    
+
         if (op == OOB_OP_SEND) {
             ret = retry_on_eagain_unless("fi_sendmsg failed.",
                                          [this](){return remote_failed.load();},
@@ -1042,7 +1042,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             dbg_debug(g_ctxt.sst_logger, "WEIRD: we get an entry with op_context = NULL.");
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!
         } else {
-            
+
             // dbg_trace(g_ctxt.sst_logger, "Normal: we get an entry with op_context = {:p}.", static_cast<void*>(ce_ctxt));
             std::pair<uint32_t,std::pair<int32_t,int32_t>> ret = {ce_ctxt->ce_idx(), {ce_ctxt->remote_id(), 1}};
             if (!ce_ctxt->is_managed()) {
@@ -1060,7 +1060,7 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& in
                    uint32_t node_id) {
     // Create SST logger, which must be done exactly once before any SST functions are called
     auto logger = LoggerFactory::createLogger(LoggerFactory::SST_LOGGER_NAME,
-                                              derecho::getConfString(CONF_LOGGER_SST_LOG_LEVEL));
+                                              derecho::getConfString(derecho::Conf::LOGGER_SST_LOG_LEVEL));
 
     // initialize derecho connection manager
     // May there be a better design?

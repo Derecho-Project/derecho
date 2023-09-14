@@ -78,7 +78,7 @@ void ExternalClientCaller<T, ExternalGroupType>::add_p2p_connection(node_id_t de
             throw derecho_exception("Leader rejected join, ID already in use.");
         }
         sock.write(ExternalClientRequest::ESTABLISH_P2P);
-        sock.write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
+        sock.write(getConfUInt16(Conf::DERECHO_EXTERNAL_PORT));
     } catch(tcp::socket_error&) {
         throw derecho_exception("Failed to establish P2P connection: socket error while sending join request.");
     }
@@ -100,14 +100,14 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
     uint64_t message_seq_num;
     auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
             [this, &dest_node, &message_seq_num](size_t size) -> uint8_t* {
-                const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
+                const std::size_t max_p2p_request_payload_size = getConfUInt64(Conf::DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                 if(size <= max_p2p_request_payload_size) {
                     auto buffer_handle = group_client.get_sendbuffer_ptr(dest_node,
                                                                          sst::MESSAGE_TYPE::P2P_REQUEST);
                     message_seq_num = buffer_handle.seq_num;
                     return buffer_handle.buf_ptr;
                 } else {
-                    throw derecho_exception("The size of serialized args exceeds the maximum message size (CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE).");
+                    throw derecho_exception("The size of serialized args exceeds the maximum message size (Conf::DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE).");
                 }
             },
             std::forward<Args>(args)...);
@@ -138,10 +138,10 @@ void ExternalGroupClient<ReplicatedTypes...>::initialize_p2p_connections() {
 
     p2p_connections = std::make_unique<sst::P2PConnectionManager>(sst::P2PParams{
             my_id,
-            getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
+            getConfUInt32(Conf::DERECHO_P2P_WINDOW_SIZE),
             view_max_rpc_window_size,
-            getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
-            getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
+            getConfUInt64(Conf::DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
+            getConfUInt64(Conf::DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
             view_max_rpc_reply_payload_size + sizeof(header),
             true,
             NULL});
@@ -149,19 +149,19 @@ void ExternalGroupClient<ReplicatedTypes...>::initialize_p2p_connections() {
 
 template <typename... ReplicatedTypes>
 ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient()
-        : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
+        : my_id(getConfUInt32(Conf::DERECHO_LOCAL_ID)),
           receivers(new std::decay_t<decltype(*receivers)>()),
           // ExternalGroupClient needs to create the RPC logger since P2PConnectionManager uses it (but there is no RPCManager to create it)
-          rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(CONF_LOGGER_RPC_LOG_LEVEL))),
-          busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
+          rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(Conf::LOGGER_RPC_LOG_LEVEL))),
+          busy_wait_before_sleep_ms(getConfUInt64(Conf::DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
     RpcLoggerPtr::initialize();
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
-                          std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                          std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(Conf::DERECHO_LOCAL_IP), getConfUInt16(Conf::DERECHO_EXTERNAL_PORT)}}},
                           my_id);
 #else
     sst::lf_initialize({},
-                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(Conf::DERECHO_LOCAL_IP), getConfUInt16(Conf::DERECHO_EXTERNAL_PORT)}}},
                        my_id);
 #endif
 
@@ -180,26 +180,26 @@ template <typename... ReplicatedTypes>
 ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(
         std::vector<DeserializationContext*> deserialization_contexts,
         std::function<std::unique_ptr<ReplicatedTypes>()>... factories)
-        : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
+        : my_id(getConfUInt32(Conf::DERECHO_LOCAL_ID)),
           receivers(new std::decay_t<decltype(*receivers)>()),
 #if __GNUC__ < 9
           factories(make_kind_map(factories...)),
 #else
           factories(make_kind_map<NoArgFactory>(factories...)),
 #endif
-          rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(CONF_LOGGER_RPC_LOG_LEVEL))),
-          busy_wait_before_sleep_ms(getConfUInt64(CONF_DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
+          rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(Conf::LOGGER_RPC_LOG_LEVEL))),
+          busy_wait_before_sleep_ms(getConfUInt64(Conf::DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
     RpcLoggerPtr::initialize();
     for(auto dc : deserialization_contexts) {
         rdv.push_back(dc);
     }
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
-                          std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                          std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(Conf::DERECHO_LOCAL_IP), getConfUInt16(Conf::DERECHO_EXTERNAL_PORT)}}},
                           my_id);
 #else
     sst::lf_initialize({},
-                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(Conf::DERECHO_LOCAL_IP), getConfUInt16(Conf::DERECHO_EXTERNAL_PORT)}}},
                        my_id);
 #endif
 
@@ -223,7 +223,7 @@ template <typename... ReplicatedTypes>
 bool ExternalGroupClient<ReplicatedTypes...>::get_view(const node_id_t nid) {
     try {
         tcp::socket sock = (nid == INVALID_NODE_ID)
-                                   ? tcp::socket(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT))
+                                   ? tcp::socket(getConfString(Conf::DERECHO_LEADER_IP), getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT))
                                    : tcp::socket(curr_view->member_ips_and_ports[curr_view->rank_of(nid)].ip_address,
                                                  curr_view->member_ips_and_ports[curr_view->rank_of(nid)].gms_port, false);
 

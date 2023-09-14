@@ -289,7 +289,7 @@ bool verbs_initialize(const map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_ad
         goto resources_create_exit;
     }
 
-    local_config.dev_name = strdup(derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
+    local_config.dev_name = strdup(derecho::getConfString(derecho::Conf::RDMA_DOMAIN).c_str());
     fprintf(stdout, "found %d device(s)\n", num_devices);
     /* search for the specific device we want to work with */
     for(i = 0; i < num_devices; i++) {
@@ -526,8 +526,8 @@ queue_pair::queue_pair(size_t remote_index,
     qp_init_attr.sq_sig_all = 1;
     qp_init_attr.send_cq = verbs_resources.cq;
     qp_init_attr.recv_cq = verbs_resources.cq;
-    qp_init_attr.cap.max_send_wr = derecho::getConfUInt32(CONF_RDMA_TX_DEPTH);
-    qp_init_attr.cap.max_recv_wr = derecho::getConfUInt32(CONF_RDMA_RX_DEPTH);
+    qp_init_attr.cap.max_send_wr = derecho::getConfUInt32(derecho::Conf::RDMA_TX_DEPTH);
+    qp_init_attr.cap.max_recv_wr = derecho::getConfUInt32(derecho::Conf::RDMA_RX_DEPTH);
     qp_init_attr.cap.max_send_sge = 1;
     qp_init_attr.cap.max_recv_sge = 1;
 

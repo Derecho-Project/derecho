@@ -130,8 +130,8 @@ _resources::_resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int
     qp_init_attr.send_cq = g_res->cq;
     qp_init_attr.recv_cq = g_res->cq;
     // since we send the value first and the update the counter, we double the depth configurations.
-    qp_init_attr.cap.max_send_wr = derecho::getConfUInt32(CONF_RDMA_TX_DEPTH) << 1;
-    qp_init_attr.cap.max_recv_wr = derecho::getConfUInt32(CONF_RDMA_RX_DEPTH) << 1;
+    qp_init_attr.cap.max_send_wr = derecho::getConfUInt32(derecho::Conf::RDMA_TX_DEPTH) << 1;
+    qp_init_attr.cap.max_recv_wr = derecho::getConfUInt32(derecho::Conf::RDMA_RX_DEPTH) << 1;
     qp_init_attr.cap.max_send_sge = 1;
     qp_init_attr.cap.max_recv_sge = 1;
     // create the queue pair
@@ -148,7 +148,7 @@ _resources::_resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int
     without_completion_send_cnt = 0;
     // leave 20% queue pair space for ops with completion.
     // send signal every half of the capacity.
-    without_completion_send_signal_interval = (derecho::getConfInt32(CONF_RDMA_TX_DEPTH) * 4 / 5) / 2;
+    without_completion_send_signal_interval = (derecho::getConfInt32(derecho::Conf::RDMA_TX_DEPTH) * 4 / 5) / 2;
     without_completion_send_capacity = without_completion_send_signal_interval * 2;
     // sender context
     without_completion_sender_ctxt.type = verbs_sender_ctxt::INTERNAL_FLOW_CONTROL;
@@ -644,7 +644,7 @@ void resources_create() {
         cout << "NO RDMA device present" << endl;
     }
     // search for the specific device we want to work with
-    char* dev_name = strdup(derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
+    char* dev_name = strdup(derecho::getConfString(derecho::Conf::RDMA_DOMAIN).c_str());
     for(i = 0; i < num_devices; i++) {
         if(!dev_name) {
             dev_name = strdup(ibv_get_device_name(dev_list[i]));
