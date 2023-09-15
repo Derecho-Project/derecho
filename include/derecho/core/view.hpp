@@ -1,5 +1,5 @@
 /**
- * @file view.h
+ * @file view.hpp
  * @brief: Contains the definition of the View class
  */
 
@@ -199,7 +199,10 @@ public:
     /**
      * Constructs a SubView containing the provided subset of this View's
      * members. This is helpful in writing subgroup-membership functions.
-     * @param with_members The node IDs that will be the SubView's members vector
+     * @param   with_members The node IDs that will be the SubView's members vector
+     * @param   mode            ordered or raw
+     * @param   is_sender       i am sender or node.
+     * @param   profile         profile in configuration
      * @return A SubView containing those members, the corresponding member IPs,
      * and the subsets of joined[] and departed[] that intersect with those members
      * @throws subgroup_provisioning_exception if any of the requested members

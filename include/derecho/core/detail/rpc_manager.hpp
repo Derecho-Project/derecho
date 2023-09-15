@@ -1,5 +1,5 @@
 /**
- * @file rpc_manager.h
+ * @file rpc_manager.hpp
  *
  * @date Feb 7, 2017
  */
@@ -46,19 +46,24 @@ namespace rpc {
  * Given a subgroup ID and a list of functions, constructs a
  * RemoteInvokerForClass for the type of object given by the template
  * parameter, with its receive functions registered to this RPCManager.
- * @param type_id A number uniquely identifying the type of the object (in
- * practice, this is the index of UserProvidedClass within the template
- * parameters of the containing Group).
- * @param instance_id A number uniquely identifying the subgroup to which
- * RPC invocations for this object should be sent.
- * @param funs A tuple of "partially wrapped" pointer-to-member-functions
- * (the return type of rpc::tag<>(), which is called by the client), one for
- * each method of UserProvidedClass that should be an RPC function
- * @return The RemoteInvokerForClass that can call a remote UserProvidedClass,
- * by pointer
+ *
  * @tparam UserProvidedClass The type of the object being wrapped with a
  * RemoteInvokerForClass
  * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
+ *
+ * @param   nid         node id
+ * @param   type_id     A number uniquely identifying the type of the object (in
+ * practice, this is the index of UserProvidedClass within the template
+ * parameters of the containing Group).
+ * @param   instance_id A number uniquely identifying the subgroup to which
+ * RPC invocations for this object should be sent.
+ * @param   funs        A tuple of "partially wrapped" pointer-to-member-functions
+ * (the return type of rpc::tag<>(), which is called by the client), one for
+ * each method of UserProvidedClass that should be an RPC function
+ * @param   receivers   handlers
+ *
+ * @return The RemoteInvokerForClass that can call a remote UserProvidedClass,
+ * by pointer
  */
 template <typename UserProvidedClass, typename FunctionTuple>
 auto make_remote_invoker(const node_id_t nid, uint32_t type_id, uint32_t instance_id, FunctionTuple funs, std::map<Opcode, receive_fun_t>& receivers) {

@@ -1,5 +1,5 @@
 /**
- * @file remote_invocable.h
+ * @file remote_invocable.hpp
  *
  * @date Feb 13, 2017
  */
@@ -101,9 +101,9 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     /**
      * Called to construct an RPC message to send that will invoke the remote-
      * invocable function targeted by this RemoteInvoker.
-     * @param out_alloc A function that can allocate buffers, which will be
+     * @param out_alloc     A function that can allocate buffers, which will be
      * used to store the constructed message
-     * @param a The arguments to be used when calling the remote-invocable function
+     * @param remote_args   The arguments to be used when calling the remote-invocable function
      */
     send_return send(const std::function<uint8_t*(std::size_t)>& out_alloc,
                      const std::decay_t<Args>&... remote_args) {
@@ -199,8 +199,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     /**
      * Entry point for responses; called when a message is received that
      * contains a response to this RemoteInvocable function's RPC call.
-     * @param dsm
-     * @param nid The ID of the node that sent the response
+     * @param rdv   Deserialization vector
+     * @param nid   The ID of the node that sent the response
      * @param response The byte buffer containing the response message
      * @param f
      * @return A recv_ret containing nothing of value.
@@ -222,7 +222,9 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      * (The actual function implementation is not needed, since only the
      * remote side needs to know how to implement the RPC function.)
      *
-     * @param receivers A map from RPC message opcodes to handler functions,
+     * @param   class_id    class id
+     * @param   instance_id instance id
+     * @param   receivers   A map from RPC message opcodes to handler functions,
      * which this RemoteInvoker should add its functions to.
      */
     RemoteInvoker(uint32_t class_id, uint32_t instance_id,
@@ -345,7 +347,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      * Entry point for handling an RPC function call to this RemoteInvocable
      * function. Called when a message is received that contains a request to
      * call this function.
-     * @param dsm
+     * @param rdv   Deserialization vector
      * @param who The node that sent the message
      * @param recv_buf The buffer containing the received message
      * @param out_alloc A function that can allocate a buffer for the response message
@@ -364,9 +366,11 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      * Constructs a RemoteInvocable that provides RPC call handling for a
      * specific function, and registers the RPC-handling functions in the
      * given "receivers" map.
-     * @param receivers A map from RPC message opcodes to handler functions,
+     * @param   class_id    Class id
+     * @param   instance_id Instance id
+     * @param   receivers   A map from RPC message opcodes to handler functions,
      * which this RemoteInvocable should add its functions to.
-     * @param f The actual function that should be called when an RPC call
+     * @param   f           The actual function that should be called when an RPC call
      * arrives.
      */
     RemoteInvocable(uint32_t class_id, uint32_t instance_id,

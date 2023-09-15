@@ -173,6 +173,7 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      * @param client_object_factory A factory functor that can create instances
+     * @param group group pointer
      * of T.
      */
     Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index,
@@ -196,6 +197,7 @@ public:
      * subgroup_id) that participates in replicating this object
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
+     * @param group     Group pointer
      */
     Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index,
                uint32_t shard_num, rpc::RPCManager& group_rpc_manager, _Group* group);
@@ -358,7 +360,8 @@ public:
 
     /**
      * make a version for all the persistent<T> members.
-     * @param ver - the version number to be made
+     * @param ver   the version number to be made
+     * @param hlc   the hybrid clock
      */
     virtual void make_version(persistent::version_t ver, const HLC& hlc);
 

@@ -1,5 +1,5 @@
 /**
- * @file test_objects.h
+ * @file test_objects.hpp
  *
  * Some ReplicatedObject definitions used by typed_subgroup_test and variants.
  */

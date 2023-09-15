@@ -1,5 +1,5 @@
 /**
- * @file ViewManager.h
+ * @file view_manager.hpp
  *
  * @date Feb 6, 2017
  */
@@ -681,7 +681,7 @@ public:
      * the template parameters to the Group class
      * @param any_persistent_objects True if any of the subgroup types in this
      * group use Persistent<T> fields, false otherwise
-     * @param object_reference_map A mutable reference to the list of
+     * @param object_pointer_map A mutable reference to the list of
      * ReplicatedObject pointers in Group, so that ViewManager can access it
      * while Group manages the list
      * @param persistence_manager A mutable reference to the PersistenceManager

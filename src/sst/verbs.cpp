@@ -317,15 +317,6 @@ void _resources::connect_qp() {
     }
 }
 
-/**
- * This is used for both reads and writes.
- *
- * @param id
- * @param offset The offset within the remote buffer to start the operation at.
- * @param size The number of bytes to read or write.
- * @param op The operation mode; 0 is for read, 1 is for write.
- * @return The return code of the IB Verbs post_send operation.
- */
 int _resources::post_remote_send(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size,
                                  const int op, const bool completion) {
     struct ibv_send_wr sr;

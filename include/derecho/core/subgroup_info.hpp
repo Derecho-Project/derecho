@@ -1,5 +1,5 @@
 /**
- * @file subgroup_info.h
+ * @file subgroup_info.hpp
  *
  * @date Feb 17, 2017
  */

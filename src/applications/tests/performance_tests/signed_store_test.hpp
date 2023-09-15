@@ -12,6 +12,10 @@
 #include <derecho/openssl/hash.hpp>
 
 /**
+ * @cond DoxygenSuppressed
+ */
+
+/**
  * This object, representing arbitrary binary data, was (mostly) copied and
  * pasted from the Cascade code.
  */
@@ -210,3 +214,6 @@ public:
         return std::make_unique<ClientTier>(0);
     };
 };
+/**
+ * @endcond
+ */

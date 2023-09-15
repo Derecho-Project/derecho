@@ -2,6 +2,10 @@
 #include <string.h>
 using namespace std;
 
+/**
+ * @cond DoxygenSuppreseed
+ */
+
 namespace mutils {
 
 std::size_t to_bytes(const ByteRepresentable& b, uint8_t* buffer) {
@@ -60,3 +64,6 @@ std::size_t from_bytes_noalloc_v(DeserializationManager*, uint8_t const* const) 
 }
 
 }  // namespace mutils
+/**
+ * @endcond
+ */

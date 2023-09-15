@@ -255,18 +255,20 @@ public:
 
     /** prefix generator
      * prefix format: [hex of subgroup_type]-[subgroup_index]-[shard_num]
-     * @param subgroup_type, the type information of a subgroup
-     * @param subgroup_index, the index of a subgroup
-     * @param shard_num, the shard number of a subgroup
+     * @param subgroup_type     the type information of a subgroup
+     * @param subgroup_index    the index of a subgroup
+     * @param shard_num         the shard number of a subgroup
      * @return a std::string representation of the prefix
      */
     static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num);
 
     /** match prefix
-     * @param str, a string begin with a prefix like [hex64 of subgroup_type]-[subgroup_index]-[shard_num]-
-     * @param subgroup_type, the type information of a subgroup
-     * @param subgroup_index, the index of a subgroup
-     * @param shard_num, the shard number of a subgroup
+     * @param str               a string begin with a prefix like 
+     *                          [hex64 of subgroup_type]-[subgroup_index]-[shard_num]-
+     * @param subgroup_type     the type information of a subgroup
+     * @param subgroup_index    the index of a subgroup
+     * @param shard_num         the shard number of a subgroup
+     *
      * @return true if the prefix match the subgroup type,index, and shard_num; otherwise, false.
      */
     static bool match_prefix(const std::string str, const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(true);
@@ -403,7 +405,8 @@ template <typename ObjectType,
 class Persistent : public PersistentObject, public mutils::ByteRepresentable {
 protected:
     /** initialize from local state.
-     *  @param object_name Object name
+     *  @param  object_name         Object name
+     *  @param  enable_signatures   enable signature
      */
     inline void initialize_log(const char* object_name, bool enable_signatures);
 
@@ -553,7 +556,7 @@ public:
      * it returns.
      *
      * A note for ObjectType implementing IDeltaSupport<> interface: a history state will be reconstructed from the very
-     * first log entry, making it extremely inefficient. @TODO: use cached checkpoint to accelerate it.
+     * first log entry, making it extremely inefficient. TODO: use cached checkpoint to accelerate it.
      *
      * @param idx   index
      * @param fun   the user function to process a const ObjectType& object
@@ -574,7 +577,7 @@ public:
      *
      * Get a version of value T by log index. Returns a copy of the object.
      *
-     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     * TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
      *
      * @param idx   index
      * @param dm    the deserialization manager
@@ -594,7 +597,7 @@ public:
      * (const ObjectType&). Please note that due to zero copy design, this object may not be accessible anymore after
      * it returns.
      *
-     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     * TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
      *
      * @param ver   if 'ver', the specified version, matches a log entry, the state corresponding to that entry will be
      *              send to 'fun'; if 'ver' does not match a log entry, the latest state before 'ver' will be applied to
@@ -617,7 +620,7 @@ public:
      *
      * Get a version of value T. specified version.
      *
-     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     * TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
      *
      * @param ver   if 'ver', the specified version, matches a log entry, the state corresponding to that entry will be
      *              send to 'fun'; if 'ver' does not match a log entry, the latest state before 'ver' will be applied to
@@ -750,6 +753,7 @@ public:
      * @param prev_ver          A variable which will be updated to equal the previous version whose signature is
      *                          included in this version's signature, or INVALID_VERSION if the Delta at this version
      *                          fails the search predicate
+     * @param dm                deserialization manager
      *
      * @return True if a signature was placed in the signature buffer, false if there was no log entry at the
      * requested version or the delta at that entry did not pass the user-provided search predicate
@@ -790,7 +794,7 @@ public:
      * Get a version of ObjectType, specified by HLC clock. the user function will be fed with an object of type 'const
      * ObjectType&'. Due to the zero-copy design, this object might not be accessible after get() returns.
      *
-     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     * TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
      *
      * @tparam Func         User-specified function type, which is usually deduced.
      *
@@ -813,7 +817,7 @@ public:
      *
      * Get a version of ObjectType, specified by HLC clock. A copy of ObjectType object will be returned.
      *
-     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     * TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
      *
      * @param hlc   the HLC timestamp
      * @param dm    the deserialization manager
@@ -1013,10 +1017,10 @@ public:
      * this log. Also specifies the previous version whose signature has been included
      * in this signature, to make it easier to verify the chain of signatures.
      * Does nothing if signatures are disabled.
-     * @param ver the version to add the signature to; should be the same version
+     * @param   ver         the version to add the signature to; should be the same version
      * that was used previously in update_signature to create this signature.
-     * @param signature A byte buffer containing the signature to add to the log
-     * @param pervious_signed_version The previous version that this signature
+     * @param   signature   A byte buffer containing the signature to add to the log
+     * @param   previous_signed_version     The previous version that this signature
      * depends on (i.e. whose signature was signed when creating this signature).
      */
     virtual void addSignature(version_t ver, const uint8_t* signature,
@@ -1100,9 +1104,11 @@ public:
     static std::unique_ptr<Persistent> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* v);
     // derived from ByteRepresentable
     virtual void ensure_registered(mutils::DeserializationManager&) {}
-    // apply the serialized log tail to existing log
-    // @dsm - deserialization manager
-    // @v - bytes representation of the log tail)
+    /**
+     * apply the serialized log tail to existing log
+     * @param   dsm - deserialization manager
+     * @param   v - bytes representation of the log tail)
+     */
     void applyLogTail(mutils::DeserializationManager* dsm, uint8_t const* v);
 
 #if defined(_PERFORMANCE_DEBUG)
@@ -1144,7 +1150,7 @@ public:
      * @param object_factory factory for ObjectType
      * @param object_name The name is used for persistent data in file.
      * @param wrapped_obj_ptr A unique pointer to the wrapped object.
-     * @param log_ptr A pointer to the beginning of the log within the serialized buffer
+     * @param log_tail A pointer to the beginning of the log within the serialized buffer
      * @param persistent_registry A normal pointer to the registry.
      * @param dm DeserializationManager for deserializing logged object.
      */
@@ -1183,7 +1189,7 @@ public:
  * saveObject() saves a serializable object
  * @param obj The object to be persisted.
  * @param object_name Optional object name. If not given, the object_name
- *        is <storage type>-<object type name>-nolog. NOTE: please provide
+ *        is \<storage type\>-\<object type name\>-nolog. NOTE: please provide
  *        an object name if you trying to persist two objects of the same
  *        type. NOTE: the object has to be ByteRepresentable.
  * @return

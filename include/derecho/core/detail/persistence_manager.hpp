@@ -1,5 +1,5 @@
 /**
- * @file persistence_manager.h
+ * @file persistence_manager.hpp
  *
  * @date Jun 20, 2017
  */
@@ -146,7 +146,7 @@ public:
                       const persistent::version_t& version, const HLC& mhlc);
 
     /** shutdown the thread
-     * @wait - wait till the thread finished or not.
+     * @param   wait    Wait till the thread finished or not.
      */
     void shutdown(bool wait);
 };
