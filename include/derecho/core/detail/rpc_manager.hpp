@@ -89,10 +89,12 @@ class RPCManager {
      * from the targets of an earlier remote call.
      * Note that a FunctionID is (class ID, subgroup ID, Function Tag). */
     std::unique_ptr<std::map<Opcode, receive_fun_t>> receivers;
-    /** An emtpy DeserializationManager, in case we need it later. */
-    // mutils::DeserializationManager dsm{{}};
-    // Weijia: I prefer the deserialization context vector.
-    mutils::RemoteDeserialization_v rdv;
+    /**
+     * A copy of the user-provided deserialization context vector, which is
+     * also stored in Group. Provided to from_bytes when deserializing a user-
+     * defined Replicated Object.
+     */
+    mutils::RemoteDeserialization_v deserialization_contexts;
 
     template <typename T>
     friend class ::derecho::Replicated;  // Give only Replicated access to view_manager
@@ -256,6 +258,13 @@ class RPCManager {
                                          const std::function<uint8_t*(int)>& out_alloc);
 
 public:
+    /**
+     * Constructor
+     *
+     * @param group_view_manager A reference to the ViewManager object
+     * @param deserialization_context A reference to the vector of user-provided
+     * deserialization contexts from Group, which will be copied in
+     */
     RPCManager(ViewManager& group_view_manager,
                const std::vector<DeserializationContext*>& deserialization_context);
 

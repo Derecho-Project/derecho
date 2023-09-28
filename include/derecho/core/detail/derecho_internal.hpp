@@ -71,7 +71,12 @@ using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, persistent::v
  * not an internal data structure).
  */
 struct UserMessageCallbacks {
-    /** A function to be called each time a message reaches global stability in the group. */
+    /**
+     * A function to be called each time a raw (non-RPC) message reaches global stability in the group.
+     * Note that this will not be called when RPC messages reach global stability, since the RPC function
+     * itself is already a user-provided callback, and a serialized RPC message will not be readable as
+     * a plain byte array (the "message body" argument provided to this callback).
+     */
     message_callback_t global_stability_callback;
     /** A function to be called when a new version of a subgroup's state finishes persisting locally */
     persistence_callback_t local_persistence_callback = nullptr;

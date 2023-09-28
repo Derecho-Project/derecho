@@ -197,8 +197,8 @@ void Replicated<T>::send_object_raw(tcp::socket& receiver_socket) const {
 
 template <typename T>
 std::size_t Replicated<T>::receive_object(uint8_t* buffer) {
-    // *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager.dsm, buffer));
-    mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
+    // Add this object's persistent registry to the list of deserialization contexts
+    mutils::RemoteDeserialization_v rdv{group_rpc_manager.deserialization_contexts};
     rdv.insert(rdv.begin(), persistent_registry.get());
     mutils::DeserializationManager dsm{rdv};
     *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
