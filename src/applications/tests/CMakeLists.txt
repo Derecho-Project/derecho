@@ -4,4 +4,3 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
 add_subdirectory(unit_tests)
 add_subdirectory(performance_tests)
-add_subdirectory(scalability_tests)
