@@ -1,3 +1,10 @@
+#include "aggregate_bandwidth.hpp"
+#include "bytes_object.hpp"
+#include "log_results.hpp"
+#include "partial_senders_allocator.hpp"
+
+#include <derecho/core/derecho.hpp>
+
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -5,13 +12,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <derecho/core/derecho.hpp>
-
-#include "aggregate_bandwidth.hpp"
-#include "bytes_object.hpp"
-#include "log_results.hpp"
-#include "partial_senders_allocator.hpp"
 
 using std::cout;
 using std::endl;
@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
             break;
     }
     // variable 'done' tracks the end of the test
-    volatile bool done = false;
+    std::atomic<bool> done = false;
 
     // last_version and its flag is shared between the stability callback and persistence callback.
     // This is a clumsy hack to figure out what version number is assigned to the last delivered message.

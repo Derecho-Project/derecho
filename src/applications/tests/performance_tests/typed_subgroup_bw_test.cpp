@@ -9,6 +9,7 @@
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/Persistent.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <map>
@@ -21,13 +22,10 @@ using test::Bytes;
 using namespace std::chrono;
 
 /**
- * RPC Object with a single function that accepts a string
+ * RPC Object with a single function that accepts a byte array
  */
 class TestObject {
 public:
-    void fun(const std::string& words) {
-    }
-
     void bytes_fun(const Bytes& bytes) {
     }
 
@@ -35,7 +33,7 @@ public:
         return true;
     }
 
-    REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(fun, bytes_fun, finishing_call));
+    REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(bytes_fun, finishing_call));
 };
 
 struct exp_result {
@@ -110,7 +108,7 @@ int main(int argc, char* argv[]) {
             break;
     }
     // variable 'done' tracks the end of the test
-    volatile bool done = false;
+    std::atomic<bool> done = false;
     // callback into the application code at each message delivery
     auto stability_callback = [&done,
                                &send_complete_time,
@@ -135,39 +133,15 @@ int main(int argc, char* argv[]) {
         pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
     }
 
-    /*******************
-    derecho::SubgroupInfo subgroup_info{[num_nodes](
-                                                const std::vector<std::type_index>& subgroup_type_order,
-                                                const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
-        if(curr_view.num_members < num_nodes) {
-            std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_nodes << std::endl;
-            throw derecho::subgroup_provisioning_exception();
-        }
-        derecho::subgroup_shard_layout_t subgroup_layout(1);
-
-        std::vector<uint32_t> members(num_nodes);
-        for(int i = 0; i < num_nodes; i++) {
-            members[i] = i;
-        }
-
-        subgroup_layout[0].emplace_back(curr_view.make_subview(members));
-        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_nodes);
-        derecho::subgroup_allocation_map_t subgroup_allocation;
-        subgroup_allocation.emplace(std::type_index(typeid(TestObject)), std::move(subgroup_layout));
-        return subgroup_allocation;
-    }};
-    *****************/
-
     auto membership_function = PartialSendersAllocator(num_nodes, senders_mode, derecho::Mode::ORDERED);
     derecho::SubgroupInfo subgroup_info(membership_function);
 
-    auto ba_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
+    auto test_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
 
-    derecho::Group<TestObject> group(derecho::UserMessageCallbacks{stability_callback}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, ba_factory);
+    derecho::Group<TestObject> group(derecho::UserMessageCallbacks{stability_callback}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, test_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
-    //std::string str_1k(max_msg_size, 'x');
-    uint8_t* bbuf = (uint8_t*)malloc(max_msg_size);
+    uint8_t* bbuf = new uint8_t[max_msg_size];
     memset(bbuf, 0, max_msg_size);
     Bytes bytes(bbuf, max_msg_size);
 
@@ -208,7 +182,7 @@ int main(int argc, char* argv[]) {
     while(!done) {
     }
 
-    free(bbuf);
+    delete[] bbuf;
 
     int64_t nsec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
 

@@ -10,6 +10,7 @@
  * in the only subgroup that consists of all the nodes
  * Upon completion, the results are appended to file data_latency on the leader
  */
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -88,7 +89,7 @@ int main(int argc, char* argv[]) {
     vector<struct timespec> start_times(num_messages), end_times(num_messages);
 
     // variable 'done' tracks the end of the test
-    volatile bool done = false;
+    std::atomic<bool> done = false;
     uint32_t my_id;
     // callback into the application code at each message delivery
     auto stability_callback = [&, num_delivered = 0u, time_index = 0u](

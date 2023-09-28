@@ -7,6 +7,13 @@
  * in the only subgroup that consists of all the nodes
  * Upon completion, the results are appended to file data_derecho_bw on the leader
  */
+#include "aggregate_bandwidth.hpp"
+#include "log_results.hpp"
+#include "partial_senders_allocator.hpp"
+
+#include <derecho/core/derecho.hpp>
+
+#include <atomic>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -14,12 +21,6 @@
 #include <memory>
 #include <optional>
 #include <vector>
-
-#include <derecho/core/derecho.hpp>
-
-#include "aggregate_bandwidth.hpp"
-#include "log_results.hpp"
-#include "partial_senders_allocator.hpp"
 
 using std::cout;
 using std::endl;
@@ -98,7 +99,7 @@ int main(int argc, char* argv[]) {
     }
 
     // variable 'done' tracks the end of the test
-    volatile bool done = false;
+    std::atomic<bool> done = false;
     // callback into the application code at each message delivery
     auto stability_callback = [&done,
                                total_num_messages,

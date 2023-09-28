@@ -6,6 +6,11 @@
  * in the only subgroup that consists of all the nodes
  * Upon completion, the results are appended to file data_deliver_predicate_delay on the leader
  */
+#include "aggregate_bandwidth.hpp"
+#include "log_results.hpp"
+#include <derecho/core/derecho.hpp>
+
+#include <atomic>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -13,11 +18,6 @@
 #include <optional>
 #include <time.h>
 #include <vector>
-
-#include "aggregate_bandwidth.hpp"
-#include <derecho/core/derecho.hpp>
-
-#include "log_results.hpp"
 
 using std::cout;
 using std::endl;
@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
     Conf::initialize(argc, argv);
 
     // variable 'done' tracks the end of the test
-    volatile bool done = false;
+    std::atomic<bool> done = false;
     // callback into the application code at each message delivery
     auto stability_callback = [&num_messages,
                                &done,

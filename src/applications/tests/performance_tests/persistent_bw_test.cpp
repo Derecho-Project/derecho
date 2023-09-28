@@ -1,3 +1,10 @@
+#include "aggregate_bandwidth.hpp"
+#include "bytes_object.hpp"
+#include "log_results.hpp"
+#include "partial_senders_allocator.hpp"
+
+#include <derecho/core/derecho.hpp>
+
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -5,13 +12,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <derecho/core/derecho.hpp>
-
-#include "aggregate_bandwidth.hpp"
-#include "bytes_object.hpp"
-#include "log_results.hpp"
-#include "partial_senders_allocator.hpp"
 
 using std::cout;
 using std::endl;
