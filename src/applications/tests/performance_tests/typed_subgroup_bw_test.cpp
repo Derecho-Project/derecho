@@ -22,6 +22,14 @@ using test::Bytes;
 using namespace std::chrono;
 
 /**
+ * State shared between the (replicated) TestObjects and the main thread
+ */
+struct TestState : public derecho::DeserializationContext {
+    std::atomic<bool> experiment_done;
+    steady_clock::time_point send_complete_time;
+};
+
+/**
  * RPC Object with a single function that accepts a byte array and counts
  * the number of updates it has received, comparing it to a total provided
  * in the constructor. When the total number of messages received by the
@@ -31,33 +39,49 @@ using namespace std::chrono;
 class TestObject : public mutils::ByteRepresentable {
     uint64_t messages_received;
     const uint64_t total_num_messages;
-    steady_clock::time_point send_complete_time;
-    // Shared with the main thread
-    std::shared_ptr<std::atomic<bool>> experiment_done;
+    // Pointer to a TestState object held by the main thread
+    TestState* main_test_state;
 
 public:
     void bytes_fun(const Bytes& bytes) {
         ++messages_received;
         if(messages_received == total_num_messages) {
-            send_complete_time = std::chrono::steady_clock::now();
-            experiment_done->store(true);
+            main_test_state->send_complete_time = std::chrono::steady_clock::now();
+            main_test_state->experiment_done = true;
         }
-    }
-    // Called by the main thread to retrieve send_complete_time after the experiment is done
-    const steady_clock::time_point& get_complete_time() const {
-        return send_complete_time;
     }
 
     REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(bytes_fun));
-    DEFAULT_SERIALIZATION_SUPPORT(TestObject, messages_received, total_num_messages);
-    // Deserialization constructor. This will break experiment_done's link to the main thread, so we hope it isn't called.
-    TestObject(uint64_t messages_received, uint64_t total_num_messages)
+    DEFAULT_SERIALIZE(messages_received, total_num_messages);
+    // Custom deserialization so we can use the DeserializationManager
+    static std::unique_ptr<TestObject> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
+    DEFAULT_DESERIALIZE_NOALLOC(TestObject);
+    // Deserialization constructor. The TestState pointer should be supplied by the deserialization context.
+    TestObject(uint64_t messages_received, uint64_t total_num_messages, TestState* main_test_state)
             : messages_received(messages_received),
               total_num_messages(total_num_messages),
-              experiment_done(std::make_shared<std::atomic_bool>(false)) {}
+              main_test_state(main_test_state) {}
     // Constructor called by factory function
-    TestObject(uint64_t total_num_messages, std::shared_ptr<std::atomic<bool>> experiment_done)
-            : messages_received(0), total_num_messages(total_num_messages), experiment_done(experiment_done) {}
+    TestObject(uint64_t total_num_messages, TestState* test_state)
+            : messages_received(0), total_num_messages(total_num_messages), main_test_state(test_state) {}
+};
+
+std::unique_ptr<TestObject> TestObject::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer) {
+    // Default deserialize the first 2 fields
+    auto messages_received_ptr = mutils::from_bytes<uint64_t>(dsm, buffer);
+    auto total_num_ptr = mutils::from_bytes<uint64_t>(dsm, buffer + mutils::bytes_size(*messages_received_ptr));
+    // Retrieve a pointer to TestState from DSM
+    TestState* test_state_ptr = nullptr;
+    assert(dsm);
+    assert(dsm->registered<TestState>());
+    if(dsm && dsm->registered<TestState>()) {
+        test_state_ptr = &(dsm->mgr<TestState>());
+    } else {
+        // Asserts are disabled in release mode, so try to provide some information if there's a bug
+        std::cerr << "ERROR: Unable to get TestState pointer in TestObject deserialization. TestObject will crash when it attempts to dereference it." << std::endl;
+    }
+    assert(test_state_ptr);
+    return std::make_unique<TestObject>(*messages_received_ptr, *total_num_ptr, test_state_ptr);
 };
 
 struct exp_result {
@@ -131,8 +155,9 @@ int main(int argc, char* argv[]) {
             total_num_messages = count;
             break;
     }
-    // variable 'done' tracks the end of the test
-    std::shared_ptr<std::atomic<bool>> done = std::make_shared<std::atomic<bool>>(false);
+    // The replicated TestObject will get a pointer to this object and use it to signal that the test is done
+    TestState shared_test_state;
+    shared_test_state.experiment_done = false;
 
     if(dashdash_pos + 4 < argc) {
         pthread_setname_np(pthread_self(), argv[dashdash_pos + 3]);
@@ -144,10 +169,12 @@ int main(int argc, char* argv[]) {
     derecho::SubgroupInfo subgroup_info(membership_function);
 
     auto test_factory = [&](persistent::PersistentRegistry*, derecho::subgroup_id_t) {
-        return std::make_unique<TestObject>(total_num_messages, done);
+        return std::make_unique<TestObject>(total_num_messages, &shared_test_state);
     };
 
-    derecho::Group<TestObject> group(derecho::UserMessageCallbacks{nullptr}, subgroup_info, {},
+    std::vector<derecho::DeserializationContext*> context_vector{&shared_test_state};
+
+    derecho::Group<TestObject> group(derecho::UserMessageCallbacks{nullptr}, subgroup_info, context_vector,
                                      std::vector<derecho::view_upcall_t>{}, test_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
@@ -180,15 +207,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    while(!(*done)) {
+    while(!shared_test_state.experiment_done) {
     }
 
     delete[] bbuf;
-    // Retrieve the completion time from the subgroup object
-    // Replicated::get_ref is unsafe, but the group should be idle by the time *done is true
-    steady_clock::time_point send_complete_time = group.get_subgroup<TestObject>().get_ref().get_complete_time();
 
-    int64_t nsec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
+    int64_t nsec = duration_cast<nanoseconds>(shared_test_state.send_complete_time - begin_time).count();
 
     double thp_gbps = (static_cast<double>(total_num_messages) * max_msg_size) / nsec;
     double thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / nsec;
