@@ -22,18 +22,42 @@ using test::Bytes;
 using namespace std::chrono;
 
 /**
- * RPC Object with a single function that accepts a byte array
+ * RPC Object with a single function that accepts a byte array and counts
+ * the number of updates it has received, comparing it to a total provided
+ * in the constructor. When the total number of messages received by the
+ * RPC function equals the expected total, it records the time and signals
+ * a shared atomic flag to indicate the experiment is complete.
  */
-class TestObject {
+class TestObject : public mutils::ByteRepresentable {
+    uint64_t messages_received;
+    const uint64_t total_num_messages;
+    steady_clock::time_point send_complete_time;
+    // Shared with the main thread
+    std::shared_ptr<std::atomic<bool>> experiment_done;
+
 public:
     void bytes_fun(const Bytes& bytes) {
+        ++messages_received;
+        if(messages_received == total_num_messages) {
+            send_complete_time = std::chrono::steady_clock::now();
+            experiment_done->store(true);
+        }
+    }
+    // Called by the main thread to retrieve send_complete_time after the experiment is done
+    const steady_clock::time_point& get_complete_time() const {
+        return send_complete_time;
     }
 
-    bool finishing_call(int x) {
-        return true;
-    }
-
-    REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(bytes_fun, finishing_call));
+    REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(bytes_fun));
+    DEFAULT_SERIALIZATION_SUPPORT(TestObject, messages_received, total_num_messages);
+    // Deserialization constructor. This will break experiment_done's link to the main thread, so we hope it isn't called.
+    TestObject(uint64_t messages_received, uint64_t total_num_messages)
+            : messages_received(messages_received),
+              total_num_messages(total_num_messages),
+              experiment_done(std::make_shared<std::atomic_bool>(false)) {}
+    // Constructor called by factory function
+    TestObject(uint64_t total_num_messages, std::shared_ptr<std::atomic<bool>> experiment_done)
+            : messages_received(0), total_num_messages(total_num_messages), experiment_done(experiment_done) {}
 };
 
 struct exp_result {
@@ -85,7 +109,7 @@ int main(int argc, char* argv[]) {
     const uint32_t count = std::stoi(argv[dashdash_pos + 2]);
     const uint32_t num_senders_selector = std::stoi(argv[dashdash_pos + 3]);
 
-    steady_clock::time_point begin_time, send_complete_time;
+    steady_clock::time_point begin_time;
 
     // Convert this integer to a more readable enum value
     const PartialSendMode senders_mode = num_senders_selector == 0
@@ -108,24 +132,7 @@ int main(int argc, char* argv[]) {
             break;
     }
     // variable 'done' tracks the end of the test
-    std::atomic<bool> done = false;
-    // callback into the application code at each message delivery
-    auto stability_callback = [&done,
-                               &send_complete_time,
-                               total_num_messages,
-                               num_delivered = 0u](uint32_t subgroup,
-                                                   uint32_t sender_id,
-                                                   long long int index,
-                                                   std::optional<std::pair<uint8_t*, long long int>> data,
-                                                   persistent::version_t ver) mutable {
-        // Count the total number of messages delivered
-        ++num_delivered;
-        // Check for completion
-        if(num_delivered == total_num_messages) {
-            send_complete_time = std::chrono::steady_clock::now();
-            done = true;
-        }
-    };
+    std::shared_ptr<std::atomic<bool>> done = std::make_shared<std::atomic<bool>>(false);
 
     if(dashdash_pos + 4 < argc) {
         pthread_setname_np(pthread_self(), argv[dashdash_pos + 3]);
@@ -136,9 +143,12 @@ int main(int argc, char* argv[]) {
     auto membership_function = PartialSendersAllocator(num_nodes, senders_mode, derecho::Mode::ORDERED);
     derecho::SubgroupInfo subgroup_info(membership_function);
 
-    auto test_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
+    auto test_factory = [&](persistent::PersistentRegistry*, derecho::subgroup_id_t) {
+        return std::make_unique<TestObject>(total_num_messages, done);
+    };
 
-    derecho::Group<TestObject> group(derecho::UserMessageCallbacks{stability_callback}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, test_factory);
+    derecho::Group<TestObject> group(derecho::UserMessageCallbacks{nullptr}, subgroup_info, {},
+                                     std::vector<derecho::view_upcall_t>{}, test_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     uint8_t* bbuf = new uint8_t[max_msg_size];
@@ -169,20 +179,14 @@ int main(int argc, char* argv[]) {
             send_all();
         }
     }
-    /*
-    if(node_rank == 0) {
-        derecho::rpc::QueryResults<bool> results = handle.ordered_send<RPC_NAME(finishing_call)>(0);
-        std::cout << "waiting for response..." << std::endl;
-#pragma GCC diagnostic ignored "-Wunused-variable"
-        decltype(results)::ReplyMap& replies = results.get();
-#pragma GCC diagnostic pop
-    }
-    */
 
-    while(!done) {
+    while(!(*done)) {
     }
 
     delete[] bbuf;
+    // Retrieve the completion time from the subgroup object
+    // Replicated::get_ref is unsafe, but the group should be idle by the time *done is true
+    steady_clock::time_point send_complete_time = group.get_subgroup<TestObject>().get_ref().get_complete_time();
 
     int64_t nsec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
 
