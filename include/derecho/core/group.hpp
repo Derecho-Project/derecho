@@ -92,6 +92,9 @@ public:
     auto& get_subgroup(uint32_t subgroup_index = 0);
 
     template <typename SubgroupType>
+    uint32_t get_subgroup_max_payload_size(uint32_t subgroup_index = 0);
+
+    template <typename SubgroupType>
     auto& get_nonmember_subgroup(uint32_t subgroup_num = 0);
 
     template <typename SubgroupType>
@@ -112,6 +115,7 @@ public:
     virtual node_id_t get_my_id() = 0;
 
     virtual node_id_t get_rpc_caller_id() = 0;
+
 };
 
 /**
@@ -132,6 +136,7 @@ protected:
 
 public:
     Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_index = 0);
+    uint32_t get_subgroup_max_payload_size(uint32_t subgroup_index = 0);
     PeerCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
     ExternalClientCallback<ReplicatedType>& get_client_callback(uint32_t subgroup_index = 0);
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);

@@ -25,6 +25,14 @@ auto& _Group::get_subgroup(uint32_t subgroup_num) {
 }
 
 template <typename SubgroupType>
+uint32_t _Group::get_subgroup_max_payload_size(uint32_t subgroup_num) {
+    if (auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_subgroup_max_payload_size(subgroup_num);
+    } else 
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
+template <typename SubgroupType>
 auto& _Group::get_nonmember_subgroup(uint32_t subgroup_num) {
     if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
         return gptr->get_nonmember_subgroup(subgroup_num);
@@ -79,6 +87,13 @@ GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
     set_replicated_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
                            &pointer_to_replicated);
     return *static_cast<Replicated<ReplicatedType>*>(pointer_to_replicated);
+}
+
+template <typename ReplicatedType>
+uint32_t
+GroupProjection<ReplicatedType>::get_subgroup_max_payload_size(uint32_t subgroup_num) {
+    void* pointer_to_replicated{nullptr};
+    return get_view_manager().get_subgroup_max_payload_size(get_index_of_type(typeid(ReplicatedType)), subgroup_num);
 }
 
 template <typename ReplicatedType>

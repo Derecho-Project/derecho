@@ -1997,6 +1997,13 @@ std::map<subgroup_id_t, uint64_t> ViewManager::get_max_payload_sizes() {
     return max_payload_sizes;
 }
 
+uint64_t ViewManager::get_subgroup_max_payload_size(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
+    shared_lock_t read_lock(view_mutex);
+    subgroup_id_t subgroup_id = curr_view->subgroup_ids_by_type_id.at(subgroup_type).at(subgroup_index);
+    return max_payload_sizes.at(subgroup_id);
+}
+
+
 std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
 ViewManager::make_member_ips_and_ports_map(const View& view, const PortType port) {
     std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> member_ips_and_ports_map;

@@ -977,6 +977,14 @@ public:
     // UGLY - IMPROVE LATER
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
     std::map<subgroup_id_t, uint64_t> get_max_payload_sizes();
+    /**
+     * @fn get_Subgroup_max_payload_size(sbugroup_type_id_t,uint32_t) view_manager.hpp \<derecho/core/detail/view_manager.hpp\>
+     * @brief get maximum payload size of a given subgroup.
+     * @param[in]   subgroup_type   The type of the subgroup.
+     * @param[in]   subgroup_index  The index of the subgroup.
+     * @return the maximum payload size of the subgroup.
+     */
+    uint64_t get_subgroup_max_payload_size(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
     // max of max_payload_sizes
     uint64_t view_max_rpc_reply_payload_size = 0;
     uint32_t view_max_rpc_window_size = 0;
