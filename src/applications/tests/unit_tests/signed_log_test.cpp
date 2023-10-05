@@ -29,9 +29,9 @@ struct TestState : public derecho::DeserializationContext {
     derecho::subgroup_id_t my_subgroup_id;
     // Set by the main thread after it figures out which subgroup this node was assigned to
     uint32_t subgroup_total_updates;
-    // Counts the number of updates delivered within this node's subgroup
-    uint32_t subgroup_updates_delivered;
+    // Set by each replicated object when the last update is delivered and its version is known
     persistent::version_t last_version;
+    // Used to alert other threads (i.e. global callbacks) that last_version has been set
     std::atomic<bool> last_version_ready;
     // Mutex for subgroup_finished
     std::mutex finish_mutex;
@@ -40,15 +40,16 @@ struct TestState : public derecho::DeserializationContext {
     // Boolean to set to true when signaling the condition variable
     bool subgroup_finished;
     // Called from replicated object update_state methods to notify the main thread that an update was delivered
-    void update_delivered(persistent::version_t version) {
-        subgroup_updates_delivered++;
-        if(subgroup_updates_delivered == subgroup_total_updates) {
+    void notify_update_delivered(uint64_t update_counter, persistent::version_t version) {
+        dbg_default_debug("Update {}/{} delivered", update_counter, subgroup_total_updates);
+        if(update_counter == subgroup_total_updates) {
+            dbg_default_info("Final update (#{}) delivered, version is {}", update_counter, version);
             last_version = version;
             last_version_ready = true;
         }
     }
     // Called by Derecho's global persistence callback
-    void global_persistence_callback(derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
+    void notify_global_persistence(derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
         dbg_default_info("Persisted: Subgroup {}, version {}.", subgroup_id, version);
         //Mark the unsigned subgroup as finished when it has finished persisting, since it won't be "verified"
         //NOTE: This relies on UnsignedObject always being the third subgroup (with ID 2)
@@ -61,7 +62,7 @@ struct TestState : public derecho::DeserializationContext {
         }
     }
     // Called by Derecho's global verified callback
-    void global_verified_callback(derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
+    void notify_global_verified(derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
         dbg_default_info("Verified: Subgroup {}, version {}.", subgroup_id, version);
         dbg_default_flush();
         // Each node should only be placed in one subgroup, so this callback should not be invoked for any other subgroup IDs
@@ -80,6 +81,11 @@ class OneFieldObject : public mutils::ByteRepresentable,
                        public derecho::GroupReference,
                        public derecho::SignedPersistentFields {
     persistent::Persistent<std::string> string_field;
+    // Counts the number of updates delivered within this subgroup.
+    // Not persisted, but needs to be replicated so that all replicas have a consistent count of
+    // the total number of messages, even across view changes
+    uint64_t updates_delivered;
+    // Pointer to an object held by the main thread, set from DeserializationManager
     TestState* test_state;
 
 public:
@@ -87,13 +93,16 @@ public:
     OneFieldObject(persistent::PersistentRegistry* registry, TestState* test_state)
             : string_field(std::make_unique<std::string>,
                            "OneFieldObjectStringField", registry, true),
+              updates_delivered(0),
               test_state(test_state) {
         assert(test_state);
     }
     /** Deserialization constructor */
     OneFieldObject(persistent::Persistent<std::string>& other_value,
+                   uint64_t other_updates_delivered,
                    TestState* test_state)
             : string_field(std::move(other_value)),
+              updates_delivered(other_updates_delivered),
               test_state(test_state) {
         assert(test_state);
     }
@@ -106,26 +115,29 @@ public:
 
     REGISTER_RPC_FUNCTIONS(OneFieldObject, P2P_TARGETS(get_state), ORDERED_TARGETS(update_state));
 
-    DEFAULT_SERIALIZE(string_field);
+    DEFAULT_SERIALIZE(string_field, updates_delivered);
     DEFAULT_DESERIALIZE_NOALLOC(OneFieldObject);
     static std::unique_ptr<OneFieldObject> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
 };
 
 // Can't be declared inline because it uses get_subgroup
 void OneFieldObject::update_state(const std::string& new_value) {
-        auto& this_subgroup_reference = this->group->template get_subgroup<OneFieldObject>(this->subgroup_index);
-        auto version_and_timestamp = this_subgroup_reference.get_current_version();
-        *string_field = new_value;
-        test_state->update_delivered(std::get<0>(version_and_timestamp));
-    }
+    auto& this_subgroup_reference = this->group->template get_subgroup<OneFieldObject>(this->subgroup_index);
+    auto version_and_timestamp = this_subgroup_reference.get_current_version();
+    ++updates_delivered;
+    *string_field = new_value;
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_timestamp));
+}
 
 // Custom deserializer that retrieves the TestState pointer from the DeserializationManager
 std::unique_ptr<OneFieldObject> OneFieldObject::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer) {
     auto field_ptr = mutils::from_bytes<persistent::Persistent<std::string>>(dsm, buffer);
+    std::size_t bytes_read = mutils::bytes_size(*field_ptr);
+    auto counter_ptr = mutils::from_bytes<uint64_t>(dsm, buffer + bytes_read);
     assert(dsm);
     assert(dsm->registered<TestState>());
     TestState* test_state_ptr = &(dsm->mgr<TestState>());
-    return std::make_unique<OneFieldObject>(*field_ptr, test_state_ptr);
+    return std::make_unique<OneFieldObject>(*field_ptr, *counter_ptr, test_state_ptr);
 }
 
 class TwoFieldObject : public mutils::ByteRepresentable,
@@ -133,6 +145,7 @@ class TwoFieldObject : public mutils::ByteRepresentable,
                        public derecho::SignedPersistentFields {
     persistent::Persistent<std::string> foo;
     persistent::Persistent<std::string> bar;
+    uint64_t updates_delivered;
     TestState* test_state;
 
 public:
@@ -140,15 +153,18 @@ public:
     TwoFieldObject(persistent::PersistentRegistry* registry, TestState* test_state)
             : foo(std::make_unique<std::string>, "TwoFieldObjectStringOne", registry, true),
               bar(std::make_unique<std::string>, "TwoFieldObjectStringTwo", registry, true),
+              updates_delivered(0),
               test_state(test_state) {
         assert(test_state);
     }
     /** Deserialization constructor */
     TwoFieldObject(persistent::Persistent<std::string>& other_foo,
                    persistent::Persistent<std::string>& other_bar,
+                   uint64_t other_updates_delivered,
                    TestState* test_state)
             : foo(std::move(other_foo)),
               bar(std::move(other_bar)),
+              updates_delivered(other_updates_delivered),
               test_state(test_state) {
         assert(test_state);
     }
@@ -164,48 +180,56 @@ public:
     void update(const std::string& new_foo, const std::string& new_bar);
 
     REGISTER_RPC_FUNCTIONS(TwoFieldObject, P2P_TARGETS(get_foo, get_bar), ORDERED_TARGETS(update));
-    DEFAULT_SERIALIZE(foo, bar);
+    DEFAULT_SERIALIZE(foo, bar, updates_delivered);
     DEFAULT_DESERIALIZE_NOALLOC(TwoFieldObject);
     static std::unique_ptr<TwoFieldObject> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
 };
 
 void TwoFieldObject::update(const std::string& new_foo, const std::string& new_bar) {
-        auto& this_subgroup_reference = this->group->template get_subgroup<TwoFieldObject>(this->subgroup_index);
-        auto version_and_timestamp = this_subgroup_reference.get_current_version();
-        *foo = new_foo;
-        *bar = new_bar;
-        test_state->update_delivered(std::get<0>(version_and_timestamp));
-    }
+    auto& this_subgroup_reference = this->group->template get_subgroup<TwoFieldObject>(this->subgroup_index);
+    auto version_and_timestamp = this_subgroup_reference.get_current_version();
+    ++updates_delivered;
+    *foo = new_foo;
+    *bar = new_bar;
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_timestamp));
+}
 
 std::unique_ptr<TwoFieldObject> TwoFieldObject::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer) {
     auto foo_ptr = mutils::from_bytes<persistent::Persistent<std::string>>(dsm, buffer);
     std::size_t bytes_read = mutils::bytes_size(*foo_ptr);
     auto bar_ptr = mutils::from_bytes<persistent::Persistent<std::string>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*bar_ptr);
+    auto update_counter_ptr = mutils::from_bytes<uint64_t>(dsm, buffer + bytes_read);
     assert(dsm);
     assert(dsm->registered<TestState>());
     TestState* test_state_ptr = &(dsm->mgr<TestState>());
-    return std::make_unique<TwoFieldObject>(*foo_ptr, *bar_ptr, test_state_ptr);
+    return std::make_unique<TwoFieldObject>(*foo_ptr, *bar_ptr, *update_counter_ptr, test_state_ptr);
 }
 
 class UnsignedObject : public mutils::ByteRepresentable,
-public derecho::GroupReference,
-public derecho::PersistsFields {
+                       public derecho::GroupReference,
+                       public derecho::PersistsFields {
     persistent::Persistent<std::string> string_field;
+    uint64_t updates_delivered;
     TestState* test_state;
 
 public:
     /** Factory constructor */
     UnsignedObject(persistent::PersistentRegistry* registry, TestState* test_state)
             : string_field(std::make_unique<std::string>, "UnsignedObjectField", registry, false),
-            test_state(test_state) {
-                assert(test_state);
-            }
+              updates_delivered(0),
+              test_state(test_state) {
+        assert(test_state);
+    }
     /** Deserialization constructor */
-    UnsignedObject(persistent::Persistent<std::string>& other_field, TestState* test_state)
+    UnsignedObject(persistent::Persistent<std::string>& other_field,
+                   uint64_t other_updates_delivered,
+                   TestState* test_state)
             : string_field(std::move(other_field)),
-            test_state(test_state) {
-                assert(test_state);
-            }
+              updates_delivered(other_updates_delivered),
+              test_state(test_state) {
+        assert(test_state);
+    }
     std::string get_state() const {
         return *string_field;
     }
@@ -213,7 +237,7 @@ public:
     void update_state(const std::string& new_value);
 
     REGISTER_RPC_FUNCTIONS(UnsignedObject, P2P_TARGETS(get_state), ORDERED_TARGETS(update_state));
-    DEFAULT_SERIALIZE(string_field);
+    DEFAULT_SERIALIZE(string_field, updates_delivered);
     DEFAULT_DESERIALIZE_NOALLOC(UnsignedObject);
     static std::unique_ptr<UnsignedObject> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
 };
@@ -221,18 +245,20 @@ public:
 void UnsignedObject::update_state(const std::string& new_value) {
     auto& this_subgroup_reference = this->group->template get_subgroup<UnsignedObject>(this->subgroup_index);
     auto version_and_timestamp = this_subgroup_reference.get_current_version();
+    ++updates_delivered;
     *string_field = new_value;
-    test_state->update_delivered(std::get<0>(version_and_timestamp));
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_timestamp));
 }
 
 std::unique_ptr<UnsignedObject> UnsignedObject::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer) {
     auto field_ptr = mutils::from_bytes<persistent::Persistent<std::string>>(dsm, buffer);
+    std::size_t bytes_read = mutils::bytes_size(*field_ptr);
+    auto counter_ptr = mutils::from_bytes<uint64_t>(dsm, buffer + bytes_read);
     assert(dsm);
     assert(dsm->registered<TestState>());
     TestState* test_state_ptr = &(dsm->mgr<TestState>());
-    return std::make_unique<UnsignedObject>(*field_ptr, test_state_ptr);
+    return std::make_unique<UnsignedObject>(*field_ptr, *counter_ptr, test_state_ptr);
 }
-
 
 /**
  * Command-line arguments: <one_field_size> <two_field_size> <unsigned_size> <num_updates>
@@ -270,20 +296,20 @@ int main(int argc, char** argv) {
                                                 derecho::one_subgroup_policy(derecho::flexible_even_shards(
                                                         1, 1, subgroup_unsigned_size))}}));
 
-    //Count the total number of messages delivered in each subgroup to figure out what version is assigned to the last one
+    //Count the total number of messages to be delivered in each subgroup, so we can
+    //identify when the last message has been delivered and discover what version it got
     std::array<uint32_t, 3> subgroup_total_messages = {subgroup_1_size * num_updates,
                                                        subgroup_2_size * num_updates,
                                                        subgroup_unsigned_size * num_updates};
 
     TestState test_state;
-    test_state.subgroup_updates_delivered = 0;
     test_state.subgroup_finished = false;
     test_state.last_version_ready = false;
     auto global_persist_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
-        test_state.global_persistence_callback(subgroup_id, version);
+        test_state.notify_global_persistence(subgroup_id, version);
     };
     auto global_verified_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
-        test_state.global_verified_callback(subgroup_id, version);
+        test_state.notify_global_verified(subgroup_id, version);
     };
     auto new_view_callback = [](const derecho::View& view) {
         dbg_default_info("Now on View {}", view.vid);
@@ -293,11 +319,14 @@ int main(int argc, char** argv) {
             {nullptr, nullptr, global_persist_callback, global_verified_callback},
             subgroup_info, {&test_state}, {new_view_callback},
             [&](persistent::PersistentRegistry* pr, derecho::subgroup_id_t id) {
-                return std::make_unique<OneFieldObject>(pr, &test_state); },
+                return std::make_unique<OneFieldObject>(pr, &test_state);
+            },
             [&](persistent::PersistentRegistry* pr, derecho::subgroup_id_t id) {
-                return std::make_unique<TwoFieldObject>(pr, &test_state); },
+                return std::make_unique<TwoFieldObject>(pr, &test_state);
+            },
             [&](persistent::PersistentRegistry* pr, derecho::subgroup_id_t id) {
-                return std::make_unique<UnsignedObject>(pr, &test_state); });
+                return std::make_unique<UnsignedObject>(pr, &test_state);
+            });
     //Figure out which subgroup this node got assigned to
     int32_t my_shard_subgroup_1 = group.get_my_shard<OneFieldObject>();
     int32_t my_shard_subgroup_2 = group.get_my_shard<TwoFieldObject>();
