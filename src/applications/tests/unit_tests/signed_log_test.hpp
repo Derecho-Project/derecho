@@ -13,10 +13,10 @@
  * constructed or deserialized, set up by the deserialization manager.
  */
 struct TestState : public derecho::DeserializationContext {
-    // Set by the main thread after it figures out which subgroup this node was assigned to
+    // The next 3 are set by the main thread after it figures out which subgroup this node was assigned to
     derecho::subgroup_id_t my_subgroup_id;
-    // Set by the main thread after it figures out which subgroup this node was assigned to
     uint32_t subgroup_total_updates;
+    bool my_subgroup_is_unsigned;
     // Set by each replicated object when the last update is delivered and its version is known
     persistent::version_t last_version;
     // Used to alert other threads (i.e. global callbacks) that last_version has been set
@@ -51,22 +51,11 @@ class OneFieldObject : public mutils::ByteRepresentable,
 
 public:
     /** Factory constructor */
-    OneFieldObject(persistent::PersistentRegistry* registry, TestState* test_state)
-            : string_field(std::make_unique<std::string>,
-                           "OneFieldObjectStringField", registry, true),
-              updates_delivered(0),
-              test_state(test_state) {
-        assert(test_state);
-    }
+    OneFieldObject(persistent::PersistentRegistry* registry, TestState* test_state);
     /** Deserialization constructor */
     OneFieldObject(persistent::Persistent<std::string>& other_value,
                    uint64_t other_updates_delivered,
-                   TestState* test_state)
-            : string_field(std::move(other_value)),
-              updates_delivered(other_updates_delivered),
-              test_state(test_state) {
-        assert(test_state);
-    }
+                   TestState* test_state);
 
     std::string get_state() const {
         return *string_field;
@@ -94,24 +83,12 @@ class TwoFieldObject : public mutils::ByteRepresentable,
 
 public:
     /** Factory constructor */
-    TwoFieldObject(persistent::PersistentRegistry* registry, TestState* test_state)
-            : foo(std::make_unique<std::string>, "TwoFieldObjectStringOne", registry, true),
-              bar(std::make_unique<std::string>, "TwoFieldObjectStringTwo", registry, true),
-              updates_delivered(0),
-              test_state(test_state) {
-        assert(test_state);
-    }
+    TwoFieldObject(persistent::PersistentRegistry* registry, TestState* test_state);
     /** Deserialization constructor */
     TwoFieldObject(persistent::Persistent<std::string>& other_foo,
                    persistent::Persistent<std::string>& other_bar,
                    uint64_t other_updates_delivered,
-                   TestState* test_state)
-            : foo(std::move(other_foo)),
-              bar(std::move(other_bar)),
-              updates_delivered(other_updates_delivered),
-              test_state(test_state) {
-        assert(test_state);
-    }
+                   TestState* test_state);
 
     std::string get_foo() const {
         return *foo;
@@ -141,21 +118,11 @@ class UnsignedObject : public mutils::ByteRepresentable,
 
 public:
     /** Factory constructor */
-    UnsignedObject(persistent::PersistentRegistry* registry, TestState* test_state)
-            : string_field(std::make_unique<std::string>, "UnsignedObjectField", registry, false),
-              updates_delivered(0),
-              test_state(test_state) {
-        assert(test_state);
-    }
+    UnsignedObject(persistent::PersistentRegistry* registry, TestState* test_state);
     /** Deserialization constructor */
     UnsignedObject(persistent::Persistent<std::string>& other_field,
                    uint64_t other_updates_delivered,
-                   TestState* test_state)
-            : string_field(std::move(other_field)),
-              updates_delivered(other_updates_delivered),
-              test_state(test_state) {
-        assert(test_state);
-    }
+                   TestState* test_state);
     std::string get_state() const {
         return *string_field;
     }

@@ -33,8 +33,7 @@ void TestState::notify_update_delivered(uint64_t update_counter, persistent::ver
 void TestState::notify_global_persistence(derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
     dbg_default_info("Persisted: Subgroup {}, version {}.", subgroup_id, version);
     //Mark the unsigned subgroup as finished when it has finished persisting, since it won't be "verified"
-    //NOTE: This relies on UnsignedObject always being the third subgroup (with ID 2)
-    if(subgroup_id == 2 && last_version_ready && version == last_version) {
+    if(my_subgroup_is_unsigned && last_version_ready && version == last_version) {
         {
             std::unique_lock<std::mutex> finish_lock(finish_mutex);
             subgroup_finished = true;
@@ -58,6 +57,23 @@ void TestState::notify_global_verified(derecho::subgroup_id_t subgroup_id, persi
 
 /* --- OneFieldObject implementation --- */
 
+OneFieldObject::OneFieldObject(persistent::PersistentRegistry* registry, TestState* test_state)
+        : string_field(std::make_unique<std::string>,
+                       "OneFieldObjectStringField", registry, true),
+          updates_delivered(0),
+          test_state(test_state) {
+    assert(test_state);
+}
+
+OneFieldObject::OneFieldObject(persistent::Persistent<std::string>& other_value,
+                               uint64_t other_updates_delivered,
+                               TestState* test_state)
+        : string_field(std::move(other_value)),
+          updates_delivered(other_updates_delivered),
+          test_state(test_state) {
+    assert(test_state);
+}
+
 void OneFieldObject::update_state(const std::string& new_value) {
     auto& this_subgroup_reference = this->group->template get_subgroup<OneFieldObject>(this->subgroup_index);
     auto version_and_timestamp = this_subgroup_reference.get_current_version();
@@ -78,6 +94,25 @@ std::unique_ptr<OneFieldObject> OneFieldObject::from_bytes(mutils::Deserializati
 }
 
 /* --- TwoFieldObject implementation --- */
+
+TwoFieldObject::TwoFieldObject(persistent::PersistentRegistry* registry, TestState* test_state)
+        : foo(std::make_unique<std::string>, "TwoFieldObjectStringOne", registry, true),
+          bar(std::make_unique<std::string>, "TwoFieldObjectStringTwo", registry, true),
+          updates_delivered(0),
+          test_state(test_state) {
+    assert(test_state);
+}
+
+TwoFieldObject::TwoFieldObject(persistent::Persistent<std::string>& other_foo,
+                               persistent::Persistent<std::string>& other_bar,
+                               uint64_t other_updates_delivered,
+                               TestState* test_state)
+        : foo(std::move(other_foo)),
+          bar(std::move(other_bar)),
+          updates_delivered(other_updates_delivered),
+          test_state(test_state) {
+    assert(test_state);
+}
 
 void TwoFieldObject::update(const std::string& new_foo, const std::string& new_bar) {
     auto& this_subgroup_reference = this->group->template get_subgroup<TwoFieldObject>(this->subgroup_index);
@@ -101,6 +136,22 @@ std::unique_ptr<TwoFieldObject> TwoFieldObject::from_bytes(mutils::Deserializati
 }
 
 /* --- UnsignedObject implementation --- */
+
+UnsignedObject::UnsignedObject(persistent::PersistentRegistry* registry, TestState* test_state)
+        : string_field(std::make_unique<std::string>, "UnsignedObjectField", registry, false),
+          updates_delivered(0),
+          test_state(test_state) {
+    assert(test_state);
+}
+
+UnsignedObject::UnsignedObject(persistent::Persistent<std::string>& other_field,
+                               uint64_t other_updates_delivered,
+                               TestState* test_state)
+        : string_field(std::move(other_field)),
+          updates_delivered(other_updates_delivered),
+          test_state(test_state) {
+    assert(test_state);
+}
 
 void UnsignedObject::update_state(const std::string& new_value) {
     auto& this_subgroup_reference = this->group->template get_subgroup<UnsignedObject>(this->subgroup_index);
@@ -196,6 +247,7 @@ int main(int argc, char** argv) {
         derecho::Replicated<OneFieldObject>& object_handle = group.get_subgroup<OneFieldObject>();
         test_state.subgroup_total_updates = subgroup_total_messages[0];
         test_state.my_subgroup_id = object_handle.get_subgroup_id();
+        test_state.my_subgroup_is_unsigned = false;
         //Send random updates
         for(unsigned counter = 0; counter < num_updates; ++counter) {
             std::string new_string('a', 32);
@@ -208,6 +260,7 @@ int main(int argc, char** argv) {
         derecho::Replicated<TwoFieldObject>& object_handle = group.get_subgroup<TwoFieldObject>();
         test_state.subgroup_total_updates = subgroup_total_messages[1];
         test_state.my_subgroup_id = object_handle.get_subgroup_id();
+        test_state.my_subgroup_is_unsigned = false;
         //Send random updates
         for(unsigned counter = 0; counter < num_updates; ++counter) {
             std::string new_foo('a', 32);
@@ -223,6 +276,7 @@ int main(int argc, char** argv) {
         derecho::Replicated<UnsignedObject>& object_handle = group.get_subgroup<UnsignedObject>();
         test_state.subgroup_total_updates = subgroup_total_messages[2];
         test_state.my_subgroup_id = object_handle.get_subgroup_id();
+        test_state.my_subgroup_is_unsigned = true;
         //Send random updates
         for(unsigned counter = 0; counter < num_updates; ++counter) {
             std::string new_string('a', 32);
