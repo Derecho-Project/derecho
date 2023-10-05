@@ -600,6 +600,16 @@ node_id_t Group<ReplicatedTypes...>::get_rpc_caller_id() {
 }
 
 template <typename... ReplicatedTypes>
+uint64_t Group<ReplicatedTypes...>::get_max_p2p_request_payload_size() {
+    return getConfUInt64(Conf::DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
+}
+
+template <typename... ReplicatedTypes>
+uint64_t Group<ReplicatedTypes...>::get_max_p2p_reply_payload_size() {
+    return getConfUInt64(Conf::DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE);
+}
+
+template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::barrier_sync() {
     view_manager.barrier_sync();
 }

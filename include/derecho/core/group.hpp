@@ -116,6 +116,10 @@ public:
 
     virtual node_id_t get_rpc_caller_id() = 0;
 
+    virtual uint64_t get_max_p2p_request_payload_size() = 0;
+
+    virtual uint64_t get_max_p2p_reply_payload_size() = 0;
+
 };
 
 /**
@@ -488,6 +492,12 @@ public:
 
     /** @returns the id of the lastest rpc caller, only valid when called from an RPC handler */
     node_id_t get_rpc_caller_id() override;
+
+    /** @returns the maximal allowed p2p request payload size */
+    uint64_t get_max_p2p_request_payload_size() override;
+
+    /** @returns the maximal allowed p2p reply payload size */
+    uint64_t get_max_p2p_reply_payload_size() override;
 
     /**
      * @returns the shard number that this node is a member of in the specified
