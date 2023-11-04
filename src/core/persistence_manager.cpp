@@ -35,6 +35,9 @@ PersistenceManager::PersistenceManager(
 }
 
 PersistenceManager::~PersistenceManager() {
+    if (this->persist_thread.joinable()) {
+        this->persist_thread.join();
+    }
     sem_destroy(&persistence_request_sem);
 }
 
@@ -233,7 +236,9 @@ void PersistenceManager::shutdown(bool wait) {
     sem_post(&persistence_request_sem);  // kick the persistence thread in case it is sleeping
 
     if(wait) {
-        this->persist_thread.join();
+        if (this->persist_thread.joinable()) {
+            this->persist_thread.join();
+        }
     }
 }
 }  // namespace derecho
