@@ -302,10 +302,10 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
     }
 
     if(m_currMetaHeader == m_persMetaHeader) {
-        if(CURR_LOG_IDX != INVALID_INDEX) {
+        // if(CURR_LOG_IDX != INVALID_INDEX) {
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-            ver_ret = m_currMetaHeader.fields.ver;
-        }
+        // }
+        ver_ret = m_currMetaHeader.fields.ver;
         if(!preLocked) {
             FPL_UNLOCK;
             FPL_PERS_UNLOCK;
@@ -330,11 +330,11 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
             flush_lstart = ALIGN_TO_PAGE(NEXT_LOG_ENTRY_PERS);
             flush_llen = ((size_t)NEXT_LOG_ENTRY - (size_t)NEXT_LOG_ENTRY_PERS) + ((int64_t)NEXT_LOG_ENTRY_PERS) % PAGE_SIZE;
         }
-        if(NUM_USED_SLOTS > 0) {
+        // if(NUM_USED_SLOTS > 0) {
             //get the latest flushed version
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-            ver_ret = m_currMetaHeader.fields.ver;
-        }
+        // }
+        ver_ret = m_currMetaHeader.fields.ver;
         if(!preLocked) {
             FPL_UNLOCK;
         }
