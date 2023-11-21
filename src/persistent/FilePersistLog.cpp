@@ -305,7 +305,7 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
         // if(CURR_LOG_IDX != INVALID_INDEX) {
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
         // }
-        ver_ret = m_currMetaHeader.fields.ver;
+        ver_ret = m_persMetaHeader.fields.ver;
         if(!preLocked) {
             FPL_UNLOCK;
             FPL_PERS_UNLOCK;
@@ -334,7 +334,6 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
             //get the latest flushed version
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
         // }
-        ver_ret = m_currMetaHeader.fields.ver;
         if(!preLocked) {
             FPL_UNLOCK;
         }
@@ -350,6 +349,7 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
         }
         // flush meta data
         this->persistMetaHeaderAtomically(&shadow_header);
+        ver_ret = shadow_header.fields.ver;
     } catch(std::exception& e) {
         if(!preLocked) {
             FPL_PERS_UNLOCK;
