@@ -87,8 +87,7 @@ union LogEntry {
 #define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen - LOG_ENTRY_AT(m_currMetaHeader.fields.head)->fields.ofst))
 #define NUM_FREE_BYTES (MAX_DATA_SIZE - NUM_USED_BYTES)
 
-#define PAGE_SIZE (getpagesize())
-#define ALIGN_TO_PAGE(x) ((void*)(((uint64_t)(x)) - ((uint64_t)(x)) % PAGE_SIZE))
+#define ALIGN_TO_PAGE(x) ((void*)(((uint64_t)(x)) - ((uint64_t)(x)) % getpagesize()))
 
 // declaration for binary search util. see cpp file for comments.
 template <typename TKey, typename KeyGetter>
