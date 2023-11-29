@@ -191,7 +191,7 @@ ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(
           busy_wait_before_sleep_ms(getConfUInt64(Conf::DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
     RpcLoggerPtr::initialize();
     for(auto dc : deserialization_contexts) {
-        rdv.push_back(dc);
+        deserialization_contexts.push_back(dc);
     }
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
@@ -383,7 +383,7 @@ std::exception_ptr ExternalGroupClient<ReplicatedTypes...>::receive_message(
     }
     std::size_t reply_header_size = header_space();
     recv_ret reply_return = receiver_function_entry->second(
-            &rdv, received_from, buf,
+            &deserialization_contexts, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {
                 return out_alloc(size + reply_header_size) + reply_header_size;
             });
@@ -405,7 +405,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_message_handler(node_id_t send
     Opcode indx;
     node_id_t received_from;
     uint32_t flags;
-    retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
+    retrieve_header(msg_buf, payload_size, indx, received_from, flags);
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
@@ -447,7 +447,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
             request = p2p_request_queue.front();
             p2p_request_queue.pop();
         }
-        retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
+        retrieve_header(request.msg_buf, payload_size, indx, received_from, flags);
         if(indx.is_reply || RPC_HEADER_FLAG_TST(flags, CASCADE)) {
             dbg_error(rpc_logger, "Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
                       indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));

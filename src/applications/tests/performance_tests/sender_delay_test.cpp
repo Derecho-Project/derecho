@@ -1,3 +1,8 @@
+#include "aggregate_bandwidth.hpp"
+#include "log_results.hpp"
+#include <derecho/core/derecho.hpp>
+
+#include <atomic>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -6,9 +11,6 @@
 #include <time.h>
 #include <vector>
 
-#include "aggregate_bandwidth.hpp"
-#include "log_results.hpp"
-#include <derecho/core/derecho.hpp>
 
 using std::cout;
 using std::endl;
@@ -35,7 +37,7 @@ struct exp_result {
     }
 };
 
-void busy_wait(uint32_t wait_time, volatile bool& done) {
+void busy_wait(uint32_t wait_time, std::atomic<bool>& done) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_REALTIME, &start_time);
 
@@ -80,7 +82,7 @@ int main(int argc, char* argv[]) {
     Conf::initialize(argc, argv);
 
     // variable 'done' tracks the end of the test
-    volatile bool done = false;
+    std::atomic<bool> done = false;
     // start and end time to compute bw
     struct timespec start_time;
     long long int nanoseconds_elapsed;
