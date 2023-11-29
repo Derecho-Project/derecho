@@ -199,18 +199,18 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     /**
      * Entry point for responses; called when a message is received that
      * contains a response to this RemoteInvocable function's RPC call.
-     * @param rdv   Deserialization vector
+     * @param contexts Deserialization context vector
      * @param nid   The ID of the node that sent the response
      * @param response The byte buffer containing the response message
-     * @param f
+     * @param f An allocation function (unused)
      * @return A recv_ret containing nothing of value.
      */
-    inline recv_ret receive_response(  //mutils::DeserializationManager* dsm,
-            mutils::RemoteDeserialization_v* rdv,
+    inline recv_ret receive_response(
+            mutils::RemoteDeserialization_v* contexts,
             const node_id_t& nid, const uint8_t* response,
             const std::function<uint8_t*(int)>& f) {
         constexpr std::is_same<void, Ret>* choice{nullptr};
-        mutils::DeserializationManager dsm{*rdv};
+        mutils::DeserializationManager dsm{*contexts};
         return receive_response(choice, &dsm, nid, response, f);
     }
 
@@ -347,18 +347,18 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      * Entry point for handling an RPC function call to this RemoteInvocable
      * function. Called when a message is received that contains a request to
      * call this function.
-     * @param rdv   Deserialization vector
+     * @param contexts Deserialization context vector
      * @param who The node that sent the message
      * @param recv_buf The buffer containing the received message
      * @param out_alloc A function that can allocate a buffer for the response message
      * @return
      */
-    inline recv_ret receive_call(  //mutils::DeserializationManager* dsm,
-            mutils::RemoteDeserialization_v* rdv,
+    inline recv_ret receive_call(
+            mutils::RemoteDeserialization_v* contexts,
             const node_id_t& who, const uint8_t* recv_buf,
             const std::function<uint8_t*(std::size_t)>& out_alloc) {
         constexpr std::is_same<Ret, void>* choice{nullptr};
-        mutils::DeserializationManager dsm{*rdv};
+        mutils::DeserializationManager dsm{*contexts};
         return this->receive_call(choice, &dsm, who, recv_buf, out_alloc);
     }
 

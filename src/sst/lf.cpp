@@ -263,6 +263,7 @@ void _resources::connect_endpoint(bool is_lf_server) {
             fi_freeinfo(entry.info);
             crash_with_message("failed to initialize server endpoint.\n");
         }
+        dbg_trace(sst_logger, "calling fi_accept()");
         if(fi_accept(this->ep, NULL, 0)) {
             fi_reject(g_ctxt.pep, entry.info->handle, NULL, 0);
             fi_freeinfo(entry.info);
@@ -292,6 +293,7 @@ void _resources::connect_endpoint(bool is_lf_server) {
                                                    malloc, remote_cm_data.pep_addr_len);
         memcpy((void*)client_hints->dest_addr, (void*)remote_cm_data.pep_addr, (size_t)remote_cm_data.pep_addr_len);
         client_hints->dest_addrlen = remote_cm_data.pep_addr_len;
+        dbg_trace(sst_logger, "calling fi_getinfo()");
         fail_if_nonzero_retry_on_eagain("fi_getinfo() failed.", CRASH_ON_FAILURE,
                                         fi_getinfo, LF_VERSION, nullptr, nullptr, 0, client_hints, &client_info);
         if(init_endpoint(client_info)) {
@@ -300,9 +302,10 @@ void _resources::connect_endpoint(bool is_lf_server) {
             crash_with_message("failed to initialize client endpoint.\n");
         }
 
+        dbg_trace(sst_logger, "calling fi_connect()");
         fail_if_nonzero_retry_on_eagain("fi_connect()", CRASH_ON_FAILURE,
                                         fi_connect, this->ep, remote_cm_data.pep_addr, nullptr, 0);
-
+        dbg_trace(sst_logger, "fi_connect() succeeded, calling fi_eq_sread()");
         nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
             dbg_error(sst_logger, "failed to connect remote.");

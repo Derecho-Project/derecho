@@ -71,6 +71,14 @@ private:
     Blob(uint8_t* buffer, std::size_t size, bool temporary);
 };
 
+/**
+ * A DeserializationContext object used to share state between the replicated
+ * objects (e.g. ObjectStore, SignatureStore) and the main thread.
+ */
+struct ExperimentState : public derecho::DeserializationContext {
+    std::atomic<bool> done;
+};
+
 class ObjectStore : public mutils::ByteRepresentable,
                     public derecho::PersistsFields,
                     public derecho::GroupReference {
@@ -83,17 +91,20 @@ class ObjectStore : public mutils::ByteRepresentable,
      * Shared with the main thread to tell it when the experiment is done and it should
      * call group.leave() (which can't be done from inside this subgroup object).
      */
-    std::shared_ptr<std::atomic<bool>> experiment_done;
+    ExperimentState* experiment_state;
 
 public:
     ObjectStore(persistent::PersistentRegistry* pr,
-                std::shared_ptr<std::atomic<bool>> experiment_done);
+                ExperimentState* experiment_state);
     /** Deserialization constructor */
-    ObjectStore(persistent::Persistent<Blob>& other_log) : object_log(std::move(other_log)) {}
+    ObjectStore(persistent::Persistent<Blob>& other_log,
+                ExperimentState* experiment_state)
+            : object_log(std::move(other_log)),
+              experiment_state(experiment_state) {}
     /**
      * P2P-callable function that creates a new log entry with the provided data.
      * @return The version assigned to the new log entry, and the timestamp assigned to the new log entry
-    */
+     */
     std::pair<persistent::version_t, uint64_t> update(const Blob& new_data) const;
 
     /** Actual implementation of update, only callable from within the subgroup as an ordered send. */
@@ -123,7 +134,10 @@ public:
      */
     void end_test() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(ObjectStore, object_log);
+    DEFAULT_SERIALIZE(object_log);
+    DEFAULT_DESERIALIZE_NOALLOC(ObjectStore);
+    static std::unique_ptr<ObjectStore> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
+
     REGISTER_RPC_FUNCTIONS(ObjectStore, ORDERED_TARGETS(ordered_update),
                            P2P_TARGETS(update, await_persistence, get, get_latest, end_test));
 };
@@ -138,16 +152,18 @@ class SignatureStore : public mutils::ByteRepresentable,
     persistent::Persistent<SHA256Hash> hashes;
 
     /**
-     * Shared with the main thread to tell it when the experiment is done and it should
-     * call group.leave() (which can't be done from inside this subgroup object).
+     * Shared with the main thread to tell it when the experiment is done.
      */
-    std::shared_ptr<std::atomic<bool>> experiment_done;
+    ExperimentState* experiment_state;
 
 public:
     SignatureStore(persistent::PersistentRegistry* pr,
-                   std::shared_ptr<std::atomic<bool>> experiment_done);
+                   ExperimentState* experiment_state);
     /** Deserialization constructor */
-    SignatureStore(persistent::Persistent<SHA256Hash>& other_hashes) : hashes(std::move(other_hashes)) {}
+    SignatureStore(persistent::Persistent<SHA256Hash>& other_hashes,
+                   ExperimentState* experiment_state)
+            : hashes(std::move(other_hashes)),
+              experiment_state(experiment_state) {}
 
     /**
      * P2P-callable function that appends a new object-update hash to the signed log.
@@ -168,7 +184,10 @@ public:
      */
     void end_test() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(SignatureStore, hashes);
+    DEFAULT_SERIALIZE(hashes);
+    DEFAULT_DESERIALIZE_NOALLOC(SignatureStore);
+    static std::unique_ptr<SignatureStore> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
+
     REGISTER_RPC_FUNCTIONS(SignatureStore, P2P_TARGETS(add_hash, end_test), ORDERED_TARGETS(ordered_add_hash));
 };
 

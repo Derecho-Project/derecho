@@ -1,3 +1,10 @@
+#include "aggregate_bandwidth.hpp"
+#include "bytes_object.hpp"
+#include "log_results.hpp"
+#include "partial_senders_allocator.hpp"
+
+#include <derecho/core/derecho.hpp>
+
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -6,35 +13,84 @@
 #include <string>
 #include <vector>
 
-#include <derecho/core/derecho.hpp>
-
-#include "aggregate_bandwidth.hpp"
-#include "bytes_object.hpp"
-#include "log_results.hpp"
-#include "partial_senders_allocator.hpp"
-
 using std::cout;
 using std::endl;
+using std::chrono::steady_clock;
 using namespace persistent;
 
-class ByteArrayObject : public mutils::ByteRepresentable, public derecho::SignedPersistentFields {
+/**
+ * State shared between the replicated test objects and the main thread. The replicated
+ * objects get a pointer to this object using DeserializationManager.
+ */
+struct TestState : public derecho::DeserializationContext {
+    uint64_t total_num_messages;
+    // Used to signal the main thread that the experiment is done
+    std::atomic<bool> experiment_done;
+    // Set by ByteArrayObject when the last RPC message is delivered and its version is known
+    persistent::version_t last_version;
+    // Used to alert the global persistence callback that last_version is ready
+    std::atomic<bool> last_version_set;
+    // The time the last RPC message is delivered to ByteArrayObject
+    steady_clock::time_point send_complete_time;
+    // Set by the global persistence callback when version last_version is persisted
+    steady_clock::time_point persist_complete_time;
+    // Set by the global verification callback when version last_version is verified
+    steady_clock::time_point verify_complete_time;
+};
+
+class ByteArrayObject : public mutils::ByteRepresentable,
+                        public derecho::GroupReference,
+                        public derecho::SignedPersistentFields {
 public:
     Persistent<test::Bytes> pers_bytes;
+    uint64_t messages_received;
+    TestState* test_state;
 
-    void change_pers_bytes(const test::Bytes& bytes) {
-        *pers_bytes = bytes;
-    }
+    void change_pers_bytes(const test::Bytes& bytes);
 
     // default constructor
-    ByteArrayObject(PersistentRegistry* pr)
-            : pers_bytes(pr, true) {}
+    ByteArrayObject(PersistentRegistry* pr, TestState* test_state)
+            : pers_bytes(pr, true),
+              messages_received(0),
+              test_state(test_state) {}
 
     // deserialization constructor
-    ByteArrayObject(Persistent<test::Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {}
+    ByteArrayObject(Persistent<test::Bytes>& _p_bytes, uint64_t _messages_received, TestState* _test_state)
+            : pers_bytes(std::move(_p_bytes)),
+              messages_received(_messages_received),
+              test_state(_test_state) {}
 
     REGISTER_RPC_FUNCTIONS(ByteArrayObject, ORDERED_TARGETS(change_pers_bytes));
-    DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
+    DEFAULT_SERIALIZE(pers_bytes, messages_received);
+    DEFAULT_DESERIALIZE_NOALLOC(ByteArrayObject);
+    static std::unique_ptr<ByteArrayObject> from_bytes(mutils::DeserializationManager* dsm, const uint8_t* buffer);
 };
+
+void ByteArrayObject::change_pers_bytes(const test::Bytes& bytes) {
+    *pers_bytes = bytes;
+    // This logic used to be in the global stability callback, but now it needs to be here
+    // because global stability callbacks were disabled for RPC messages. It also now requires
+    // a call to get_subgroup().get_current_version(), which means we can't write the method inline.
+    auto ver = this->group->template get_subgroup<ByteArrayObject>(this->subgroup_index).get_current_version();
+    ++messages_received;
+    if(messages_received == test_state->total_num_messages) {
+        test_state->send_complete_time = std::chrono::steady_clock::now();
+        test_state->last_version = std::get<0>(ver);
+        test_state->last_version_set = true;
+    }
+}
+
+std::unique_ptr<ByteArrayObject> ByteArrayObject::from_bytes(mutils::DeserializationManager* dsm, const uint8_t* buffer) {
+    // Default serialization will serialize each named field in order, so deserialize in the same order
+    auto pers_bytes_ptr = mutils::from_bytes<Persistent<test::Bytes>>(dsm, buffer);
+    std::size_t bytes_read = mutils::bytes_size(*pers_bytes_ptr);
+    auto messages_received_ptr = mutils::from_bytes<uint64_t>(dsm, buffer + bytes_read);
+    // Get the TestState pointer from the DeserializationManager
+    assert(dsm);
+    assert(dsm->registered<TestState>());
+    TestState* test_state_ptr = &(dsm->mgr<TestState>());
+    return std::make_unique<ByteArrayObject>(*pers_bytes_ptr, *messages_received_ptr, test_state_ptr);
+}
 
 struct signed_bw_result {
     int num_nodes;
@@ -94,70 +150,49 @@ int main(int argc, char* argv[]) {
         pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
     }
 
-    steady_clock::time_point begin_time, send_complete_time, persist_complete_time, verify_complete_time;
+    TestState shared_test_state;
+    shared_test_state.experiment_done = false;
+    shared_test_state.last_version_set = false;
+    steady_clock::time_point begin_time;
     bool is_sending = true;
 
-    long total_num_messages;
     switch(sender_selector) {
         case PartialSendMode::ALL_SENDERS:
-            total_num_messages = num_of_nodes * num_msgs;
+            shared_test_state.total_num_messages = num_of_nodes * num_msgs;
             break;
         case PartialSendMode::HALF_SENDERS:
-            total_num_messages = (num_of_nodes / 2) * num_msgs;
+            shared_test_state.total_num_messages = (num_of_nodes / 2) * num_msgs;
             break;
         case PartialSendMode::ONE_SENDER:
-            total_num_messages = num_msgs;
+            shared_test_state.total_num_messages = num_msgs;
             break;
     }
-    // variable 'done' tracks the end of the test
-    volatile bool done = false;
-
-    // last_version and its flag is shared between the stability callback and persistence callback.
-    // This is a clumsy hack to figure out what version number is assigned to the last delivered message.
-    persistent::version_t last_version;
-    std::atomic<bool> last_version_set = false;
-
-    auto stability_callback = [&last_version,
-                               &last_version_set,
-                               &send_complete_time,
-                               total_num_messages,
-                               num_delivered = 0u](uint32_t subgroup,
-                                                   uint32_t sender_id,
-                                                   long long int index,
-                                                   std::optional<std::pair<uint8_t*, long long int>> data,
-                                                   persistent::version_t ver) mutable {
-        //Count the total number of messages delivered
-        ++num_delivered;
-        if(num_delivered == total_num_messages) {
-            send_complete_time = std::chrono::steady_clock::now();
-            last_version = ver;
-            last_version_set = true;
-        }
-    };
 
     auto persistence_callback = [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
-        if(last_version_set && ver == last_version) {
-            persist_complete_time = std::chrono::steady_clock::now();
+        if(shared_test_state.last_version_set && ver == shared_test_state.last_version) {
+            shared_test_state.persist_complete_time = steady_clock::now();
         }
     };
 
     auto verified_callback = [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
-        if(last_version_set && ver == last_version) {
-            verify_complete_time = std::chrono::steady_clock::now();
-            done = true;
+        if(shared_test_state.last_version_set && ver == shared_test_state.last_version) {
+            shared_test_state.verify_complete_time = steady_clock::now();
+            shared_test_state.experiment_done = true;
         }
     };
     derecho::UserMessageCallbacks callback_set{
-            stability_callback,
-            persistence_callback,
             nullptr,
+            nullptr,
+            persistence_callback,
             verified_callback};
 
     derecho::SubgroupInfo subgroup_info(PartialSendersAllocator(num_of_nodes, sender_selector));
 
-    auto ba_factory = [](PersistentRegistry* pr, derecho::subgroup_id_t) { return std::make_unique<ByteArrayObject>(pr); };
+    auto ba_factory = [&shared_test_state](PersistentRegistry* pr, derecho::subgroup_id_t) {
+        return std::make_unique<ByteArrayObject>(pr, &shared_test_state);
+    };
 
-    derecho::Group<ByteArrayObject> group(callback_set, subgroup_info, {},
+    derecho::Group<ByteArrayObject> group(callback_set, subgroup_info, {&shared_test_state},
                                           std::vector<derecho::view_upcall_t>{}, ba_factory);
 
     auto node_rank = group.get_my_rank();
@@ -186,32 +221,32 @@ int main(int argc, char* argv[]) {
 #endif  //_PERFORMANCE_DEBUG
     }
 
-    while(!done) {
+    while(!shared_test_state.experiment_done) {
     }
-    int64_t send_nanosec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
+    int64_t send_nanosec = duration_cast<nanoseconds>(shared_test_state.send_complete_time - begin_time).count();
     double send_millisec = static_cast<double>(send_nanosec) / 1000000;
-    int64_t persist_nanosec = duration_cast<nanoseconds>(persist_complete_time - begin_time).count();
+    int64_t persist_nanosec = duration_cast<nanoseconds>(shared_test_state.persist_complete_time - begin_time).count();
     double persist_millisec = static_cast<double>(persist_nanosec) / 1000000;
-    int64_t verified_nanosec = duration_cast<nanoseconds>(verify_complete_time - begin_time).count();
+    int64_t verified_nanosec = duration_cast<nanoseconds>(shared_test_state.verify_complete_time - begin_time).count();
     double verified_millisec = static_cast<double>(verified_nanosec) / 1000000;
 
     //Calculate bandwidth
     //Bytes / nanosecond just happens to be equivalent to GigaBytes / second (in "decimal" GB)
     //Note that total_num_messages already incorporates multiplying by the number of senders
-    double send_thp_gbps = (static_cast<double>(total_num_messages) * msg_size) / send_nanosec;
-    double send_thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / send_nanosec;
+    double send_thp_gbps = (static_cast<double>(shared_test_state.total_num_messages) * msg_size) / send_nanosec;
+    double send_thp_ops = (static_cast<double>(shared_test_state.total_num_messages) * 1000000000) / send_nanosec;
     std::cout << "(send)timespan: " << send_millisec << " milliseconds." << std::endl;
     std::cout << "(send)throughput: " << send_thp_gbps << "GB/s." << std::endl;
     std::cout << "(send)throughput: " << send_thp_ops << "ops." << std::endl;
 
-    double persist_thp_gbs = (static_cast<double>(total_num_messages) * msg_size) / persist_nanosec;
-    double persist_thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / persist_nanosec;
+    double persist_thp_gbs = (static_cast<double>(shared_test_state.total_num_messages) * msg_size) / persist_nanosec;
+    double persist_thp_ops = (static_cast<double>(shared_test_state.total_num_messages) * 1000000000) / persist_nanosec;
     std::cout << "(pers)timespan: " << persist_millisec << " millisecond." << std::endl;
     std::cout << "(pers)throughput: " << persist_thp_gbs << "GB/s." << std::endl;
     std::cout << "(pers)throughput: " << persist_thp_ops << "ops." << std::endl;
 
-    double verified_thp_gbs = (static_cast<double>(total_num_messages) * msg_size) / verified_nanosec;
-    double verified_thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / verified_nanosec;
+    double verified_thp_gbs = (static_cast<double>(shared_test_state.total_num_messages) * msg_size) / verified_nanosec;
+    double verified_thp_ops = (static_cast<double>(shared_test_state.total_num_messages) * 1000000000) / verified_nanosec;
     std::cout << "(verify)timespan: " << verified_millisec << " millisecond." << std::endl;
     std::cout << "(verify)throughput: " << verified_thp_gbs << "GB/s." << std::endl;
     std::cout << "(verify)throughput: " << verified_thp_ops << "ops." << std::endl;

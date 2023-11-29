@@ -28,12 +28,10 @@ RPCManager::RPCManager(ViewManager& group_view_manager,
         : nid(getConfUInt32(Conf::DERECHO_LOCAL_ID)),
           rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(Conf::LOGGER_RPC_LOG_LEVEL))),
           receivers(new std::decay_t<decltype(*receivers)>()),
+          deserialization_contexts(deserialization_context),
           view_manager(group_view_manager),
           busy_wait_before_sleep_ms(getConfUInt64(Conf::DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
     RpcLoggerPtr::initialize();
-    for(const auto& deserialization_context_ptr : deserialization_context) {
-        rdv.push_back(deserialization_context_ptr);
-    }
     rpc_listener_thread = std::thread(&RPCManager::p2p_receive_loop, this);
 }
 
@@ -121,7 +119,7 @@ std::exception_ptr RPCManager::receive_message(
     std::size_t reply_header_size = header_space();
     //Pass through the provided out_alloc function, but add space for the reply header
     recv_ret reply_return = receiver_function_entry->second(
-            &rdv, received_from, buf,
+            &deserialization_contexts, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {
                 return out_alloc(size + reply_header_size) + reply_header_size;
             });
@@ -143,7 +141,7 @@ std::exception_ptr RPCManager::parse_and_receive(uint8_t* buf, std::size_t size,
     Opcode indx;
     node_id_t received_from;
     uint32_t flags;
-    retrieve_header(&rdv, buf, payload_size, indx, received_from, flags);
+    retrieve_header(buf, payload_size, indx, received_from, flags);
     RPCManager::rpc_caller_id = received_from;
     return receive_message(indx, received_from, buf + header_space(),
                            payload_size, out_alloc);
@@ -233,7 +231,7 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, uint8_t* msg_buf) {
     Opcode indx;
     node_id_t received_from;
     uint32_t flags;
-    retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
+    retrieve_header(msg_buf, payload_size, indx, received_from, flags);
     dbg_trace(rpc_logger, "Handling a P2P message: function_id = {}, is_reply = {}, received_from = {}, payload_size = {}, invocation_id = {}",
               indx.function_id, indx.is_reply, received_from, payload_size, ((long*)(msg_buf + header_size))[0]);
     if(indx.is_reply) {
@@ -487,7 +485,7 @@ void RPCManager::p2p_request_worker() {
             request = p2p_request_queue.front();
             p2p_request_queue.pop();
         }
-        retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
+        retrieve_header(request.msg_buf, payload_size, indx, received_from, flags);
         if(indx.is_reply || RPC_HEADER_FLAG_TST(flags, CASCADE)) {
             dbg_error(rpc_logger, "Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
                       indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));

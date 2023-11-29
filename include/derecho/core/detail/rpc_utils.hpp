@@ -234,7 +234,7 @@ struct recv_ret {
  * some RPC message is received.
  */
 using receive_fun_t = std::function<recv_ret(
-        mutils::RemoteDeserialization_v* rdv, const node_id_t&, const uint8_t* recv_buf,
+        mutils::RemoteDeserialization_v*, const node_id_t&, const uint8_t* recv_buf,
         const std::function<uint8_t*(int)>& out_alloc)>;
 
 //Forward declaration of PendingResults, to be used by QueryResults
@@ -1145,9 +1145,7 @@ inline void populate_header(uint8_t* reply_buf,
     reinterpret_cast<uint32_t*>(reply_buf + offset)[0] = flags;  // flags
 }
 
-//inline void retrieve_header(mutils::DeserializationManager* dsm,
-inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
-                            const uint8_t* reply_buf,
+inline void retrieve_header(const uint8_t* reply_buf,
                             std::size_t& payload_size, Opcode& op,
                             node_id_t& from, uint32_t& flags) {
     std::size_t offset = 0;

@@ -291,10 +291,11 @@ Group<ReplicatedTypes...>::Group(const SubgroupInfo& subgroup_info, Factory<Repl
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
-    // shutdown the persistence manager
-    // TODO-discussion:
-    // Will a node be able to come back once it leaves? if not, maybe we should
-    // shut it down on leave().
+    /**
+        We shut down the persistence_manager on leave, assuming a process will not come back once it leaves.
+        Here we shut it down again, in case the process is just leaving by itself instead of a system-level
+        shutdown. Please note that the shutdown opeartion is idempotent.
+     */
     persistence_manager.shutdown(true);
 }
 
@@ -545,6 +546,9 @@ template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::leave(bool group_shutdown) {
     if(group_shutdown) {
         view_manager.silence();
+        view_manager.barrier_sync();
+        /* Here we flush the data to persistent store and wait until it finished. */
+        persistence_manager.shutdown(true);
         view_manager.barrier_sync();
     }
     view_manager.leave();

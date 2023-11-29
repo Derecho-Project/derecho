@@ -197,14 +197,16 @@ private:
 
     const node_id_t my_id;
     /**
-     * The shared pointer holding deserialization context is obsolete. I (Weijia)
-     * removed it because it complicated things: the deserialization context is
-     * generally a big object containing the group handle; however, the group handle
-     * need to hold a shared pointer to the object, which causes a dependency loop
-     * and results in an object indirectly holding a shared pointer to its self.
-     * Another side effect is double free. So I change it back to the raw pointer.
-     * The user deserialization context for all objects serialized and deserialized. */
-    // std::shared_ptr<DeserializationContext> user_deserialization_context;
+     * A list (possibly empty) of user-provided deserialization contexts that are
+     * needed to help deserialize the Replicated Objects. These should be passed
+     * into the from_bytes method whenever from_bytes is called on a Replicated
+     * Object. They are stored as raw pointers, even though it is more dangerous,
+     * because Weijia found that trying to store a shared_ptr here complicated
+     * things: the deserialization context is generally a big object containing
+     * the group handle; however, the group handle need to hold a shared pointer
+     * to the object, which causes a dependency loop and results in an object
+     * indirectly holding a shared pointer to its self.
+     */
     std::vector<DeserializationContext*> user_deserialization_context;
 
     /** Persist the objects. Once persisted, persistence_manager updates the SST
@@ -339,9 +341,13 @@ public:
      * events in this group.
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
-     * @param deserialization_context The context used for deserialization
-     * purpose. The application is responsible to keep it alive during Group
-     * object lifetime.
+     * @param deserialization_context A list of pointers to deserialization
+     * contexts, which are objects needed to help deserialize user-provided
+     * Replicated Object classes. These context pointers will be provided in
+     * the DeserializationManager argument to from_bytes any time a Replicated
+     * Object is deserialized, e.g. during state transfer. The calling
+     * application is responsible for keeping these objects alive during the
+     * lifetime of the Group, since Group does not own the pointers.
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
      * @param factories A variable number of Factory functions, one for each
