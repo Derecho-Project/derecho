@@ -79,6 +79,17 @@ bool P2PConnectionManager::contains_node(const node_id_t node_id) {
     return p2p_connections[node_id].second != nullptr;
 }
 
+std::vector<node_id_t> P2PConnectionManager::get_active_nodes(){
+    std::vector<node_id_t> node_ids;
+    for(uint32_t i = 0; i < derecho::getConfUInt32(derecho::Conf::DERECHO_MAX_NODE_ID); ++i) {
+        std::lock_guard<std::mutex> connection_lock(p2p_connections[i].first);
+        if(active_p2p_connections[i]){
+            node_ids.push_back(i);
+        }
+    }
+    return node_ids;
+}
+
 void P2PConnectionManager::shutdown_failures_thread() {
     thread_shutdown = true;
     if(timeout_thread.joinable()) {

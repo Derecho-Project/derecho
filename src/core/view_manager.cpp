@@ -1092,6 +1092,9 @@ void ViewManager::external_join_handler(tcp::socket& client_socket, const node_i
         sst::add_external_node(joiner_id, {client_socket.get_remote_ip(),
                                            external_client_external_port});
         add_external_connection_upcall(joiner_id);
+    } else if(request == ExternalClientRequest::REMOVE_P2P) {
+        sst::remove_node(joiner_id);
+        remove_external_connection_upcall(joiner_id);
     }
 }
 

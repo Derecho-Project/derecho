@@ -217,6 +217,53 @@ ExternalGroupClient<ReplicatedTypes...>::~ExternalGroupClient() {
     if(rpc_listener_thread.joinable()) {
         rpc_listener_thread.join();
     }
+
+    // gracefully inform each remote node that this client is leaving
+    auto node_ids = p2p_connections->get_active_nodes();
+    for(const node_id_t remote_id : node_ids){
+        if(remote_id == my_id) continue;
+
+        dbg_default_info("informing node {} that this client is leaving.", remote_id);
+        int rank = curr_view->rank_of(remote_id);
+        if(rank == -1) {
+            dbg_default_error("Cannot send a p2p request to node {}: it is not a member of the Group.", remote_id);
+            dbg_default_flush();
+            continue;
+        }
+
+        tcp::socket sock(curr_view->member_ips_and_ports[rank].ip_address,
+                curr_view->member_ips_and_ports[rank].gms_port);
+
+        JoinResponse response;
+        uint64_t node_version_hashcode;
+        try {
+            sock.exchange(my_version_hashcode, node_version_hashcode);
+            if(node_version_hashcode != my_version_hashcode) {
+                dbg_default_error("Unable to connect to Derecho member because the node is running on an incompatible platform or used an incompatible compiler.");
+                dbg_default_flush();
+                continue;
+            }
+            sock.write(JoinRequest{my_id, true});
+            sock.read(response);
+            if(response.code == JoinResponseCode::ID_IN_USE) {
+                dbg_default_error("Error! Derecho member refused connection because ID {} is already in use!", my_id);
+                dbg_default_flush();
+                continue;
+            }
+            sock.write(ExternalClientRequest::REMOVE_P2P);
+            sock.write(getConfUInt16(Conf::DERECHO_EXTERNAL_PORT));
+        } catch(tcp::socket_error&) {
+            dbg_default_error("Failed to gracefully exit: socket error while sending join request.");
+            dbg_default_flush();
+            continue;
+        }
+
+        assert(remote_id != my_id);
+        sst::remove_node(remote_id);
+    }
+
+    // cleanup
+    p2p_connections->remove_connections(node_ids);
 }
 
 template <typename... ReplicatedTypes>

@@ -101,7 +101,8 @@ struct JoinRequest {
  */
 enum class ExternalClientRequest {
     GET_VIEW,      //!< GET_VIEW The external client wants to download the current View
-    ESTABLISH_P2P  //!< ESTABLISH_P2P The external client wants to set up a P2P connection with this node
+    ESTABLISH_P2P, //!< ESTABLISH_P2P The external client wants to set up a P2P connection with this node
+    REMOVE_P2P     //!< REMOVE_P2P The external client is informing that it is exiting
 };
 
 template <typename T>
@@ -275,6 +276,7 @@ private:
     std::atomic<bool> bSilent = false;
 
     std::function<void(uint32_t)> add_external_connection_upcall;
+    std::function<void(uint32_t)> remove_external_connection_upcall;
 
     bool has_pending_new() { return pending_new_sockets.locked().access.size() > 0; }
     bool has_pending_join() { return pending_join_sockets.size() > 0; }
@@ -794,6 +796,10 @@ public:
 
     void register_add_external_connection_upcall(const std::function<void(uint32_t)>& upcall) {
         add_external_connection_upcall = upcall;
+    }
+    
+    void register_remove_external_connection_upcall(const std::function<void(uint32_t)>& upcall) {
+        remove_external_connection_upcall = upcall;
     }
 
     /**

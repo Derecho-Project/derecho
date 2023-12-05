@@ -415,6 +415,13 @@ void RPCManager::add_external_connection(node_id_t node_id) {
     connections->add_connections({node_id});
 }
 
+void RPCManager::remove_external_connection(node_id_t node_id) {
+    if(external_client_ids.erase(node_id) != 0) {
+        dbg_debug(rpc_logger, "External client with id {} gracefully exiting, doing cleanup", node_id);
+        connections->remove_connections({node_id});
+    }
+}
+
 void RPCManager::register_rpc_results(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle) {
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     pending_results_to_fulfill[subgroup_id].push(pending_results_handle);
