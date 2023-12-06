@@ -217,6 +217,57 @@ ExternalGroupClient<ReplicatedTypes...>::~ExternalGroupClient() {
     if(rpc_listener_thread.joinable()) {
         rpc_listener_thread.join();
     }
+
+    // gracefully inform each remote node that this client is leaving
+    auto node_ids = p2p_connections->get_active_nodes();
+    for(const node_id_t remote_id : node_ids){
+        if(remote_id == my_id) continue;
+
+        dbg_default_info("informing node {} that this client is leaving.", remote_id);
+        int rank = curr_view->rank_of(remote_id);
+        if(rank == -1) {
+            dbg_default_error("Cannot send a p2p request to node {}: it is not a member of the Group.", remote_id);
+            dbg_default_flush();
+            continue;
+        }
+
+        tcp::socket sock(curr_view->member_ips_and_ports[rank].ip_address,
+                curr_view->member_ips_and_ports[rank].gms_port);
+
+        JoinResponse response;
+        uint64_t node_version_hashcode;
+        try {
+            sock.exchange(my_version_hashcode, node_version_hashcode);
+            if(node_version_hashcode != my_version_hashcode) {
+                dbg_default_error("Unable to connect to Derecho member because the node is running on an incompatible platform or used an incompatible compiler.");
+                dbg_default_flush();
+                continue;
+            }
+            sock.write(JoinRequest{my_id, true});
+            sock.read(response);
+            if(response.code == JoinResponseCode::ID_IN_USE) {
+                dbg_default_error("Error! Derecho member refused connection because ID {} is already in use!", my_id);
+                dbg_default_flush();
+                continue;
+            }
+            sock.write(ExternalClientRequest::REMOVE_P2P);
+
+            // wait confirmation from server
+            bool remove_confirmed;
+            sock.read(remove_confirmed); 
+        } catch(tcp::socket_error&) {
+            dbg_default_error("Failed to gracefully exit: socket error while sending join request.");
+            dbg_default_flush();
+            continue;
+        }
+
+        sst::remove_node(remote_id);
+    }
+
+    // wait sst_poll_cq_timeout before cleaning up connections, to make sure this client replies to all heartbeat requests
+    uint32_t sst_poll_cq_timeout_ms = derecho::getConfUInt32(derecho::Conf::DERECHO_SST_POLL_CQ_TIMEOUT_MS);
+    std::this_thread::sleep_for(std::chrono::milliseconds(sst_poll_cq_timeout_ms));
+    p2p_connections->remove_connections(node_ids);
 }
 
 template <typename... ReplicatedTypes>
