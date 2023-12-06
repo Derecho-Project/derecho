@@ -1095,6 +1095,13 @@ void ViewManager::external_join_handler(tcp::socket& client_socket, const node_i
     } else if(request == ExternalClientRequest::REMOVE_P2P) {
         sst::remove_node(joiner_id);
         remove_external_connection_upcall(joiner_id);
+
+        // send confirmation to client
+        try {
+            client_socket.write(true);
+        } catch(tcp::socket_error& ex) {
+            dbg_debug(vm_logger, "Socket error description: {}", ex.what());
+        }
     }
 }
 

@@ -251,18 +251,22 @@ ExternalGroupClient<ReplicatedTypes...>::~ExternalGroupClient() {
                 continue;
             }
             sock.write(ExternalClientRequest::REMOVE_P2P);
-            sock.write(getConfUInt16(Conf::DERECHO_EXTERNAL_PORT));
+
+            // wait confirmation from server
+            bool remove_confirmed;
+            sock.read(remove_confirmed); 
         } catch(tcp::socket_error&) {
             dbg_default_error("Failed to gracefully exit: socket error while sending join request.");
             dbg_default_flush();
             continue;
         }
 
-        assert(remote_id != my_id);
         sst::remove_node(remote_id);
     }
 
-    // cleanup
+    // wait sst_poll_cq_timeout before cleaning up connections, to make sure this client replies to all heartbeat requests
+    uint32_t sst_poll_cq_timeout_ms = derecho::getConfUInt32(derecho::Conf::DERECHO_SST_POLL_CQ_TIMEOUT_MS);
+    std::this_thread::sleep_for(std::chrono::milliseconds(sst_poll_cq_timeout_ms));
     p2p_connections->remove_connections(node_ids);
 }
 
