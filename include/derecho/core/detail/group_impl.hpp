@@ -403,6 +403,9 @@ void Group<ReplicatedTypes...>::set_up_components() {
     view_manager.register_add_external_connection_upcall([this](uint32_t node_id) {
         rpc_manager.add_external_connection(node_id);
     });
+    view_manager.register_remove_external_connection_upcall([this](uint32_t node_id) {
+        rpc_manager.remove_external_connection(node_id);
+    });
     // Give RPCManager a standard "new view callback" on every View change
     view_manager.add_view_upcall([this](const View& new_view) {
         rpc_manager.new_view_callback(new_view);

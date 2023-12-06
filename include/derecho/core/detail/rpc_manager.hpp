@@ -281,6 +281,14 @@ public:
      * are set up in the new-view callback, but external clients can join at any time.
      */
     void add_external_connection(node_id_t node_id);
+    
+    /**
+     * Remove a P2P connection to an external client. The connection is cleaned up in 
+     * case a failure is detected (i.e. the external client stopped sending heartbeats. 
+     * However, we avoid the failure procedure in case the external client performs a 
+     * graceful exit, informing that it is exiting.
+     */
+    void remove_external_connection(node_id_t node_id);
 
     /**
      * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P

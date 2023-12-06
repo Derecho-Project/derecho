@@ -20,6 +20,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <chrono>
 #include <unordered_map>
 
 namespace derecho {
