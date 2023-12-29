@@ -9,8 +9,9 @@ find_dependency(spdlog 1.3.1)
 find_dependency(OpenSSL 1.1.1)
 find_dependency(nlohmann_json 3.9.0)
 
-set_and_check(derecho_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
-set(derecho_LIBRARIES "-L@PACKAGE_CMAKE_INSTALL_LIBDIR@ -lderecho -pthread")
+# We don't support the old style derecho_INCLUDE_DIRS and derecho_LIBRARIES anymore.
+# set_and_check(derecho_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+# set(derecho_LIBRARIES "-L@PACKAGE_CMAKE_INSTALL_LIBDIR@ -lderecho -pthread")
 include("${CMAKE_CURRENT_LIST_DIR}/derechoTargets.cmake")
 
 check_required_components(derecho)
