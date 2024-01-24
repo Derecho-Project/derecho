@@ -30,7 +30,9 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
           wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(),
                                                                      type_id, subgroup_id,
                                                                      T::register_functions())),
-          group(group) {
+          group(group),
+          current_version(persistent::INVALID_VERSION),
+          current_hlc(0,0) {
     if constexpr(std::is_base_of_v<GroupReference, T>) {
         (**user_object_ptr).set_group_pointers(group, subgroup_index);
     }
@@ -282,12 +284,12 @@ persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() {
 template <typename T>
 void Replicated<T>::post_next_version(persistent::version_t version, uint64_t ts_us) {
     current_version = version;
-    current_timestamp_us = ts_us;
+    current_hlc.tick({ts_us,0},false);
 }
 
 template <typename T>
-std::tuple<persistent::version_t, uint64_t> Replicated<T>::get_current_version() {
-    return std::tie(current_version, current_timestamp_us);
+std::tuple<persistent::version_t, HLC> Replicated<T>::get_current_version() {
+    return std::tie(current_version, current_hlc);
 }
 
 template <typename T>

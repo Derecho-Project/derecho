@@ -167,7 +167,7 @@ void SignatureStore::ordered_add_hash(const SHA256Hash& hash) {
     dbg_default_debug("Received call to ordered_add_hash");
     derecho::Replicated<SignatureStore>& this_subgroup = group->get_subgroup<SignatureStore>(this->subgroup_index);
     //Ask the Replicated interface what version it's about to persist
-    std::tuple<persistent::version_t, uint64_t> curr_version = this_subgroup.get_current_version();
+    std::tuple<persistent::version_t, HLC> curr_version = this_subgroup.get_current_version();
     //Append the new hash to the Persistent log, thus generating a version
     *hashes = hash;
     dbg_default_debug("SHA256 hash added for version {}", std::get<0>(curr_version));

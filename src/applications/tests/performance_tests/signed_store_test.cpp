@@ -245,7 +245,7 @@ std::vector<unsigned char> SignatureStore::add_hash(const SHA256Hash& hash) cons
 void SignatureStore::ordered_add_hash(const SHA256Hash& hash) {
     derecho::Replicated<SignatureStore>& this_subgroup = group->get_subgroup<SignatureStore>(this->subgroup_index);
     //Ask the Replicated interface what version it's about to persist
-    std::tuple<persistent::version_t, uint64_t> curr_version = this_subgroup.get_current_version();
+    std::tuple<persistent::version_t, HLC> curr_version = this_subgroup.get_current_version();
     //Append the new hash to the Persistent log
     *hashes = hash;
     dbg_default_debug("SHA256 hash added for version {}", std::get<0>(curr_version));
@@ -282,8 +282,8 @@ std::pair<persistent::version_t, uint64_t> ObjectStore::update(const Blob& new_d
 void ObjectStore::ordered_update(const Blob& new_data) {
     derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
     //Ask the Replicated interface what version it's about to generate
-    std::tuple<persistent::version_t, uint64_t> next_version = this_subgroup.get_current_version();
-    dbg_default_debug("Got a version of ({}, {}) in ordered_update", std::get<0>(next_version), std::get<1>(next_version));
+    std::tuple<persistent::version_t, HLC> next_version = this_subgroup.get_current_version();
+    dbg_default_debug("Got a version of ({}, {}) in ordered_update", std::get<0>(next_version), std::get<1>(next_version).m_rtc_us);
     //Update the Persistent object, generating a new version
     *object_log = new_data;
 }
