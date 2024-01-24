@@ -6,8 +6,9 @@
 #include "PersistException.hpp"
 #include "PersistNoLog.hpp"
 #include "PersistentInterface.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/utils/logger.hpp>
+#include <derecho/utils/time.h>
 #include "detail/FilePersistLog.hpp"
 #include "detail/PersistLog.hpp"
 #include "detail/logger.hpp"
@@ -224,9 +225,7 @@ public:
             return m_temporalQueryFrontierProvider->getFrontier();
 #endif  //NDEBUG
         } else {
-            struct timespec t;
-            clock_gettime(CLOCK_REALTIME, &t);
-            return HLC((uint64_t)(t.tv_sec * 1e6 + t.tv_nsec / 1e3), (uint64_t)0);
+            return HLC(get_walltime()/INT64_1E3, (uint64_t)0);
         }
     }
 

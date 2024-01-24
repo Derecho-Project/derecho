@@ -689,9 +689,8 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
 
 void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_us) {
     std::optional<int32_t> result;
-    uint64_t start_time_us;
+    uint64_t start_time_us = get_time() / INT64_1E3;
     uint64_t cur_time_us;
-    start_time_us = get_time()/1e3;
     const auto tid = std::this_thread::get_id();
 
     while (num_entries) {
@@ -703,7 +702,7 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
             num_entries --;
             continue;
         }
-        cur_time_us = get_time()/1e3;
+        cur_time_us = get_time() / INT64_1E3;
         if ((cur_time_us - start_time_us) >= timeout_us) {
             //timeout
             break;
@@ -913,8 +912,7 @@ void polling_loop() {
     auto sst_logger = spdlog::get(LoggerFactory::SST_LOGGER_NAME);
     dbg_trace(sst_logger, "Polling thread starting.");
 
-    struct timespec last_time, cur_time;
-    clock_gettime(CLOCK_REALTIME, &last_time);
+    uint64_t last_time_ms = get_walltime() / INT64_1E6;
 
     while(!shutdown) {
         auto ce = lf_poll_completion();
@@ -925,12 +923,9 @@ void polling_loop() {
             util::polling_data.insert_completion_entry(ce.first, ce.second);
 
             // update last time
-            clock_gettime(CLOCK_REALTIME, &last_time);
+            last_time_ms = get_walltime() / INT64_1E6;
         } else {
-            clock_gettime(CLOCK_REALTIME, &cur_time);
-            // check if the system has been inactive for enough time to induce sleep
-            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            uint64_t time_elapsed_in_ms = (get_walltime() / INT64_1E6) - last_time_ms;
             if(time_elapsed_in_ms > 100) {
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
@@ -953,14 +948,10 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
     struct fi_cq_entry entry;
     int poll_result = 0;
 
-    struct timespec last_time, cur_time;
-    clock_gettime(CLOCK_REALTIME, &last_time);
+    uint64_t last_time_ms = get_walltime() / INT64_1E6;
 
     while(!shutdown) {
-        clock_gettime(CLOCK_REALTIME, &cur_time);
-        // check if the system has been inactive for enough time to induce sleep
-        double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                    + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+        uint64_t time_elapsed_in_ms = (get_walltime() / INT64_1E6) - last_time_ms;
         if(time_elapsed_in_ms > 100) {
             using namespace std::chrono_literals;
             std::this_thread::sleep_for(1ms);

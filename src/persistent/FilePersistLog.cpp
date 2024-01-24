@@ -325,10 +325,10 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
             flush_dlen = (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen - NEXT_LOG_ENTRY_PERS->fields.ofst);
             // flush data
             flush_dstart = ALIGN_TO_PAGE(NEXT_DATA_PERS);
-            flush_dlen += ((int64_t)NEXT_DATA_PERS) % PAGE_SIZE;
+            flush_dlen += ((int64_t)NEXT_DATA_PERS) % getpagesize();
             // flush log
             flush_lstart = ALIGN_TO_PAGE(NEXT_LOG_ENTRY_PERS);
-            flush_llen = ((size_t)NEXT_LOG_ENTRY - (size_t)NEXT_LOG_ENTRY_PERS) + ((int64_t)NEXT_LOG_ENTRY_PERS) % PAGE_SIZE;
+            flush_llen = ((size_t)NEXT_LOG_ENTRY - (size_t)NEXT_LOG_ENTRY_PERS) + ((int64_t)NEXT_LOG_ENTRY_PERS) % getpagesize();
         }
         // if(NUM_USED_SLOTS > 0) {
             //get the latest flushed version
