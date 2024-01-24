@@ -541,8 +541,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop() {
 
     request_worker_thread = std::thread(&ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker, this);
 
-    struct timespec last_time, cur_time;
-    clock_gettime(CLOCK_REALTIME, &last_time);
+    uint64_t last_time_ms = get_walltime() / INT64_1E6;
 
     // loop event
     while(!thread_shutdown) {
@@ -557,12 +556,10 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop() {
             }
 
             // update last time
-            clock_gettime(CLOCK_REALTIME, &last_time);
+            last_time_ms = get_walltime() / INT64_1E6;
         } else {
-            clock_gettime(CLOCK_REALTIME, &cur_time);
             // check if the system has been inactive for enough time to induce sleep
-            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            uint64_t time_elapsed_in_ms = (get_walltime() / INT64_1E6) - last_time_ms;
             if(time_elapsed_in_ms > busy_wait_before_sleep_ms) {
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);

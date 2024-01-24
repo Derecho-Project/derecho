@@ -328,7 +328,7 @@ public:
 
     inline const HLC getFrontier() {
         // transform from ns to us:
-        HLC hlc(this->compute_global_stability_frontier() / 1e3, 0);
+        HLC hlc(this->compute_global_stability_frontier() / INT64_1E3, 0);
         return hlc;
     }
 

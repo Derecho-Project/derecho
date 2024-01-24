@@ -10,7 +10,6 @@
 
 #include "../predicates.hpp"
 #include "poll_utils.hpp"
-
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -20,6 +19,7 @@
 #include <thread>
 #include <time.h>
 #include <vector>
+#include <derecho/utils/time.h>
 
 namespace sst {
 
@@ -65,8 +65,7 @@ void SST<DerivedSST>::detect() {
         std::unique_lock<std::mutex> lock(thread_start_mutex);
         thread_start_cv.wait(lock, [this]() { return thread_start; });
     }
-    struct timespec last_time, cur_time;
-    clock_gettime(CLOCK_REALTIME, &last_time);
+    uint64_t last_time_ms = get_walltime() / INT64_1E6;
 
     while(!thread_shutdown) {
         bool predicate_fired = false;
@@ -124,12 +123,10 @@ void SST<DerivedSST>::detect() {
 
         if(predicate_fired) {
             // update last time
-            clock_gettime(CLOCK_REALTIME, &last_time);
+            last_time_ms = get_walltime() / INT64_1E6;
         } else {
-            clock_gettime(CLOCK_REALTIME, &cur_time);
             // check if the system has been inactive for enough time to induce sleep
-            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            uint64_t time_elapsed_in_ms = ( get_walltime() / INT64_1E6 ) - last_time_ms;
             if(time_elapsed_in_ms > 100) {
                 predicates_lock.unlock();
                 using namespace std::chrono_literals;
