@@ -284,7 +284,11 @@ persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() {
 template <typename T>
 void Replicated<T>::post_next_version(persistent::version_t version, uint64_t ts_us) {
     current_version = version;
-    current_hlc.tick({ts_us,0},false);
+    if (current_hlc > HLC{ts_us,0}) {
+        current_hlc.m_logic ++;
+    } else {
+        current_hlc = {ts_us,0};
+    }
 }
 
 template <typename T>
