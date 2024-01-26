@@ -37,7 +37,7 @@ public:
     /**
      * Destructor
      */
-    virtual ~HLC() noexcept(false);
+    virtual ~HLC();
 
     /**
      * Local tick

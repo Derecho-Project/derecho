@@ -27,10 +27,8 @@ HLC::HLC(uint64_t _r, uint64_t _l) : m_rtc_us(_r), m_logic(_l) {
     }
 }
 
-HLC::~HLC() noexcept(false) {
-    if(pthread_spin_destroy(&this->m_oLck) != 0) {
-        throw HLC_EXP_SPIN_DESTROY(errno);
-    }
+HLC::~HLC() {
+    pthread_spin_destroy(&this->m_oLck);
 }
 
 #define HLC_LOCK                                \

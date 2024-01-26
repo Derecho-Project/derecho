@@ -153,9 +153,9 @@ private:
      */
     _Group* group;
     /** The current version number being processed by an ordered_send */
-    persistent::version_t current_version = persistent::INVALID_VERSION;
-    /** The timestamp associated with the current version number */
-    uint64_t current_timestamp_us = 0;
+    persistent::version_t current_version;
+    /** The HLC associated with the current version number */
+    HLC current_hlc;
 
 public:
     /**
@@ -431,9 +431,9 @@ public:
      * since P2P method calls are handled in a separate thread from ordered_send
      * method calls, and there is no synchronization between these two threads on
      * the value of current_version.
-     * @return an ordered pair (version number, timestamp)
+     * @return an ordered pair (version number, HLC)
      */
-    virtual std::tuple<persistent::version_t, uint64_t> get_current_version();
+    virtual std::tuple<persistent::version_t,HLC> get_current_version();
 
     /**
      * Register a persistent member
