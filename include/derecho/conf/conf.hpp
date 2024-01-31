@@ -208,6 +208,13 @@ public:
     const bool hasCustomizedKey(const std::string& key) const {
         return (this->config.find(key) != this->config.end());
     }
+
+    /**
+     * @brief Get leader's ip
+     * @return	A tuple of <leader ip,gms port,external port> representing the information of the current leader.
+     */
+    const std::tuple<std::string,uint16_t,uint16_t> get_leader() const;
+
     // Initialize the singleton from the command line and the configuration file.
     // The command line has higher priority than the configuration file
     // The process we find the configuration file:

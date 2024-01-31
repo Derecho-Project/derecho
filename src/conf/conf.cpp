@@ -170,6 +170,12 @@ const Conf* Conf::get() noexcept(true) {
     return Conf::singleton.get();
 }
 
+const std::tuple<std::string,uint16_t,uint16_t> Conf::get_leader() const {
+    // TODO:
+    std::tuple<std::string,uint16_t,uint16_t> leader = {"",0,0};
+    return leader;
+}
+
 const std::string& getConfString(const std::string& key) {
     return Conf::get()->getString(key);
 }
