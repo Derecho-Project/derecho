@@ -171,12 +171,12 @@ const Conf* Conf::get() noexcept(true) {
 }
 
 const std::tuple<std::string,uint16_t,uint16_t> Conf::get_leader() const {
-    // TODO:
+    // TODO: implement a full version of this.
     std::tuple<std::string,uint16_t,uint16_t> leader = 
     {
-        Conf::get()->getString(DERECHO_LEADER_IP),
-        Conf::get()->getUInt16(DERECHO_LEADER_GMS_PORT),
-        Conf::get()->getUInt16(DERECHO_LEADER_EXTERNAL_PORT)
+        this->getString(DERECHO_LEADER_IP),
+        this->getUInt16(DERECHO_LEADER_GMS_PORT),
+        this->getUInt16(DERECHO_LEADER_EXTERNAL_PORT)
     };
     return leader;
 }

@@ -273,8 +273,9 @@ ExternalGroupClient<ReplicatedTypes...>::~ExternalGroupClient() {
 template <typename... ReplicatedTypes>
 bool ExternalGroupClient<ReplicatedTypes...>::get_view(const node_id_t nid) {
     try {
+        auto leader_tuple = Conf::get()->get_leader();
         tcp::socket sock = (nid == INVALID_NODE_ID)
-                                   ? tcp::socket(getConfString(Conf::DERECHO_LEADER_IP), getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT))
+                                   ? tcp::socket(std::get<0>(leader_tuple), std::get<1>(leader_tuple))
                                    : tcp::socket(curr_view->member_ips_and_ports[curr_view->rank_of(nid)].ip_address,
                                                  curr_view->member_ips_and_ports[curr_view->rank_of(nid)].gms_port, false);
 

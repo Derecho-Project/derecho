@@ -96,7 +96,8 @@ void ViewManager::startup_to_first_view() {
     const uint16_t my_gms_port = getConfUInt16(Conf::DERECHO_GMS_PORT);
     in_total_restart = false;
     //Determine if I am the initial leader for a new group
-    if(my_ip == getConfString(Conf::DERECHO_LEADER_IP) && my_gms_port == getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT)) {
+    auto leader_tuple = Conf::get()->get_leader();
+    if(my_ip == std::get<0>(leader_tuple) && my_gms_port == std::get<1>(leader_tuple)) {
         curr_view = std::make_unique<View>(
                 0, std::vector<node_id_t>{my_id},
                 std::vector<IpAndPorts>{
@@ -115,8 +116,8 @@ void ViewManager::startup_to_first_view() {
     } else {
         active_leader = false;
         dbg_info(vm_logger, "Non-leader node {} initiating a join request at the leader", my_id);
-        leader_connection = std::make_unique<tcp::socket>(getConfString(Conf::DERECHO_LEADER_IP),
-                                                          getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT));
+        leader_connection = std::make_unique<tcp::socket>(std::get<0>(leader_tuple),
+                                                          std::get<1>(leader_tuple));
         bool success = receive_initial_view();
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
@@ -549,12 +550,7 @@ void ViewManager::reinit_tcp_connections(const View& initial_view, const node_id
 }
 
 bool ViewManager::is_starting_leader() const {
-    if(in_total_restart) {
-        return active_leader;
-    } else {
-        return getConfString(Conf::DERECHO_LOCAL_IP) == getConfString(Conf::DERECHO_LEADER_IP)
-               && getConfUInt16(Conf::DERECHO_GMS_PORT) == getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT);
-    }
+    return active_leader;
 }
 
 void ViewManager::start() {

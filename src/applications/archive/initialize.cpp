@@ -24,8 +24,9 @@ std::string read_string(socket& s) {
 std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> initialize(const uint32_t num_nodes) {
     // Get conf file parameters
     // Global information
-    const std::string leader_ip = getConfString(Conf::DERECHO_LEADER_IP);
-    const uint16_t leader_gms_port = getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT);
+    auto leader_tuple = Conf::get()->get_leader();
+    const std::string leader_ip = std::get<0>(leader_tuple);
+    const uint16_t leader_gms_port = std::get<1>(leader_tuple);
     // Local information
     const uint32_t local_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
     const std::string local_ip = getConfString(Conf::DERECHO_LOCAL_IP);
