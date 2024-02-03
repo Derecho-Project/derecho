@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <sys/resource.h>
 #include <time.h>
+#include <derecho/config.h>
 
 #define INT64_1E3  (1000L)
 #define INT64_1E6  (1000000L)

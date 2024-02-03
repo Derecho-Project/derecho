@@ -5,6 +5,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <derecho/config.h>
 
 namespace tcp {
 

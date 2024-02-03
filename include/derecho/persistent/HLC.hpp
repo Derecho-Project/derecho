@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <pthread.h>
 #include <sys/types.h>
+#include <derecho/config.h>
 
 /**
  * @brief Hybrid Logical clock

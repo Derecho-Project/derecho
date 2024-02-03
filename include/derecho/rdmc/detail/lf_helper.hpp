@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include <derecho/config.h>
 #include <derecho/core/derecho_type_definitions.hpp>
 #include <derecho/utils/logger.hpp>
 

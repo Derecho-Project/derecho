@@ -1,5 +1,5 @@
 #pragma once
-#include "derecho/utils/map_macro.hpp"
+#include <derecho/utils/map_macro.hpp>
 #include "detail/rpc_utils.hpp"
 
 #define make_p2p_tagger_expr(x) derecho::rpc::tag_p2p<derecho::rpc::hash_cstr(#x)>(&classname::x)

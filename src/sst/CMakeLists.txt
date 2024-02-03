@@ -5,5 +5,6 @@ else()
 endif()
 target_include_directories(sst PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
 )
 target_link_libraries(sst spdlog::spdlog)

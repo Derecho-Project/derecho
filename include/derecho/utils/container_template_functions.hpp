@@ -11,6 +11,7 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <derecho/config.h>
 
 namespace derecho {
 

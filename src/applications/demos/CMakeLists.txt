@@ -4,6 +4,7 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_BINARY_DIR}/include)
 
 # random_messages
 add_executable(random_messages random_messages.cpp)

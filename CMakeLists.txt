@@ -20,6 +20,8 @@ set(ignoreMe "${CMAKE_WARN_DEPRECATED}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
+set(ENABLE_LEADER_REGISTRY 1)
+
 include(GNUInstallDirs)
 
 # Prevent "make install" from automatically calling "make all", since the "all" target includes
@@ -60,6 +62,13 @@ find_package(OpenSSL 1.1.1 REQUIRED)
 
 # Target: nlohmann_json::nlohmann_json
 find_package(nlohmann_json 3.9.0 REQUIRED)
+
+if(${ENABLE_LEADER_REGISTRY})
+# provides the import target rpclib::rpc
+find_package(rpclib 2.3.0 REQUIRED)
+endif()
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/include/derecho/config.h)
 
 # Target: Doxygen
 find_package(Doxygen)

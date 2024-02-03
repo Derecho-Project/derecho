@@ -1,4 +1,5 @@
 #pragma once
+#include <derecho/config.h>
 #include "SerializationSupport.hpp"
 #include "../mutils-networking/connection.hpp"
 

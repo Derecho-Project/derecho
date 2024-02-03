@@ -5,8 +5,9 @@
  * @brief   This file include the declarations of types for the notification API.
  */
 
-#include "derecho/mutils-serialization/SerializationMacros.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include <derecho/config.h>
+#include <derecho/mutils-serialization/SerializationMacros.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include "register_rpc_functions.hpp"
 
 #include <functional>

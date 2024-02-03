@@ -2,6 +2,7 @@
 #ifndef PERSISTENT_HPP
 #define PERSISTENT_HPP
 
+#include <derecho/config.h>
 #include "HLC.hpp"
 #include "PersistException.hpp"
 #include "PersistNoLog.hpp"

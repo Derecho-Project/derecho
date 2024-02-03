@@ -1,4 +1,5 @@
 include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_BINARY_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(rpc_function_types rpc_function_types.cpp)

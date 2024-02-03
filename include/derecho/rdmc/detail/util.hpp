@@ -1,6 +1,7 @@
 #ifndef RDMC_UTIL_HPP
 #define RDMC_UTIL_HPP
 
+#include <derecho/config.h>
 #include <derecho/utils/time.h>
 
 #include <cstdint>

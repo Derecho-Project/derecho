@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include <derecho/config.h>
 #include <derecho/core/derecho_type_definitions.hpp>
 
 struct ibv_mr;

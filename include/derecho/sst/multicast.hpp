@@ -10,6 +10,7 @@
 #include <memory>
 #include <thread>
 #include <vector>
+#include <derecho/config.h>
 
 namespace sst {
 template <typename sstType>

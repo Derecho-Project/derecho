@@ -1,6 +1,7 @@
 #ifndef CONF_HPP
 #define CONF_HPP
 
+#include <derecho/config.h>
 #include "getpot/GetPot"
 #include <atomic>
 #include <getopt.h>
@@ -262,6 +263,13 @@ const std::string getAbsoluteFilePath(const std::string& filename);
  * delimiter. The delimiter is not included in any substring.
  */
 std::vector<std::string> split_string(const std::string& str, const std::string& delimiter = ",");
+
+#ifdef  ENABLE_LEADER_REGISTRY
+/**
+ * The default port number of leader registry
+ */
+constexpr uint16_t LEADER_REGISTRY_PORT = 50182;
+#endif
 
 }  // namespace derecho
 #endif  // CONF_HPP

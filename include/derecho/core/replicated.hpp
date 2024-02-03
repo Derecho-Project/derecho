@@ -5,8 +5,9 @@
 
 #pragma once
 
-#include "derecho/persistent/Persistent.hpp"
-#include "derecho/tcp/tcp.hpp"
+#include <derecho/config.h>
+#include <derecho/persistent/Persistent.hpp>
+#include <derecho/tcp/tcp.hpp>
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/remote_invocable.hpp"

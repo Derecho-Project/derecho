@@ -1,8 +1,9 @@
 #ifndef PERSISTENT_UTIL_HPP
 #define PERSISTENT_UTIL_HPP
 
+#include <derecho/config.h>
 #include "../PersistException.hpp"
-#include "derecho/conf/conf.hpp"
+#include <derecho/conf/conf.hpp>
 #include <errno.h>
 #include <fcntl.h>
 #include <string>

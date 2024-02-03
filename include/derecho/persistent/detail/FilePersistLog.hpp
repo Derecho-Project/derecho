@@ -3,7 +3,7 @@
 
 #include "PersistLog.hpp"
 #include "util.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/utils/logger.hpp>
 #include <pthread.h>
 #include <string>
 

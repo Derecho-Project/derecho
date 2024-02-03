@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
+#include <derecho/config.h>
 
 using std::vector;
 using std::optional;

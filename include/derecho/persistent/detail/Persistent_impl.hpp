@@ -1,7 +1,7 @@
 #ifndef PERSISTENT_IMPL_HPP
 #define PERSISTENT_IMPL_HPP
 
-#include "derecho/openssl/hash.hpp"
+#include <derecho/openssl/hash.hpp>
 
 #include <utility>
 

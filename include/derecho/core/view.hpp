@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <derecho/config.h>
 #include "derecho_modes.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/derecho_sst.hpp"

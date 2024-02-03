@@ -5,9 +5,10 @@
 #error PersistLog.hpp only works with clang and gnu compilers
 #endif
 
+#include <derecho/config.h>
 #include "detail/PersistLog.hpp"
 #include "detail/util.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <inttypes.h>
 #include <map>
 #include <set>

@@ -1,4 +1,5 @@
 include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_BINARY_DIR}/include)
 include_directories(${CMAKE_CIRRENT_SOURCE_DIR})
 
 # bandwidth_test

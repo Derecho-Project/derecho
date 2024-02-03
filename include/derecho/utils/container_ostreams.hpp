@@ -12,6 +12,7 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <derecho/config.h>
 
 namespace std {
 
