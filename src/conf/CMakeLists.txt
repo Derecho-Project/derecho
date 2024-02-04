@@ -24,5 +24,8 @@ target_include_directories(conftst PRIVATE
 )
 target_link_libraries(conftst pthread nlohmann_json::nlohmann_json)
 
+# installation
 install(FILES derecho-sample.cfg
     DESTINATION share/derecho/)
+install(TARGETS leader_registry
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
