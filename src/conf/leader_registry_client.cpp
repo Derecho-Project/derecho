@@ -34,8 +34,8 @@ struct option long_options[] = {
 };
 
 int main(int argc, char** argv) {
-    std::string server = "localhost";
-    uint16_t    port = LEADER_REGISTRY_PORT;
+    std::string server =    getConfString(Conf::DERECHO_LEADER_REGISTRY_IP);
+    uint16_t    port =      getConfUInt16(Conf::DERECHO_LEADER_REGISTRY_PORT);
 
     while(true) {
         int option_index = 0;

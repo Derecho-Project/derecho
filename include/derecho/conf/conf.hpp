@@ -21,12 +21,18 @@ constexpr std::size_t DERECHO_MIN_RPC_RESPONSE_SIZE = 128;
 /** The single configuration file for derecho **/
 class Conf {
 public:
+
     //String constants for config options
-    static constexpr const char* DERECHO_LEADER_IP = "DERECHO/leader_ip";
-    static constexpr const char* DERECHO_LEADER_GMS_PORT = "DERECHO/leader_gms_port";
-    static constexpr const char* DERECHO_LEADER_EXTERNAL_PORT = "DERECHO/leader_external_port";
-    static constexpr const char* DERECHO_RESTART_LEADERS = "DERECHO/restart_leaders";
-    static constexpr const char* DERECHO_RESTART_LEADER_PORTS = "DERECHO/restart_leader_ports";
+#ifdef  ENABLE_LEADER_REGISTRY
+    static constexpr const char* DERECHO_LEADER_REGISTRY_IP     =   "DERECHO/leader_registry_ip";
+    static constexpr const char* DERECHO_LEADER_REGISTRY_PORT   =   "DERECHO/leader_registry_port";
+#else
+    static constexpr const char* DERECHO_LEADER_IP              =   "DERECHO/leader_ip";
+    static constexpr const char* DERECHO_LEADER_GMS_PORT        =   "DERECHO/leader_gms_port";
+    static constexpr const char* DERECHO_LEADER_EXTERNAL_PORT   =   "DERECHO/leader_external_port";
+    static constexpr const char* DERECHO_RESTART_LEADERS        =   "DERECHO/restart_leaders";
+    static constexpr const char* DERECHO_RESTART_LEADER_PORTS   =   "DERECHO/restart_leader_ports";
+#endif
     static constexpr const char* DERECHO_LOCAL_ID = "DERECHO/local_id";
     static constexpr const char* DERECHO_LOCAL_IP = "DERECHO/local_ip";
     static constexpr const char* DERECHO_GMS_PORT = "DERECHO/gms_port";
@@ -80,11 +86,16 @@ private:
     // config name --> default value
     std::map<const std::string, std::string> config = {
             // [DERECHO]
+#ifdef ENABLE_LEADER_REGISTRY
+            {DERECHO_LEADER_REGISTRY_IP, "127.0.0.1"},
+            {DERECHO_LEADER_REGISTRY_PORT, "50182"},
+#else
             {DERECHO_LEADER_IP, "127.0.0.1"},
             {DERECHO_LEADER_GMS_PORT, "23580"},
             {DERECHO_LEADER_EXTERNAL_PORT, "32645"},
             {DERECHO_RESTART_LEADERS, "127.0.0.1"},
             {DERECHO_RESTART_LEADER_PORTS, "23580"},
+#endif
             {DERECHO_LOCAL_ID, "0"},
             {DERECHO_LOCAL_IP, "127.0.0.1"},
             {DERECHO_GMS_PORT, "23580"},
@@ -216,6 +227,16 @@ public:
      */
     const std::tuple<std::string,uint16_t,uint16_t> get_leader() const;
 
+#ifdef ENABLE_LEADER_REGISTRY
+    /**
+     * Push a leader to leader registry
+     * @param   ip          The ip address of the new leader.
+     * @param   gms_port    The GMS port of the new leader.
+     * @param   ext_port    The EXT port of the new leader.
+     */
+    void push_leader(std::string ip,uint16_t gms_port,uint16_t ext_port);
+#endif
+
     // Initialize the singleton from the command line and the configuration file.
     // The command line has higher priority than the configuration file
     // The process we find the configuration file:
@@ -263,13 +284,6 @@ const std::string getAbsoluteFilePath(const std::string& filename);
  * delimiter. The delimiter is not included in any substring.
  */
 std::vector<std::string> split_string(const std::string& str, const std::string& delimiter = ",");
-
-#ifdef  ENABLE_LEADER_REGISTRY
-/**
- * The default port number of leader registry
- */
-constexpr uint16_t LEADER_REGISTRY_PORT = 50182;
-#endif
 
 }  // namespace derecho
 #endif  // CONF_HPP

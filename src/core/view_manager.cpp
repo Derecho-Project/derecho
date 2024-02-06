@@ -72,6 +72,8 @@ bool ViewManager::first_init() {
     if(curr_view) {
         dbg_debug(vm_logger, "Found view {} on disk", curr_view->vid);
         restart_state = std::make_unique<RestartState>();
+#ifdef ENABLE_LEADER_REGISTRY
+#else
         restart_state->restart_leader_ips = split_string(getConfString(Conf::DERECHO_RESTART_LEADERS));
         restart_state->restart_leader_ports = [&]() {
             //"Apply std::stoi over the result of split_string(getConfString(...))"
@@ -83,6 +85,7 @@ bool ViewManager::first_init() {
             return ports;
         }();
         restart_state->num_leader_failures = 0;
+#endif//ENABLE_LEADER_REGISTRY
         restart_to_initial_view();
     } else {
         startup_to_first_view();
@@ -135,8 +138,13 @@ bool ViewManager::restart_to_initial_view() {
     bool got_initial_view = false;
     while(!got_initial_view) {
         //Determine if I am the current restart leader
+#ifdef ENABLE_LEADER_REGISTRY
+        auto leader_tuple = Conf::get()->get_leader();
+        if (my_ip == std::get<0>(leader_tuple) && my_gms_port == std::get<1>(leader_tuple)) {
+#else
         if(my_ip == restart_state->restart_leader_ips[restart_state->num_leader_failures]
            && my_gms_port == restart_state->restart_leader_ports[restart_state->num_leader_failures]) {
+#endif
             in_total_restart = true;
             active_leader = true;
             dbg_info(vm_logger, "Logged View {} found on disk. Restarting in recovery mode as the leader.", curr_view->vid);
@@ -245,6 +253,8 @@ bool ViewManager::receive_initial_view() {
                                                std::vector<std::type_index>{});
             // Initialize restart_state, which wasn't created in first_init() because we had no logged View
             restart_state = std::make_unique<RestartState>();
+#ifdef ENABLE_LEADER_REGISTRY
+#else
             restart_state->restart_leader_ips = split_string(getConfString(Conf::DERECHO_RESTART_LEADERS));
             restart_state->restart_leader_ports = [&]() {
                 auto port_list = split_string(getConfString(Conf::DERECHO_RESTART_LEADER_PORTS));
@@ -255,6 +265,7 @@ bool ViewManager::receive_initial_view() {
                 return ports;
             }();
             restart_state->num_leader_failures = 0;
+#endif//ENABLE_LEADER_REGISTRY
         }
         dbg_debug(vm_logger, "Sending view {} to leader", curr_view->vid);
         auto leader_socket_write = [this](const uint8_t* bytes, std::size_t size) {

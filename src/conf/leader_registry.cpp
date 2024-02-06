@@ -116,7 +116,7 @@ void term_handler(int signum) {
 
 int main(int argc, char** argv) {
 
-    uint16_t    port = LEADER_REGISTRY_PORT;
+    uint16_t    port = getConfUInt16(Conf::DERECHO_LEADER_REGISTRY_PORT);
     std::string leader_ip = "";
     uint16_t    leader_gms_port = 0;
     bool        daemonized = false;

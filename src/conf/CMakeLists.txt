@@ -13,7 +13,8 @@ if (${ENABLE_LEADER_REGISTRY})
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
     )
-    target_link_libraries(leader_registry rpclib::rpc pthread)
+    target_link_libraries(leader_registry rpclib::rpc derecho pthread)
+    add_dependencies(leader_registry derecho)
 
     add_executable(leader_registry_client leader_registry_client.cpp)
     target_include_directories(leader_registry_client PRIVATE
@@ -21,7 +22,8 @@ if (${ENABLE_LEADER_REGISTRY})
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
     )
-    target_link_libraries(leader_registry_client rpclib::rpc pthread)
+    target_link_libraries(leader_registry_client rpclib::rpc derecho pthread)
+    add_dependencies(leader_registry_client derecho)
 endif()
 
 add_executable(conftst test.cpp conf.cpp)

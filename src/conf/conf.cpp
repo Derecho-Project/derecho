@@ -7,6 +7,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdexcept>
+#ifdef ENABLE_LEADER_REGISTRY
+#include <rpc/client.h>
+#endif
 
 namespace derecho {
 
@@ -29,11 +32,16 @@ std::atomic<uint32_t> Conf::singleton_initialized_flag = 0;
     { x, required_argument, 0, 0 }
 struct option Conf::long_options[] = {
         // [DERECHO]
+#ifdef ENABLE_LEADER_REGISTRY
+        MAKE_LONG_OPT_ENTRY(DERECHO_LEADER_REGISTRY_IP),
+        MAKE_LONG_OPT_ENTRY(DERECHO_LEADER_REGISTRY_PORT),
+#else
         MAKE_LONG_OPT_ENTRY(DERECHO_LEADER_IP),
         MAKE_LONG_OPT_ENTRY(DERECHO_LEADER_GMS_PORT),
         MAKE_LONG_OPT_ENTRY(DERECHO_LEADER_EXTERNAL_PORT),
         MAKE_LONG_OPT_ENTRY(DERECHO_RESTART_LEADERS),
         MAKE_LONG_OPT_ENTRY(DERECHO_RESTART_LEADER_PORTS),
+#endif
         MAKE_LONG_OPT_ENTRY(DERECHO_LOCAL_ID),
         MAKE_LONG_OPT_ENTRY(DERECHO_LOCAL_IP),
         MAKE_LONG_OPT_ENTRY(DERECHO_GMS_PORT),
@@ -171,15 +179,26 @@ const Conf* Conf::get() noexcept(true) {
 }
 
 const std::tuple<std::string,uint16_t,uint16_t> Conf::get_leader() const {
-    // TODO: implement a full version of this.
-    std::tuple<std::string,uint16_t,uint16_t> leader = 
-    {
+#ifdef ENABLE_LEADER_REGISTRY
+    ::rpc::client lrc(this->getString(DERECHO_LEADER_REGISTRY_IP),
+                      this->getUInt16(DERECHO_LEADER_REGISTRY_PORT));
+    return lrc.call("get").as<std::tuple<std::string,uint16_t,uint16_t>>();
+#else
+    return std::tuple<std::string,uint16_t,uint16_t> {
         this->getString(DERECHO_LEADER_IP),
         this->getUInt16(DERECHO_LEADER_GMS_PORT),
         this->getUInt16(DERECHO_LEADER_EXTERNAL_PORT)
     };
-    return leader;
+#endif
 }
+
+#ifdef ENABLE_LEADER_REGISTRY
+void Conf::push_leader(std::string ip,uint16_t gms_port,uint16_t ext_port) {
+    ::rpc::client lrc(this->getString(DERECHO_LEADER_REGISTRY_IP),
+                      this->getUInt16(DERECHO_LEADER_REGISTRY_PORT));
+    lrc.call("put",ip,gms_port,ext_port);
+}
+#endif
 
 const std::string& getConfString(const std::string& key) {
     return Conf::get()->getString(key);
