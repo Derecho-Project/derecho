@@ -1,5 +1,5 @@
 /**
- * @file subgroup_function_tester.h
+ * @file subgroup_function_tester.hpp
  *
  * @date May 24, 2017
  * @author edward

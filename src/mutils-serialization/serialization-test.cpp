@@ -11,7 +11,9 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
-
+/**
+ * @cond DoxygenSuppressed
+ */
 struct PODStruct {
     int field_one;
     int field_two;
@@ -174,3 +176,6 @@ int main(int argc, char** argv) {
 
     std::cout << "Test passed" << std::endl;
 }
+/**
+ * @endcond
+ */

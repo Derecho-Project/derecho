@@ -92,6 +92,9 @@ public:
     auto& get_subgroup(uint32_t subgroup_index = 0);
 
     template <typename SubgroupType>
+    uint32_t get_subgroup_max_payload_size(uint32_t subgroup_index = 0);
+
+    template <typename SubgroupType>
     auto& get_nonmember_subgroup(uint32_t subgroup_num = 0);
 
     template <typename SubgroupType>
@@ -112,6 +115,11 @@ public:
     virtual node_id_t get_my_id() = 0;
 
     virtual node_id_t get_rpc_caller_id() = 0;
+
+    virtual uint64_t get_max_p2p_request_payload_size() = 0;
+
+    virtual uint64_t get_max_p2p_reply_payload_size() = 0;
+
 };
 
 /**
@@ -132,6 +140,7 @@ protected:
 
 public:
     Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_index = 0);
+    uint32_t get_subgroup_max_payload_size(uint32_t subgroup_index = 0);
     PeerCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
     ExternalClientCallback<ReplicatedType>& get_client_callback(uint32_t subgroup_index = 0);
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
@@ -188,14 +197,16 @@ private:
 
     const node_id_t my_id;
     /**
-     * The shared pointer holding deserialization context is obsolete. I (Weijia)
-     * removed it because it complicated things: the deserialization context is
-     * generally a big object containing the group handle; however, the group handle
-     * need to hold a shared pointer to the object, which causes a dependency loop
-     * and results in an object indirectly holding a shared pointer to its self.
-     * Another side effect is double free. So I change it back to the raw pointer.
-     * The user deserialization context for all objects serialized and deserialized. */
-    // std::shared_ptr<DeserializationContext> user_deserialization_context;
+     * A list (possibly empty) of user-provided deserialization contexts that are
+     * needed to help deserialize the Replicated Objects. These should be passed
+     * into the from_bytes method whenever from_bytes is called on a Replicated
+     * Object. They are stored as raw pointers, even though it is more dangerous,
+     * because Weijia found that trying to store a shared_ptr here complicated
+     * things: the deserialization context is generally a big object containing
+     * the group handle; however, the group handle need to hold a shared pointer
+     * to the object, which causes a dependency loop and results in an object
+     * indirectly holding a shared pointer to its self.
+     */
     std::vector<DeserializationContext*> user_deserialization_context;
 
     /** Persist the objects. Once persisted, persistence_manager updates the SST
@@ -330,9 +341,13 @@ public:
      * events in this group.
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
-     * @param deserialization_context The context used for deserialization
-     * purpose. The application is responsible to keep it alive during Group
-     * object lifetime.
+     * @param deserialization_context A list of pointers to deserialization
+     * contexts, which are objects needed to help deserialize user-provided
+     * Replicated Object classes. These context pointers will be provided in
+     * the DeserializationManager argument to from_bytes any time a Replicated
+     * Object is deserialized, e.g. during state transfer. The calling
+     * application is responsible for keeping these objects alive during the
+     * lifetime of the Group, since Group does not own the pointers.
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
      * @param factories A variable number of Factory functions, one for each
@@ -483,6 +498,12 @@ public:
 
     /** @returns the id of the lastest rpc caller, only valid when called from an RPC handler */
     node_id_t get_rpc_caller_id() override;
+
+    /** @returns the maximal allowed p2p request payload size */
+    uint64_t get_max_p2p_request_payload_size() override;
+
+    /** @returns the maximal allowed p2p reply payload size */
+    uint64_t get_max_p2p_reply_payload_size() override;
 
     /**
      * @returns the shard number that this node is a member of in the specified

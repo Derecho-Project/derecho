@@ -1,5 +1,5 @@
 /**
- * @file ViewManager.h
+ * @file view_manager.hpp
  *
  * @date Feb 6, 2017
  */
@@ -101,7 +101,8 @@ struct JoinRequest {
  */
 enum class ExternalClientRequest {
     GET_VIEW,      //!< GET_VIEW The external client wants to download the current View
-    ESTABLISH_P2P  //!< ESTABLISH_P2P The external client wants to set up a P2P connection with this node
+    ESTABLISH_P2P, //!< ESTABLISH_P2P The external client wants to set up a P2P connection with this node
+    REMOVE_P2P     //!< REMOVE_P2P The external client is informing that it is exiting
 };
 
 template <typename T>
@@ -275,6 +276,7 @@ private:
     std::atomic<bool> bSilent = false;
 
     std::function<void(uint32_t)> add_external_connection_upcall;
+    std::function<void(uint32_t)> remove_external_connection_upcall;
 
     bool has_pending_new() { return pending_new_sockets.locked().access.size() > 0; }
     bool has_pending_join() { return pending_join_sockets.size() > 0; }
@@ -681,7 +683,7 @@ public:
      * the template parameters to the Group class
      * @param any_persistent_objects True if any of the subgroup types in this
      * group use Persistent<T> fields, false otherwise
-     * @param object_reference_map A mutable reference to the list of
+     * @param object_pointer_map A mutable reference to the list of
      * ReplicatedObject pointers in Group, so that ViewManager can access it
      * while Group manages the list
      * @param persistence_manager A mutable reference to the PersistenceManager
@@ -794,6 +796,10 @@ public:
 
     void register_add_external_connection_upcall(const std::function<void(uint32_t)>& upcall) {
         add_external_connection_upcall = upcall;
+    }
+    
+    void register_remove_external_connection_upcall(const std::function<void(uint32_t)>& upcall) {
+        remove_external_connection_upcall = upcall;
     }
 
     /**
@@ -977,6 +983,14 @@ public:
     // UGLY - IMPROVE LATER
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
     std::map<subgroup_id_t, uint64_t> get_max_payload_sizes();
+    /**
+     * @fn get_Subgroup_max_payload_size(sbugroup_type_id_t,uint32_t) view_manager.hpp \<derecho/core/detail/view_manager.hpp\>
+     * @brief get maximum payload size of a given subgroup.
+     * @param[in]   subgroup_type   The type of the subgroup.
+     * @param[in]   subgroup_index  The index of the subgroup.
+     * @return the maximum payload size of the subgroup.
+     */
+    uint64_t get_subgroup_max_payload_size(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
     // max of max_payload_sizes
     uint64_t view_max_rpc_reply_payload_size = 0;
     uint32_t view_max_rpc_window_size = 0;

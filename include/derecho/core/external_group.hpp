@@ -20,6 +20,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <chrono>
 #include <unordered_map>
 
 namespace derecho {
@@ -177,7 +178,7 @@ private:
     std::queue<p2p_req> p2p_request_queue;
     std::mutex request_queue_mutex;
     std::condition_variable request_queue_cv;
-    mutils::RemoteDeserialization_v rdv;
+    mutils::RemoteDeserialization_v deserialization_contexts;
     void p2p_receive_loop();
     void p2p_request_worker();
     void p2p_message_handler(node_id_t sender_id, uint8_t* msg_buf);

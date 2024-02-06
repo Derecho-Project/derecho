@@ -263,6 +263,7 @@ void _resources::connect_endpoint(bool is_lf_server) {
             fi_freeinfo(entry.info);
             crash_with_message("failed to initialize server endpoint.\n");
         }
+        dbg_trace(sst_logger, "calling fi_accept()");
         if(fi_accept(this->ep, NULL, 0)) {
             fi_reject(g_ctxt.pep, entry.info->handle, NULL, 0);
             fi_freeinfo(entry.info);
@@ -292,6 +293,7 @@ void _resources::connect_endpoint(bool is_lf_server) {
                                                    malloc, remote_cm_data.pep_addr_len);
         memcpy((void*)client_hints->dest_addr, (void*)remote_cm_data.pep_addr, (size_t)remote_cm_data.pep_addr_len);
         client_hints->dest_addrlen = remote_cm_data.pep_addr_len;
+        dbg_trace(sst_logger, "calling fi_getinfo()");
         fail_if_nonzero_retry_on_eagain("fi_getinfo() failed.", CRASH_ON_FAILURE,
                                         fi_getinfo, LF_VERSION, nullptr, nullptr, 0, client_hints, &client_info);
         if(init_endpoint(client_info)) {
@@ -300,9 +302,10 @@ void _resources::connect_endpoint(bool is_lf_server) {
             crash_with_message("failed to initialize client endpoint.\n");
         }
 
+        dbg_trace(sst_logger, "calling fi_connect()");
         fail_if_nonzero_retry_on_eagain("fi_connect()", CRASH_ON_FAILURE,
                                         fi_connect, this->ep, remote_cm_data.pep_addr, nullptr, 0);
-
+        dbg_trace(sst_logger, "fi_connect() succeeded, calling fi_eq_sread()");
         nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
             dbg_error(sst_logger, "failed to connect remote.");
@@ -686,9 +689,8 @@ void _resources::oob_remote_op(uint32_t op, const struct iovec* iov, int iovcnt,
 
 void _resources::wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_us) {
     std::optional<int32_t> result;
-    uint64_t start_time_us;
+    uint64_t start_time_us = get_time() / INT64_1E3;
     uint64_t cur_time_us;
-    start_time_us = get_time()/1e3;
     const auto tid = std::this_thread::get_id();
 
     while (num_entries) {
@@ -700,7 +702,7 @@ void _resources::wait_for_thread_local_completion_entries(size_t num_entries, ui
             num_entries --;
             continue;
         }
-        cur_time_us = get_time()/1e3;
+        cur_time_us = get_time() / INT64_1E3;
         if ((cur_time_us - start_time_us) >= timeout_us) {
             //timeout
             break;
@@ -910,8 +912,7 @@ void polling_loop() {
     auto sst_logger = spdlog::get(LoggerFactory::SST_LOGGER_NAME);
     dbg_trace(sst_logger, "Polling thread starting.");
 
-    struct timespec last_time, cur_time;
-    clock_gettime(CLOCK_REALTIME, &last_time);
+    uint64_t last_time_ms = get_walltime() / INT64_1E6;
 
     while(!shutdown) {
         auto ce = lf_poll_completion();
@@ -922,12 +923,9 @@ void polling_loop() {
             util::polling_data.insert_completion_entry(ce.first, ce.second);
 
             // update last time
-            clock_gettime(CLOCK_REALTIME, &last_time);
+            last_time_ms = get_walltime() / INT64_1E6;
         } else {
-            clock_gettime(CLOCK_REALTIME, &cur_time);
-            // check if the system has been inactive for enough time to induce sleep
-            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            uint64_t time_elapsed_in_ms = (get_walltime() / INT64_1E6) - last_time_ms;
             if(time_elapsed_in_ms > 100) {
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
@@ -950,14 +948,10 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
     struct fi_cq_entry entry;
     int poll_result = 0;
 
-    struct timespec last_time, cur_time;
-    clock_gettime(CLOCK_REALTIME, &last_time);
+    uint64_t last_time_ms = get_walltime() / INT64_1E6;
 
     while(!shutdown) {
-        clock_gettime(CLOCK_REALTIME, &cur_time);
-        // check if the system has been inactive for enough time to induce sleep
-        double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                    + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+        uint64_t time_elapsed_in_ms = (get_walltime() / INT64_1E6) - last_time_ms;
         if(time_elapsed_in_ms > 100) {
             using namespace std::chrono_literals;
             std::this_thread::sleep_for(1ms);

@@ -1,5 +1,5 @@
 /**
- * @file group_impl.h
+ * @file group_impl.hpp
  * @date Apr 22, 2016
  */
 
@@ -21,6 +21,14 @@ auto& _Group::get_subgroup(uint32_t subgroup_num) {
     if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
         return gptr->get_subgroup(subgroup_num);
     } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
+template <typename SubgroupType>
+uint32_t _Group::get_subgroup_max_payload_size(uint32_t subgroup_num) {
+    if (auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_subgroup_max_payload_size(subgroup_num);
+    } else 
         throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
 }
 
@@ -79,6 +87,13 @@ GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
     set_replicated_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
                            &pointer_to_replicated);
     return *static_cast<Replicated<ReplicatedType>*>(pointer_to_replicated);
+}
+
+template <typename ReplicatedType>
+uint32_t
+GroupProjection<ReplicatedType>::get_subgroup_max_payload_size(uint32_t subgroup_num) {
+    void* pointer_to_replicated{nullptr};
+    return get_view_manager().get_subgroup_max_payload_size(get_index_of_type(typeid(ReplicatedType)), subgroup_num);
 }
 
 template <typename ReplicatedType>
@@ -276,10 +291,11 @@ Group<ReplicatedTypes...>::Group(const SubgroupInfo& subgroup_info, Factory<Repl
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
-    // shutdown the persistence manager
-    // TODO-discussion:
-    // Will a node be able to come back once it leaves? if not, maybe we should
-    // shut it down on leave().
+    /**
+        We shut down the persistence_manager on leave, assuming a process will not come back once it leaves.
+        Here we shut it down again, in case the process is just leaving by itself instead of a system-level
+        shutdown. Please note that the shutdown opeartion is idempotent.
+     */
     persistence_manager.shutdown(true);
 }
 
@@ -386,6 +402,9 @@ void Group<ReplicatedTypes...>::set_up_components() {
     // Connect ViewManager's external_join_handler to RPCManager
     view_manager.register_add_external_connection_upcall([this](uint32_t node_id) {
         rpc_manager.add_external_connection(node_id);
+    });
+    view_manager.register_remove_external_connection_upcall([this](uint32_t node_id) {
+        rpc_manager.remove_external_connection(node_id);
     });
     // Give RPCManager a standard "new view callback" on every View change
     view_manager.add_view_upcall([this](const View& new_view) {
@@ -531,6 +550,9 @@ void Group<ReplicatedTypes...>::leave(bool group_shutdown) {
     if(group_shutdown) {
         view_manager.silence();
         view_manager.barrier_sync();
+        /* Here we flush the data to persistent store and wait until it finished. */
+        persistence_manager.shutdown(true);
+        view_manager.barrier_sync();
     }
     view_manager.leave();
 }
@@ -582,6 +604,16 @@ node_id_t Group<ReplicatedTypes...>::get_my_id() {
 template <typename... ReplicatedTypes>
 node_id_t Group<ReplicatedTypes...>::get_rpc_caller_id() {
     return rpc::RPCManager::get_rpc_caller_id();
+}
+
+template <typename... ReplicatedTypes>
+uint64_t Group<ReplicatedTypes...>::get_max_p2p_request_payload_size() {
+    return getConfUInt64(Conf::DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
+}
+
+template <typename... ReplicatedTypes>
+uint64_t Group<ReplicatedTypes...>::get_max_p2p_reply_payload_size() {
+    return getConfUInt64(Conf::DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE);
 }
 
 template <typename... ReplicatedTypes>

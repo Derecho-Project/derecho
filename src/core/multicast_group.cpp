@@ -508,12 +508,6 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subg
         auto payload_size = msg.size - h->header_size;
         internal_callbacks.post_next_version_callback(subgroup_num, version, msg_ts_us);
         internal_callbacks.rpc_callback(subgroup_num, msg.sender_id, version, msg_ts_us, buf, payload_size);
-
-        // if(callbacks.global_stability_callback) {
-        //     callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
-        //                                         version);
-        // }
-
     } else if(callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                             {{buf + h->header_size, msg.size - h->header_size}},
@@ -536,13 +530,6 @@ void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgr
         auto payload_size = msg.size - h->header_size;
         internal_callbacks.post_next_version_callback(subgroup_num, version, msg_ts_us);
         internal_callbacks.rpc_callback(subgroup_num, msg.sender_id, version, msg_ts_us, buf, payload_size);
-
-        // if(callbacks.global_stability_callback) {
-        //     callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
-        //                                         {{buf + h->header_size, msg.size - h->header_size}},
-        //                                         version);
-        // }
-
     } else if(callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                             {{buf + h->header_size, msg.size - h->header_size}},
@@ -562,11 +549,9 @@ bool MulticastGroup::version_message(RDMCMessage& msg, const subgroup_id_t& subg
         pending_persistence[subgroup_num][locally_stable_rdmc_messages[subgroup_num].begin()->first] = msg_timestamp;
     }
     // make a version for persistent<t>/volatile<t>
-    uint64_t msg_ts_us = msg_timestamp / 1e3;
+    uint64_t msg_ts_us = msg_timestamp / INT64_1E3;
     if(msg_ts_us == 0) {
-        struct timespec now;
-        clock_gettime(CLOCK_REALTIME, &now);
-        msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
+        msg_ts_us = get_walltime() / INT64_1E3;
     }
     persistence_manager.make_version(subgroup_num, version, HLC{msg_ts_us, 0});
     return true;
@@ -584,11 +569,9 @@ bool MulticastGroup::version_message(SSTMessage& msg, const subgroup_id_t& subgr
         pending_persistence[subgroup_num][locally_stable_sst_messages[subgroup_num].begin()->first] = msg_timestamp;
     }
     // make a version for persistent<t>/volatile<t>
-    uint64_t msg_ts_us = msg_timestamp / 1e3;
+    uint64_t msg_ts_us = msg_timestamp / INT64_1E3;
     if(msg_ts_us == 0) {
-        struct timespec now;
-        clock_gettime(CLOCK_REALTIME, &now);
-        msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
+        msg_ts_us = get_walltime() / INT64_1E3;
     }
     persistence_manager.make_version(subgroup_num, version, HLC{msg_ts_us, 0});
     return true;

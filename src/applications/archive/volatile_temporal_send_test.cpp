@@ -25,7 +25,10 @@ typedef struct _payload {
     uint64_t tv_nsec;    // nano second
 } PayLoad;
 
-//This class is modified from Matt's implementation
+/**
+ * @brief byte-representable Bytes type
+ * This class is modified from Mae's implementation
+ */
 struct Bytes : public mutils::ByteRepresentable {
     uint8_t* bytes;
     std::size_t size;
@@ -128,7 +131,7 @@ public:
     }
 
     Bytes query_const_bytes(uint64_t query_us) const {
-        uint8_t bytes[1000000];
+        uint8_t bytes[1000000] = {};
         Bytes b(bytes, 1000000);
         return b;
     }

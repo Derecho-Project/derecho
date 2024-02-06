@@ -191,7 +191,7 @@ ExternalGroupClient<ReplicatedTypes...>::ExternalGroupClient(
           busy_wait_before_sleep_ms(getConfUInt64(Conf::DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
     RpcLoggerPtr::initialize();
     for(auto dc : deserialization_contexts) {
-        rdv.push_back(dc);
+        deserialization_contexts.push_back(dc);
     }
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
@@ -217,6 +217,57 @@ ExternalGroupClient<ReplicatedTypes...>::~ExternalGroupClient() {
     if(rpc_listener_thread.joinable()) {
         rpc_listener_thread.join();
     }
+
+    // gracefully inform each remote node that this client is leaving
+    auto node_ids = p2p_connections->get_active_nodes();
+    for(const node_id_t remote_id : node_ids){
+        if(remote_id == my_id) continue;
+
+        dbg_default_info("informing node {} that this client is leaving.", remote_id);
+        int rank = curr_view->rank_of(remote_id);
+        if(rank == -1) {
+            dbg_default_error("Cannot send a p2p request to node {}: it is not a member of the Group.", remote_id);
+            dbg_default_flush();
+            continue;
+        }
+
+        tcp::socket sock(curr_view->member_ips_and_ports[rank].ip_address,
+                curr_view->member_ips_and_ports[rank].gms_port);
+
+        JoinResponse response;
+        uint64_t node_version_hashcode;
+        try {
+            sock.exchange(my_version_hashcode, node_version_hashcode);
+            if(node_version_hashcode != my_version_hashcode) {
+                dbg_default_error("Unable to connect to Derecho member because the node is running on an incompatible platform or used an incompatible compiler.");
+                dbg_default_flush();
+                continue;
+            }
+            sock.write(JoinRequest{my_id, true});
+            sock.read(response);
+            if(response.code == JoinResponseCode::ID_IN_USE) {
+                dbg_default_error("Error! Derecho member refused connection because ID {} is already in use!", my_id);
+                dbg_default_flush();
+                continue;
+            }
+            sock.write(ExternalClientRequest::REMOVE_P2P);
+
+            // wait confirmation from server
+            bool remove_confirmed;
+            sock.read(remove_confirmed); 
+        } catch(tcp::socket_error&) {
+            dbg_default_error("Failed to gracefully exit: socket error while sending join request.");
+            dbg_default_flush();
+            continue;
+        }
+
+        sst::remove_node(remote_id);
+    }
+
+    // wait sst_poll_cq_timeout before cleaning up connections, to make sure this client replies to all heartbeat requests
+    uint32_t sst_poll_cq_timeout_ms = derecho::getConfUInt32(derecho::Conf::DERECHO_SST_POLL_CQ_TIMEOUT_MS);
+    std::this_thread::sleep_for(std::chrono::milliseconds(sst_poll_cq_timeout_ms));
+    p2p_connections->remove_connections(node_ids);
 }
 
 template <typename... ReplicatedTypes>
@@ -383,7 +434,7 @@ std::exception_ptr ExternalGroupClient<ReplicatedTypes...>::receive_message(
     }
     std::size_t reply_header_size = header_space();
     recv_ret reply_return = receiver_function_entry->second(
-            &rdv, received_from, buf,
+            &deserialization_contexts, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {
                 return out_alloc(size + reply_header_size) + reply_header_size;
             });
@@ -405,7 +456,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_message_handler(node_id_t send
     Opcode indx;
     node_id_t received_from;
     uint32_t flags;
-    retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
+    retrieve_header(msg_buf, payload_size, indx, received_from, flags);
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
@@ -447,7 +498,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker() {
             request = p2p_request_queue.front();
             p2p_request_queue.pop();
         }
-        retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
+        retrieve_header(request.msg_buf, payload_size, indx, received_from, flags);
         if(indx.is_reply || RPC_HEADER_FLAG_TST(flags, CASCADE)) {
             dbg_error(rpc_logger, "Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
                       indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
@@ -490,8 +541,7 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop() {
 
     request_worker_thread = std::thread(&ExternalGroupClient<ReplicatedTypes...>::p2p_request_worker, this);
 
-    struct timespec last_time, cur_time;
-    clock_gettime(CLOCK_REALTIME, &last_time);
+    uint64_t last_time_ms = get_walltime() / INT64_1E6;
 
     // loop event
     while(!thread_shutdown) {
@@ -506,12 +556,10 @@ void ExternalGroupClient<ReplicatedTypes...>::p2p_receive_loop() {
             }
 
             // update last time
-            clock_gettime(CLOCK_REALTIME, &last_time);
+            last_time_ms = get_walltime() / INT64_1E6;
         } else {
-            clock_gettime(CLOCK_REALTIME, &cur_time);
             // check if the system has been inactive for enough time to induce sleep
-            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            uint64_t time_elapsed_in_ms = (get_walltime() / INT64_1E6) - last_time_ms;
             if(time_elapsed_in_ms > busy_wait_before_sleep_ms) {
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);

@@ -153,9 +153,9 @@ private:
      */
     _Group* group;
     /** The current version number being processed by an ordered_send */
-    persistent::version_t current_version = persistent::INVALID_VERSION;
-    /** The timestamp associated with the current version number */
-    uint64_t current_timestamp_us = 0;
+    persistent::version_t current_version;
+    /** The HLC associated with the current version number */
+    HLC current_hlc;
 
 public:
     /**
@@ -173,6 +173,7 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      * @param client_object_factory A factory functor that can create instances
+     * @param group group pointer
      * of T.
      */
     Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index,
@@ -196,6 +197,7 @@ public:
      * subgroup_id) that participates in replicating this object
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
+     * @param group     Group pointer
      */
     Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index,
                uint32_t shard_num, rpc::RPCManager& group_rpc_manager, _Group* group);
@@ -326,7 +328,7 @@ public:
 
     inline const HLC getFrontier() {
         // transform from ns to us:
-        HLC hlc(this->compute_global_stability_frontier() / 1e3, 0);
+        HLC hlc(this->compute_global_stability_frontier() / INT64_1E3, 0);
         return hlc;
     }
 
@@ -358,7 +360,8 @@ public:
 
     /**
      * make a version for all the persistent<T> members.
-     * @param ver - the version number to be made
+     * @param ver   the version number to be made
+     * @param hlc   the hybrid clock
      */
     virtual void make_version(persistent::version_t ver, const HLC& hlc);
 
@@ -428,9 +431,9 @@ public:
      * since P2P method calls are handled in a separate thread from ordered_send
      * method calls, and there is no synchronization between these two threads on
      * the value of current_version.
-     * @return an ordered pair (version number, timestamp)
+     * @return an ordered pair (version number, HLC)
      */
-    virtual std::tuple<persistent::version_t, uint64_t> get_current_version();
+    virtual std::tuple<persistent::version_t,HLC> get_current_version();
 
     /**
      * Register a persistent member

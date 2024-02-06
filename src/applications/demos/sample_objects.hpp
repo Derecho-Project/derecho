@@ -1,5 +1,5 @@
 /**
- * @file sample_objects.h
+ * @file sample_objects.hpp
  *
  * Some ReplicatedObject definitions used by demonstration programs.
  */

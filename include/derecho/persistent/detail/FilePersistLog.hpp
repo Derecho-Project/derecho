@@ -87,8 +87,7 @@ union LogEntry {
 #define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen - LOG_ENTRY_AT(m_currMetaHeader.fields.head)->fields.ofst))
 #define NUM_FREE_BYTES (MAX_DATA_SIZE - NUM_USED_BYTES)
 
-#define PAGE_SIZE (getpagesize())
-#define ALIGN_TO_PAGE(x) ((void*)(((uint64_t)(x)) - ((uint64_t)(x)) % PAGE_SIZE))
+#define ALIGN_TO_PAGE(x) ((void*)(((uint64_t)(x)) - ((uint64_t)(x)) % getpagesize()))
 
 // declaration for binary search util. see cpp file for comments.
 template <typename TKey, typename KeyGetter>
@@ -264,8 +263,8 @@ public:
 
     /**
      * Get the minimum latest persisted version for a subgroup/shard with prefix
-     * @PARAM prefix the subgroup/shard prefix
-     * @RETURN the minimum latest persisted version
+     * @param prefix the subgroup/shard prefix
+     * @return the minimum latest persisted version
      */
     static const uint64_t getMinimumLatestPersistedVersion(const std::string& prefix);
 
@@ -282,38 +281,38 @@ private:
     /**
      * Get the minimum index greater than a given version
      * Note: no lock protected, use FPL_RDLOCK
-     * @PARAM ver the given version. INVALID_VERSION means to return the earliest index.
-     * @RETURN the minimum index since the given version. INVALID_INDEX means
+     * @param ver the given version. INVALID_VERSION means to return the earliest index.
+     * @return the minimum index since the given version. INVALID_INDEX means
      *         that no log entry is available for the requested version.
      */
     int64_t getMinimumIndexBeyondVersion(version_t ver);
     /**
      * get the byte size of log entry
      * Note: no lock protected, use FPL_RDLOCK
-     * @PARAM ple - pointer to the log entry
-     * @RETURN the number of bytes required for the serialized data.
+     * @param ple - pointer to the log entry
+     * @return the number of bytes required for the serialized data.
      */
     size_t byteSizeOfLogEntry(const LogEntry* ple);
     /**
      * serialize the log entry to a byte array
      * Note: no lock protected, use FPL_RDLOCK
-     * @PARAM ple - the pointer to the log entry
-     * @RETURN the number of bytes written to the byte array
+     * @param ple - the pointer to the log entry
+     * @return the number of bytes written to the byte array
      */
     size_t writeLogEntryToByteArray(const LogEntry* ple, uint8_t* ba);
     /**
      * post the log entry to a serialization function accepting a byte array
      * Note: no lock protected, use FPL_RDLOCK
-     * @PARAM f - funciton
-     * @PARAM ple - pointer to the log entry
-     * @RETURN the number of bytes posted.
+     * @param f - funciton
+     * @param ple - pointer to the log entry
+     * @return the number of bytes posted.
      */
     size_t postLogEntry(const std::function<void(uint8_t const* const, std::size_t)>& f, const LogEntry* ple);
     /**
      * merge the log entry to current state.
      * Note: no lock protected, use FPL_WRLOCK
-     * @PARAM ba - serialize form of the entry
-     * @RETURN - number of size read from the entry.
+     * @param ba - serialize form of the entry
+     * @return - number of size read from the entry.
      */
     size_t mergeLogEntryFromByteArray(const uint8_t* ba);
 

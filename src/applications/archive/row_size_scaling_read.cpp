@@ -25,7 +25,9 @@ using std::ofstream;
 using std::string;
 using std::tie;
 using std::vector;
-
+/**
+ * @brief Type of the testing sst row
+ */
 struct BigRow {
     volatile int data[ROWSIZE];
 };

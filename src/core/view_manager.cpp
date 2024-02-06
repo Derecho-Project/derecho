@@ -1,6 +1,4 @@
 /**
- * @file ViewManager.cpp
- *
  * @date Feb 6, 2017
  */
 
@@ -1094,6 +1092,16 @@ void ViewManager::external_join_handler(tcp::socket& client_socket, const node_i
         sst::add_external_node(joiner_id, {client_socket.get_remote_ip(),
                                            external_client_external_port});
         add_external_connection_upcall(joiner_id);
+    } else if(request == ExternalClientRequest::REMOVE_P2P) {
+        sst::remove_node(joiner_id);
+        remove_external_connection_upcall(joiner_id);
+
+        // send confirmation to client
+        try {
+            client_socket.write(true);
+        } catch(tcp::socket_error& ex) {
+            dbg_debug(vm_logger, "Socket error description: {}", ex.what());
+        }
     }
 }
 
@@ -1998,6 +2006,13 @@ std::tuple<uint32_t, uint32_t, uint32_t> ViewManager::derive_subgroup_settings(V
 std::map<subgroup_id_t, uint64_t> ViewManager::get_max_payload_sizes() {
     return max_payload_sizes;
 }
+
+uint64_t ViewManager::get_subgroup_max_payload_size(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
+    shared_lock_t read_lock(view_mutex);
+    subgroup_id_t subgroup_id = curr_view->subgroup_ids_by_type_id.at(subgroup_type).at(subgroup_index);
+    return max_payload_sizes.at(subgroup_id);
+}
+
 
 std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
 ViewManager::make_member_ips_and_ports_map(const View& view, const PortType port) {

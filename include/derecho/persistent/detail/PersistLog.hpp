@@ -161,7 +161,7 @@ public:
     virtual const void* getEntry(const HLC& hlc) = 0;
 
     /**
-     * process the entry at exactly version @ver
+     * process the entry at exactly version `ver`
      * if such a version does not exist, nothing will happen.
      * @param ver - the specified version
      * @param func - the function to run on the entry
@@ -190,9 +190,9 @@ public:
     /**
      * Retrieve a signature from a specified version, assuming signatures are enabled.
      * @param ver - version
-     * @param signature - A byte buffer into which the signature will be copied.
+     * @param signature         A byte buffer into which the signature will be copied.
      * Must be at least signature_size bytes.
-     * @param prev_ver A variable which will be updated to equal the previous
+     * @param prev_signed_ver   A variable which will be updated to equal the previous
      * version whose signature is included in this version's signature, or
      * INVALID_VERSION if there was no version in the log with the requested
      * version number (in this case, no signature will be returned either)
@@ -239,23 +239,23 @@ public:
 
     /**
      * Calculate the byte size required for serialization
-     * @PARAM ver - from which version the detal begins(tail log)
+     * @param ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
     virtual size_t bytes_size(version_t ver) = 0;
 
     /**
      * Write the serialized log bytes to the given buffer
-     * @PARAM buf - the buffer to receive serialized bytes
-     * @PARAM ver - from which version the detal begins(tail log)
+     * @param buf - the buffer to receive serialized bytes
+     * @param ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
     virtual size_t to_bytes(uint8_t* buf, version_t ver) = 0;
 
     /**
      * Post the serialized log bytes to a function
-     * @PARAM f - the function to handle the serialzied bytes
-     * @PARAM ver - from which version the detal begins(tail log)
+     * @param f - the function to handle the serialzied bytes
+     * @param ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
     virtual void post_object(const std::function<void(uint8_t const* const, std::size_t)>& f,
@@ -264,8 +264,7 @@ public:
 
     /**
      * Check/Merge the LogTail to the existing log.
-     * @PARAM dsm - deserialization manager
-     * @PARAM v - serialized log bytes to be apllied
+     * @param v - serialized log bytes to be apllied
      */
     virtual void applyLogTail(uint8_t const* v) = 0;
 

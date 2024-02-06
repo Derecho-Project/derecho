@@ -302,10 +302,10 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
     }
 
     if(m_currMetaHeader == m_persMetaHeader) {
-        if(CURR_LOG_IDX != INVALID_INDEX) {
+        // if(CURR_LOG_IDX != INVALID_INDEX) {
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-            ver_ret = m_currMetaHeader.fields.ver;
-        }
+        // }
+        ver_ret = m_persMetaHeader.fields.ver;
         if(!preLocked) {
             FPL_UNLOCK;
             FPL_PERS_UNLOCK;
@@ -325,16 +325,15 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
             flush_dlen = (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen - NEXT_LOG_ENTRY_PERS->fields.ofst);
             // flush data
             flush_dstart = ALIGN_TO_PAGE(NEXT_DATA_PERS);
-            flush_dlen += ((int64_t)NEXT_DATA_PERS) % PAGE_SIZE;
+            flush_dlen += ((int64_t)NEXT_DATA_PERS) % getpagesize();
             // flush log
             flush_lstart = ALIGN_TO_PAGE(NEXT_LOG_ENTRY_PERS);
-            flush_llen = ((size_t)NEXT_LOG_ENTRY - (size_t)NEXT_LOG_ENTRY_PERS) + ((int64_t)NEXT_LOG_ENTRY_PERS) % PAGE_SIZE;
+            flush_llen = ((size_t)NEXT_LOG_ENTRY - (size_t)NEXT_LOG_ENTRY_PERS) + ((int64_t)NEXT_LOG_ENTRY_PERS) % getpagesize();
         }
-        if(NUM_USED_SLOTS > 0) {
+        // if(NUM_USED_SLOTS > 0) {
             //get the latest flushed version
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-            ver_ret = m_currMetaHeader.fields.ver;
-        }
+        // }
         if(!preLocked) {
             FPL_UNLOCK;
         }
@@ -350,6 +349,7 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
         }
         // flush meta data
         this->persistMetaHeaderAtomically(&shadow_header);
+        ver_ret = shadow_header.fields.ver;
     } catch(std::exception& e) {
         if(!preLocked) {
             FPL_PERS_UNLOCK;

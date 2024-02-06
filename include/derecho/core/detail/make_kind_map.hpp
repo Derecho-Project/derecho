@@ -1,5 +1,5 @@
 /**
- * @file make_kind_map.h
+ * @file make_kind_map.hpp
  *
  * A useful template function that helps construct mutils::KindMap instances.
  * Separated out into its own file to reduce clutter in group.h and reduce

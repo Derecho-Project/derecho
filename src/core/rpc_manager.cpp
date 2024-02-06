@@ -28,12 +28,10 @@ RPCManager::RPCManager(ViewManager& group_view_manager,
         : nid(getConfUInt32(Conf::DERECHO_LOCAL_ID)),
           rpc_logger(LoggerFactory::createIfAbsent(LoggerFactory::RPC_LOGGER_NAME, getConfString(Conf::LOGGER_RPC_LOG_LEVEL))),
           receivers(new std::decay_t<decltype(*receivers)>()),
+          deserialization_contexts(deserialization_context),
           view_manager(group_view_manager),
           busy_wait_before_sleep_ms(getConfUInt64(Conf::DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS)) {
     RpcLoggerPtr::initialize();
-    for(const auto& deserialization_context_ptr : deserialization_context) {
-        rdv.push_back(deserialization_context_ptr);
-    }
     rpc_listener_thread = std::thread(&RPCManager::p2p_receive_loop, this);
 }
 
@@ -121,7 +119,7 @@ std::exception_ptr RPCManager::receive_message(
     std::size_t reply_header_size = header_space();
     //Pass through the provided out_alloc function, but add space for the reply header
     recv_ret reply_return = receiver_function_entry->second(
-            &rdv, received_from, buf,
+            &deserialization_contexts, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {
                 return out_alloc(size + reply_header_size) + reply_header_size;
             });
@@ -143,7 +141,7 @@ std::exception_ptr RPCManager::parse_and_receive(uint8_t* buf, std::size_t size,
     Opcode indx;
     node_id_t received_from;
     uint32_t flags;
-    retrieve_header(&rdv, buf, payload_size, indx, received_from, flags);
+    retrieve_header(buf, payload_size, indx, received_from, flags);
     RPCManager::rpc_caller_id = received_from;
     return receive_message(indx, received_from, buf + header_space(),
                            payload_size, out_alloc);
@@ -233,7 +231,7 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, uint8_t* msg_buf) {
     Opcode indx;
     node_id_t received_from;
     uint32_t flags;
-    retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
+    retrieve_header(msg_buf, payload_size, indx, received_from, flags);
     dbg_trace(rpc_logger, "Handling a P2P message: function_id = {}, is_reply = {}, received_from = {}, payload_size = {}, invocation_id = {}",
               indx.function_id, indx.is_reply, received_from, payload_size, ((long*)(msg_buf + header_size))[0]);
     if(indx.is_reply) {
@@ -417,6 +415,13 @@ void RPCManager::add_external_connection(node_id_t node_id) {
     connections->add_connections({node_id});
 }
 
+void RPCManager::remove_external_connection(node_id_t node_id) {
+    if(external_client_ids.erase(node_id) != 0) {
+        dbg_debug(rpc_logger, "External client with id {} gracefully exiting, doing cleanup", node_id);
+        connections->remove_connections({node_id});
+    }
+}
+
 void RPCManager::register_rpc_results(subgroup_id_t subgroup_id, std::weak_ptr<AbstractPendingResults> pending_results_handle) {
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     pending_results_to_fulfill[subgroup_id].push(pending_results_handle);
@@ -487,7 +492,7 @@ void RPCManager::p2p_request_worker() {
             request = p2p_request_queue.front();
             p2p_request_queue.pop();
         }
-        retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
+        retrieve_header(request.msg_buf, payload_size, indx, received_from, flags);
         if(indx.is_reply || RPC_HEADER_FLAG_TST(flags, CASCADE)) {
             dbg_error(rpc_logger, "Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
                       indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
@@ -540,8 +545,7 @@ void RPCManager::p2p_receive_loop() {
     // start the fifo worker thread
     request_worker_thread = std::thread(&RPCManager::p2p_request_worker, this);
 
-    struct timespec last_time, cur_time;
-    clock_gettime(CLOCK_REALTIME, &last_time);
+    uint64_t last_time_ms = get_walltime() / INT64_1E6;
 
     // loop event
     while(!thread_shutdown) {
@@ -562,15 +566,13 @@ void RPCManager::p2p_receive_loop() {
                     connections->increment_incoming_seq_num(message_handle.sender_id, message_handle.type);
                 }
                 // update last time
-                clock_gettime(CLOCK_REALTIME, &last_time);
+                last_time_ms = get_walltime() / INT64_1E6;
             }
         }
         //Release the View lock before going to sleep if no messages were received
         if(!message_received) {
-            clock_gettime(CLOCK_REALTIME, &cur_time);
             // check if the system has been inactive for enough time to induce sleep
-            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            uint64_t time_elapsed_in_ms = (get_walltime() / INT64_1E6) - last_time_ms;
             if(time_elapsed_in_ms > busy_wait_before_sleep_ms) {
                 using namespace std::chrono_literals;
                 // std::this_thread::sleep_for(1ms);

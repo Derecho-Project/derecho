@@ -237,7 +237,6 @@ public:
      * to remove
      * @param joiner_ids The list of joining node IDs
      * @param joiner_ips_and_ports The list of IP addresses and ports for the joining nodes
-     * @param logger
      * @return A View object for the next view
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,

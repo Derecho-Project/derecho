@@ -9,6 +9,7 @@
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/Persistent.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <map>
@@ -21,21 +22,66 @@ using test::Bytes;
 using namespace std::chrono;
 
 /**
- * RPC Object with a single function that accepts a string
+ * State shared between the (replicated) TestObjects and the main thread
  */
-class TestObject {
+struct TestState : public derecho::DeserializationContext {
+    std::atomic<bool> experiment_done;
+    steady_clock::time_point send_complete_time;
+};
+
+/**
+ * RPC Object with a single function that accepts a byte array and counts
+ * the number of updates it has received, comparing it to a total provided
+ * in the constructor. When the total number of messages received by the
+ * RPC function equals the expected total, it records the time and signals
+ * a shared atomic flag to indicate the experiment is complete.
+ */
+class TestObject : public mutils::ByteRepresentable {
+    uint64_t messages_received;
+    const uint64_t total_num_messages;
+    // Pointer to a TestState object held by the main thread
+    TestState* main_test_state;
+
 public:
-    void fun(const std::string& words) {
-    }
-
     void bytes_fun(const Bytes& bytes) {
+        ++messages_received;
+        if(messages_received == total_num_messages) {
+            main_test_state->send_complete_time = std::chrono::steady_clock::now();
+            main_test_state->experiment_done = true;
+        }
     }
 
-    bool finishing_call(int x) {
-        return true;
-    }
+    REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(bytes_fun));
+    DEFAULT_SERIALIZE(messages_received, total_num_messages);
+    // Custom deserialization so we can use the DeserializationManager
+    static std::unique_ptr<TestObject> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
+    DEFAULT_DESERIALIZE_NOALLOC(TestObject);
+    // Deserialization constructor. The TestState pointer should be supplied by the deserialization context.
+    TestObject(uint64_t messages_received, uint64_t total_num_messages, TestState* main_test_state)
+            : messages_received(messages_received),
+              total_num_messages(total_num_messages),
+              main_test_state(main_test_state) {}
+    // Constructor called by factory function
+    TestObject(uint64_t total_num_messages, TestState* test_state)
+            : messages_received(0), total_num_messages(total_num_messages), main_test_state(test_state) {}
+};
 
-    REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(fun, bytes_fun, finishing_call));
+std::unique_ptr<TestObject> TestObject::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer) {
+    // Default deserialize the first 2 fields
+    auto messages_received_ptr = mutils::from_bytes<uint64_t>(dsm, buffer);
+    auto total_num_ptr = mutils::from_bytes<uint64_t>(dsm, buffer + mutils::bytes_size(*messages_received_ptr));
+    // Retrieve a pointer to TestState from DSM
+    TestState* test_state_ptr = nullptr;
+    assert(dsm);
+    assert(dsm->registered<TestState>());
+    if(dsm && dsm->registered<TestState>()) {
+        test_state_ptr = &(dsm->mgr<TestState>());
+    } else {
+        // Asserts are disabled in release mode, so try to provide some information if there's a bug
+        std::cerr << "ERROR: Unable to get TestState pointer in TestObject deserialization. TestObject will crash when it attempts to dereference it." << std::endl;
+    }
+    assert(test_state_ptr);
+    return std::make_unique<TestObject>(*messages_received_ptr, *total_num_ptr, test_state_ptr);
 };
 
 struct exp_result {
@@ -87,7 +133,7 @@ int main(int argc, char* argv[]) {
     const uint32_t count = std::stoi(argv[dashdash_pos + 2]);
     const uint32_t num_senders_selector = std::stoi(argv[dashdash_pos + 3]);
 
-    steady_clock::time_point begin_time, send_complete_time;
+    steady_clock::time_point begin_time;
 
     // Convert this integer to a more readable enum value
     const PartialSendMode senders_mode = num_senders_selector == 0
@@ -109,25 +155,9 @@ int main(int argc, char* argv[]) {
             total_num_messages = count;
             break;
     }
-    // variable 'done' tracks the end of the test
-    volatile bool done = false;
-    // callback into the application code at each message delivery
-    auto stability_callback = [&done,
-                               &send_complete_time,
-                               total_num_messages,
-                               num_delivered = 0u](uint32_t subgroup,
-                                                   uint32_t sender_id,
-                                                   long long int index,
-                                                   std::optional<std::pair<uint8_t*, long long int>> data,
-                                                   persistent::version_t ver) mutable {
-        // Count the total number of messages delivered
-        ++num_delivered;
-        // Check for completion
-        if(num_delivered == total_num_messages) {
-            send_complete_time = std::chrono::steady_clock::now();
-            done = true;
-        }
-    };
+    // The replicated TestObject will get a pointer to this object and use it to signal that the test is done
+    TestState shared_test_state;
+    shared_test_state.experiment_done = false;
 
     if(dashdash_pos + 4 < argc) {
         pthread_setname_np(pthread_self(), argv[dashdash_pos + 3]);
@@ -135,39 +165,20 @@ int main(int argc, char* argv[]) {
         pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
     }
 
-    /*******************
-    derecho::SubgroupInfo subgroup_info{[num_nodes](
-                                                const std::vector<std::type_index>& subgroup_type_order,
-                                                const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
-        if(curr_view.num_members < num_nodes) {
-            std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_nodes << std::endl;
-            throw derecho::subgroup_provisioning_exception();
-        }
-        derecho::subgroup_shard_layout_t subgroup_layout(1);
-
-        std::vector<uint32_t> members(num_nodes);
-        for(int i = 0; i < num_nodes; i++) {
-            members[i] = i;
-        }
-
-        subgroup_layout[0].emplace_back(curr_view.make_subview(members));
-        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_nodes);
-        derecho::subgroup_allocation_map_t subgroup_allocation;
-        subgroup_allocation.emplace(std::type_index(typeid(TestObject)), std::move(subgroup_layout));
-        return subgroup_allocation;
-    }};
-    *****************/
-
     auto membership_function = PartialSendersAllocator(num_nodes, senders_mode, derecho::Mode::ORDERED);
     derecho::SubgroupInfo subgroup_info(membership_function);
 
-    auto ba_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
+    auto test_factory = [&](persistent::PersistentRegistry*, derecho::subgroup_id_t) {
+        return std::make_unique<TestObject>(total_num_messages, &shared_test_state);
+    };
 
-    derecho::Group<TestObject> group(derecho::UserMessageCallbacks{stability_callback}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, ba_factory);
+    std::vector<derecho::DeserializationContext*> context_vector{&shared_test_state};
+
+    derecho::Group<TestObject> group(derecho::UserMessageCallbacks{nullptr}, subgroup_info, context_vector,
+                                     std::vector<derecho::view_upcall_t>{}, test_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
-    //std::string str_1k(max_msg_size, 'x');
-    uint8_t* bbuf = (uint8_t*)malloc(max_msg_size);
+    uint8_t* bbuf = new uint8_t[max_msg_size];
     memset(bbuf, 0, max_msg_size);
     Bytes bytes(bbuf, max_msg_size);
 
@@ -195,22 +206,13 @@ int main(int argc, char* argv[]) {
             send_all();
         }
     }
-    /*
-    if(node_rank == 0) {
-        derecho::rpc::QueryResults<bool> results = handle.ordered_send<RPC_NAME(finishing_call)>(0);
-        std::cout << "waiting for response..." << std::endl;
-#pragma GCC diagnostic ignored "-Wunused-variable"
-        decltype(results)::ReplyMap& replies = results.get();
-#pragma GCC diagnostic pop
-    }
-    */
 
-    while(!done) {
+    while(!shared_test_state.experiment_done) {
     }
 
-    free(bbuf);
+    delete[] bbuf;
 
-    int64_t nsec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
+    int64_t nsec = duration_cast<nanoseconds>(shared_test_state.send_complete_time - begin_time).count();
 
     double thp_gbps = (static_cast<double>(total_num_messages) * max_msg_size) / nsec;
     double thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / nsec;

@@ -1,5 +1,5 @@
 /**
- * @file rpc_manager.h
+ * @file rpc_manager.hpp
  *
  * @date Feb 7, 2017
  */
@@ -46,19 +46,24 @@ namespace rpc {
  * Given a subgroup ID and a list of functions, constructs a
  * RemoteInvokerForClass for the type of object given by the template
  * parameter, with its receive functions registered to this RPCManager.
- * @param type_id A number uniquely identifying the type of the object (in
- * practice, this is the index of UserProvidedClass within the template
- * parameters of the containing Group).
- * @param instance_id A number uniquely identifying the subgroup to which
- * RPC invocations for this object should be sent.
- * @param funs A tuple of "partially wrapped" pointer-to-member-functions
- * (the return type of rpc::tag<>(), which is called by the client), one for
- * each method of UserProvidedClass that should be an RPC function
- * @return The RemoteInvokerForClass that can call a remote UserProvidedClass,
- * by pointer
+ *
  * @tparam UserProvidedClass The type of the object being wrapped with a
  * RemoteInvokerForClass
  * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
+ *
+ * @param   nid         node id
+ * @param   type_id     A number uniquely identifying the type of the object (in
+ * practice, this is the index of UserProvidedClass within the template
+ * parameters of the containing Group).
+ * @param   instance_id A number uniquely identifying the subgroup to which
+ * RPC invocations for this object should be sent.
+ * @param   funs        A tuple of "partially wrapped" pointer-to-member-functions
+ * (the return type of rpc::tag<>(), which is called by the client), one for
+ * each method of UserProvidedClass that should be an RPC function
+ * @param   receivers   handlers
+ *
+ * @return The RemoteInvokerForClass that can call a remote UserProvidedClass,
+ * by pointer
  */
 template <typename UserProvidedClass, typename FunctionTuple>
 auto make_remote_invoker(const node_id_t nid, uint32_t type_id, uint32_t instance_id, FunctionTuple funs, std::map<Opcode, receive_fun_t>& receivers) {
@@ -84,10 +89,12 @@ class RPCManager {
      * from the targets of an earlier remote call.
      * Note that a FunctionID is (class ID, subgroup ID, Function Tag). */
     std::unique_ptr<std::map<Opcode, receive_fun_t>> receivers;
-    /** An emtpy DeserializationManager, in case we need it later. */
-    // mutils::DeserializationManager dsm{{}};
-    // Weijia: I prefer the deserialization context vector.
-    mutils::RemoteDeserialization_v rdv;
+    /**
+     * A copy of the user-provided deserialization context vector, which is
+     * also stored in Group. Provided to from_bytes when deserializing a user-
+     * defined Replicated Object.
+     */
+    mutils::RemoteDeserialization_v deserialization_contexts;
 
     template <typename T>
     friend class ::derecho::Replicated;  // Give only Replicated access to view_manager
@@ -251,6 +258,13 @@ class RPCManager {
                                          const std::function<uint8_t*(int)>& out_alloc);
 
 public:
+    /**
+     * Constructor
+     *
+     * @param group_view_manager A reference to the ViewManager object
+     * @param deserialization_context A reference to the vector of user-provided
+     * deserialization contexts from Group, which will be copied in
+     */
     RPCManager(ViewManager& group_view_manager,
                const std::vector<DeserializationContext*>& deserialization_context);
 
@@ -267,6 +281,14 @@ public:
      * are set up in the new-view callback, but external clients can join at any time.
      */
     void add_external_connection(node_id_t node_id);
+    
+    /**
+     * Remove a P2P connection to an external client. The connection is cleaned up in 
+     * case a failure is detected (i.e. the external client stopped sending heartbeats. 
+     * However, we avoid the failure procedure in case the external client performs a 
+     * graceful exit, informing that it is exiting.
+     */
+    void remove_external_connection(node_id_t node_id);
 
     /**
      * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P

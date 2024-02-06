@@ -2,6 +2,7 @@
 #include <derecho/core/view.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <fstream>
 #include <map>
@@ -56,7 +57,7 @@ int main(int argc, char* argv[]) {
     std::unique_ptr<Group<RawObject>> group;
     uint32_t my_rank;
     uint64_t max_msg_size = getConfUInt64(Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
-    volatile bool done = false;
+    std::atomic<bool> done = false;
     auto delivery_callback = [&, num_received_msgs_map = std::map<node_id_t, uint32_t>(),
                               received_msgs_index_map = std::map<node_id_t, uint32_t>(),
                               received_msgs = std::vector<node_id_t>(),

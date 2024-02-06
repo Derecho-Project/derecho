@@ -16,6 +16,9 @@
 
 #include <derecho/core/derecho.hpp>
 
+/**
+ * @brief CallbackTestObject type
+ */
 class CallbackTestObject : public mutils::ByteRepresentable,
                            public derecho::GetsViewChangeCallback,
                            public derecho::GroupReference {

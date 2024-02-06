@@ -79,6 +79,11 @@ public:
     void add_connections(const std::vector<node_id_t>& node_ids);
     void remove_connections(const std::vector<node_id_t>& node_ids);
     bool contains_node(const node_id_t node_id);
+
+    /**
+     * @return the list of node ids with whom there is an active p2p connection
+     */
+    std::vector<node_id_t> get_active_nodes();
     /**
      * @return the size of the byte array used for sending a single P2P reply
      * in any of the P2P connections. No messages larger than this can be sent.
@@ -155,7 +160,7 @@ public:
      *
      * @throw                   derecho::derecho_exception on error
      */
-    void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_srcaddr, uint64_t rkey, size_t size);
+    void oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size);
 
     /**
      * send to data in local buffer to remote

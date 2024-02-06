@@ -4,6 +4,10 @@
 #include <cstdint>
 #include <utility>
 
+/**
+ * @cond DoxygenSuppressed
+ */
+
 struct ParsedTag {
     uint8_t reserved;
     uint8_t padding; // now used for libfabric opcode.
@@ -31,5 +35,9 @@ inline ParsedImmediate parse_immediate(uint32_t imm) {
 inline uint32_t form_immediate(uint16_t total_blocks, uint16_t block_number) {
     return ((uint32_t)total_blocks) << 16 | ((uint32_t)block_number);
 }
+
+/**
+ * @endcond
+ */
 
 #endif

@@ -223,9 +223,9 @@ bool ClientTier::update_batch_test(const int& num_updates) const {
 /* ---------------- SignatureStore implementation --------------------- */
 
 SignatureStore::SignatureStore(persistent::PersistentRegistry* pr,
-                               std::shared_ptr<std::atomic<bool>> experiment_done)
+                               ExperimentState* experiment_state)
         : hashes(std::make_unique<SHA256Hash>, "SignedHashLog", pr, true),
-          experiment_done(experiment_done) {}
+          experiment_state(experiment_state) {}
 
 std::vector<unsigned char> SignatureStore::add_hash(const SHA256Hash& hash) const {
     derecho::Replicated<SignatureStore>& this_subgroup = group->get_subgroup<SignatureStore>(this->subgroup_index);
@@ -245,7 +245,7 @@ std::vector<unsigned char> SignatureStore::add_hash(const SHA256Hash& hash) cons
 void SignatureStore::ordered_add_hash(const SHA256Hash& hash) {
     derecho::Replicated<SignatureStore>& this_subgroup = group->get_subgroup<SignatureStore>(this->subgroup_index);
     //Ask the Replicated interface what version it's about to persist
-    std::tuple<persistent::version_t, uint64_t> curr_version = this_subgroup.get_current_version();
+    std::tuple<persistent::version_t, HLC> curr_version = this_subgroup.get_current_version();
     //Append the new hash to the Persistent log
     *hashes = hash;
     dbg_default_debug("SHA256 hash added for version {}", std::get<0>(curr_version));
@@ -253,15 +253,22 @@ void SignatureStore::ordered_add_hash(const SHA256Hash& hash) {
 
 void SignatureStore::end_test() const {
     std::cout << "Received the end_test message, shutting down" << std::endl;
-    *experiment_done = true;
+    experiment_state->done = true;
+}
+
+std::unique_ptr<SignatureStore> SignatureStore::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer) {
+    auto hash_log_ptr = mutils::from_bytes<persistent::Persistent<SHA256Hash>>(dsm, buffer);
+    assert(dsm->registered<ExperimentState>());
+    ExperimentState* experiment_state_ptr = &(dsm->mgr<ExperimentState>());
+    return std::make_unique<SignatureStore>(*hash_log_ptr, experiment_state_ptr);
 }
 
 /* ----------------- ObjectStore implementation ------------------------ */
 
 ObjectStore::ObjectStore(persistent::PersistentRegistry* pr,
-                         std::shared_ptr<std::atomic<bool>> experiment_done)
+                         ExperimentState* experiment_state)
         : object_log(std::make_unique<Blob>, "BlobLog", pr, false),
-          experiment_done(experiment_done) {}
+          experiment_state(experiment_state) {}
 
 std::pair<persistent::version_t, uint64_t> ObjectStore::update(const Blob& new_data) const {
     derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
@@ -275,8 +282,8 @@ std::pair<persistent::version_t, uint64_t> ObjectStore::update(const Blob& new_d
 void ObjectStore::ordered_update(const Blob& new_data) {
     derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
     //Ask the Replicated interface what version it's about to generate
-    std::tuple<persistent::version_t, uint64_t> next_version = this_subgroup.get_current_version();
-    dbg_default_debug("Got a version of ({}, {}) in ordered_update", std::get<0>(next_version), std::get<1>(next_version));
+    std::tuple<persistent::version_t, HLC> next_version = this_subgroup.get_current_version();
+    dbg_default_debug("Got a version of ({}, {}) in ordered_update", std::get<0>(next_version), std::get<1>(next_version).m_rtc_us);
     //Update the Persistent object, generating a new version
     *object_log = new_data;
 }
@@ -299,8 +306,15 @@ Blob ObjectStore::get_latest() const {
 }
 
 void ObjectStore::end_test() const {
-    std::cout << "Recieved the end_test message, shutting down" << std::endl;
-    *experiment_done = true;
+    std::cout << "Received the end_test message, shutting down" << std::endl;
+    experiment_state->done = true;
+}
+
+std::unique_ptr<ObjectStore> ObjectStore::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer) {
+    auto object_log_ptr = mutils::from_bytes<persistent::Persistent<Blob>>(dsm, buffer);
+    assert(dsm->registered<ExperimentState>());
+    ExperimentState* experiment_state_ptr = &(dsm->mgr<ExperimentState>());
+    return std::make_unique<ObjectStore>(*object_log_ptr, experiment_state_ptr);
 }
 
 /* -------------------------------------------------------------------- */
@@ -352,16 +366,17 @@ int main(int argc, char** argv) {
                                         + derecho::remote_invocation_utilities::header_space();
     const std::size_t update_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
     steady_clock::time_point begin_time, batch_complete_time;
-    //This atomic flag will be shared with the SignatureStore or ObjectStore subgroup,
-    //if this node ends up in that group
-    std::shared_ptr<std::atomic<bool>> experiment_done = std::make_shared<std::atomic<bool>>(false);
+    //This DeserializationContext, containing a flag to indicate when the experiment is done,
+    //will be shared with the SignatureStore or ObjectStore subgroup if this node ends up in that group
+    ExperimentState experiment_state;
+    experiment_state.done = false;
 
     auto object_subgroup_factory = [&](persistent::PersistentRegistry* registry, derecho::subgroup_id_t subgroup_id) {
-        return std::make_unique<ObjectStore>(registry, experiment_done);
+        return std::make_unique<ObjectStore>(registry, &experiment_state);
     };
 
     auto signature_subgroup_factory = [&](persistent::PersistentRegistry* registry, derecho::subgroup_id_t subgroup_id) {
-        return std::make_unique<SignatureStore>(registry, experiment_done);
+        return std::make_unique<SignatureStore>(registry, &experiment_state);
     };
 
     //Subgroup and shard layout
@@ -380,7 +395,7 @@ int main(int argc, char** argv) {
     derecho::Group<ClientTier, ObjectStore, SignatureStore> group(
             {nullptr, nullptr, nullptr, nullptr},
             subgroup_layout,
-            {}, {},
+            {&experiment_state}, {},
             client_node_factory,
             object_subgroup_factory,
             signature_subgroup_factory);
@@ -431,12 +446,12 @@ int main(int argc, char** argv) {
         std::cout << "Assigned the SignatureStore role." << std::endl;
         std::cout << "Waiting for the end_test message." << std::endl;
         //Wait for this flag to be flipped by the end_test message handler
-        while(!(*experiment_done)) {
+        while(!(experiment_state.done)) {
         }
     } else if(my_storage_shard != -1) {
         std::cout << "Assigned the ObjectStore role." << std::endl;
         std::cout << "Waiting for the end_test message." << std::endl;
-        while(!(*experiment_done)) {
+        while(!(experiment_state.done)) {
         }
     } else {
         std::cout << "Not assigned to any role (?!)" << std::endl;

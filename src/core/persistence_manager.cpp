@@ -1,6 +1,4 @@
 /**
- * @file persistence_manager.h
- *
  * @date Jun 20, 2017
  */
 #include "derecho/core/detail/persistence_manager.hpp"
@@ -37,6 +35,9 @@ PersistenceManager::PersistenceManager(
 }
 
 PersistenceManager::~PersistenceManager() {
+    if (this->persist_thread.joinable()) {
+        this->persist_thread.join();
+    }
     sem_destroy(&persistence_request_sem);
 }
 
@@ -226,7 +227,6 @@ void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
 }
 
 /** shutdown the thread
- * @wait - wait till the thread finished or not.
  */
 void PersistenceManager::shutdown(bool wait) {
     // if(replicated_objects == nullptr) return;  //skip for raw subgroups - NO DON'T
@@ -236,7 +236,9 @@ void PersistenceManager::shutdown(bool wait) {
     sem_post(&persistence_request_sem);  // kick the persistence thread in case it is sleeping
 
     if(wait) {
-        this->persist_thread.join();
+        if (this->persist_thread.joinable()) {
+            this->persist_thread.join();
+        }
     }
 }
 }  // namespace derecho
