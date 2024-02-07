@@ -543,11 +543,26 @@ private:
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
     /**
-     * Helper for joining an existing group; receives the View and parameters from the leader.
-     * @return true if the leader successfully sent the View, false if the leader crashed
-     * (i.e. a socket operation to it failed) before completing the process
+     * Helper for joining an existing group; sends a join request to the configured
+     * contact node, handles redirects to the leader, and sends the logged View if
+     * the leader announces that the group is restarting.
+     * @return true if the join request interaction completed successfully, false if
+     * there was a network error while communicating with the leader
      */
-    bool receive_initial_view();
+    bool send_join_request();
+
+    /**
+     * Simple wrapper for leader_connection->try_connect that implements a
+     * timeout correctly. Due to the way sockets work, tcp::socket's try_connect
+     * will (annoyingly) return immediately if the connection is refused, which
+     * is the usual result while waiting for a node to start up.
+     *
+     * @param ip_address The IP address to try to connect leader_connection to
+     * @param port The port to try to connect leader_connection to
+     * @param timeout_ms The time, in milliseconds, to wait for a connection
+     * @return true if leader_connection connected successfully, false if it timed out
+     */
+    bool try_connect_to_leader(const ip_addr_t& ip_address, uint16_t port, int timeout_ms);
 
     /**
      * Constructor helper that initializes TCP connections (for state transfer)
@@ -797,7 +812,7 @@ public:
     void register_add_external_connection_upcall(const std::function<void(uint32_t)>& upcall) {
         add_external_connection_upcall = upcall;
     }
-    
+
     void register_remove_external_connection_upcall(const std::function<void(uint32_t)>& upcall) {
         remove_external_connection_upcall = upcall;
     }
