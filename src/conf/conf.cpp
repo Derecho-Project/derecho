@@ -29,8 +29,8 @@ std::atomic<uint32_t> Conf::singleton_initialized_flag = 0;
     { x, required_argument, 0, 0 }
 struct option Conf::long_options[] = {
         // [DERECHO]
-        MAKE_LONG_OPT_ENTRY(DERECHO_LEADER_IP),
-        MAKE_LONG_OPT_ENTRY(DERECHO_LEADER_GMS_PORT),
+        MAKE_LONG_OPT_ENTRY(DERECHO_CONTACT_IP),
+        MAKE_LONG_OPT_ENTRY(DERECHO_CONTACT_PORT),
         MAKE_LONG_OPT_ENTRY(DERECHO_LEADER_EXTERNAL_PORT),
         MAKE_LONG_OPT_ENTRY(DERECHO_RESTART_LEADERS),
         MAKE_LONG_OPT_ENTRY(DERECHO_RESTART_LEADER_PORTS),

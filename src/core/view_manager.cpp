@@ -96,7 +96,7 @@ void ViewManager::startup_to_first_view() {
     const uint16_t my_gms_port = getConfUInt16(Conf::DERECHO_GMS_PORT);
     in_total_restart = false;
     //Determine if I am the initial leader for a new group
-    if(my_ip == getConfString(Conf::DERECHO_LEADER_IP) && my_gms_port == getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT)) {
+    if(my_ip == getConfString(Conf::DERECHO_CONTACT_IP) && my_gms_port == getConfUInt16(Conf::DERECHO_CONTACT_PORT)) {
         curr_view = std::make_unique<View>(
                 0, std::vector<node_id_t>{my_id},
                 std::vector<IpAndPorts>{
@@ -114,9 +114,9 @@ void ViewManager::startup_to_first_view() {
         setup_initial_tcp_connections(*curr_view, my_id);
     } else {
         active_leader = false;
-        dbg_info(vm_logger, "Non-leader node {} initiating a join request at the leader", my_id);
-        leader_connection = std::make_unique<tcp::socket>(getConfString(Conf::DERECHO_LEADER_IP),
-                                                          getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT));
+        dbg_info(vm_logger, "Node {} starting up, sending a join request to {}", my_id, getConfString(Conf::DERECHO_CONTACT_IP));
+        leader_connection = std::make_unique<tcp::socket>(getConfString(Conf::DERECHO_CONTACT_IP),
+                                                          getConfUInt16(Conf::DERECHO_CONTACT_PORT));
         bool success = receive_initial_view();
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
@@ -205,7 +205,7 @@ bool ViewManager::receive_initial_view() {
         try {
             leader_connection->exchange(my_version_hashcode, leader_version_hashcode);
             if(leader_version_hashcode != my_version_hashcode) {
-                throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+                throw derecho_exception("Unable to connect to Derecho group because the contact node is running on an incompatible platform or used an incompatible compiler.");
             }
             leader_connection->write(JoinRequest{my_id, false});
             leader_connection->read(leader_response);
@@ -226,7 +226,7 @@ bool ViewManager::receive_initial_view() {
             ip_addr_t leader_ip(&buffer[0], &buffer[ip_addr_size]);
             uint16_t leader_gms_port;
             leader_connection->read(leader_gms_port);
-            dbg_info(vm_logger, "That node was not the leader! Redirecting to {}:{}", leader_ip, leader_gms_port);
+            dbg_info(vm_logger, "That node was not the leader. Redirecting to {}:{}", leader_ip, leader_gms_port);
             //Use move-assignment to reconnect the socket to the given IP address, and try again
             leader_connection = std::make_unique<tcp::socket>(leader_ip, leader_gms_port);
             leader_redirect = true;
@@ -552,8 +552,8 @@ bool ViewManager::is_starting_leader() const {
     if(in_total_restart) {
         return active_leader;
     } else {
-        return getConfString(Conf::DERECHO_LOCAL_IP) == getConfString(Conf::DERECHO_LEADER_IP)
-               && getConfUInt16(Conf::DERECHO_GMS_PORT) == getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT);
+        return getConfString(Conf::DERECHO_LOCAL_IP) == getConfString(Conf::DERECHO_CONTACT_IP)
+               && getConfUInt16(Conf::DERECHO_GMS_PORT) == getConfUInt16(Conf::DERECHO_CONTACT_PORT);
     }
 }
 
@@ -563,7 +563,7 @@ void ViewManager::start() {
 }
 
 void ViewManager::await_first_view() {
-    dbg_info(vm_logger, "Group leader waiting for an initial adequate view");
+    dbg_info(vm_logger, "Startup leader waiting for an initial adequate view");
     const node_id_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
     std::set<node_id_t> members_sent_view;
