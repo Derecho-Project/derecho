@@ -72,8 +72,6 @@ bool ViewManager::first_init() {
     if(curr_view) {
         dbg_debug(vm_logger, "Found view {} on disk", curr_view->vid);
         restart_state = std::make_unique<RestartState>();
-#ifdef ENABLE_LEADER_REGISTRY
-#else
         restart_state->restart_leader_ips = split_string(getConfString(Conf::DERECHO_RESTART_LEADERS));
         restart_state->restart_leader_ports = [&]() {
             //"Apply std::stoi over the result of split_string(getConfString(...))"
@@ -85,7 +83,6 @@ bool ViewManager::first_init() {
             return ports;
         }();
         restart_state->num_leader_failures = 0;
-#endif//ENABLE_LEADER_REGISTRY
         restart_to_initial_view();
     } else {
         startup_to_first_view();
@@ -307,8 +304,6 @@ bool ViewManager::send_join_request() {
                                                std::vector<std::type_index>{});
             // Initialize restart_state, which wasn't created in first_init() because we had no logged View
             restart_state = std::make_unique<RestartState>();
-#ifdef ENABLE_LEADER_REGISTRY
-#else
             restart_state->restart_leader_ips = split_string(getConfString(Conf::DERECHO_RESTART_LEADERS));
             restart_state->restart_leader_ports = [&]() {
                 auto port_list = split_string(getConfString(Conf::DERECHO_RESTART_LEADER_PORTS));
@@ -319,7 +314,6 @@ bool ViewManager::send_join_request() {
                 return ports;
             }();
             restart_state->num_leader_failures = 0;
-#endif//ENABLE_LEADER_REGISTRY
         }
         dbg_debug(vm_logger, "Sending view {} to leader", curr_view->vid);
         auto leader_socket_write = [this](const uint8_t* bytes, std::size_t size) {
