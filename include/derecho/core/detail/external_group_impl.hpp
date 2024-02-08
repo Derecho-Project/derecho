@@ -254,7 +254,7 @@ ExternalGroupClient<ReplicatedTypes...>::~ExternalGroupClient() {
 
             // wait confirmation from server
             bool remove_confirmed;
-            sock.read(remove_confirmed); 
+            sock.read(remove_confirmed);
         } catch(tcp::socket_error&) {
             dbg_default_error("Failed to gracefully exit: socket error while sending join request.");
             dbg_default_flush();
@@ -274,7 +274,7 @@ template <typename... ReplicatedTypes>
 bool ExternalGroupClient<ReplicatedTypes...>::get_view(const node_id_t nid) {
     try {
         tcp::socket sock = (nid == INVALID_NODE_ID)
-                                   ? tcp::socket(getConfString(Conf::DERECHO_LEADER_IP), getConfUInt16(Conf::DERECHO_LEADER_GMS_PORT))
+                                   ? tcp::socket(getConfString(Conf::DERECHO_CONTACT_IP), getConfUInt16(Conf::DERECHO_CONTACT_PORT))
                                    : tcp::socket(curr_view->member_ips_and_ports[curr_view->rank_of(nid)].ip_address,
                                                  curr_view->member_ips_and_ports[curr_view->rank_of(nid)].gms_port, false);
 
@@ -282,14 +282,14 @@ bool ExternalGroupClient<ReplicatedTypes...>::get_view(const node_id_t nid) {
         uint64_t leader_version_hashcode;
         sock.exchange(my_version_hashcode, leader_version_hashcode);
         if(leader_version_hashcode != my_version_hashcode) {
-            dbg_default_error("Leader refused connection because Derecho or compiler version did not match! Local version hashcode = {}, leader version hashcode = {}", my_version_hashcode, leader_version_hashcode);
+            dbg_default_error("Derecho member refused connection because Derecho or compiler version did not match! Local version hashcode = {}, member version hashcode = {}", my_version_hashcode, leader_version_hashcode);
             dbg_default_flush();
             return false;
         }
         sock.write(JoinRequest{my_id, true});
         sock.read(leader_response);
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
-            dbg_default_error("Leader refused connection because ID {} is already in use!", my_id);
+            dbg_default_error("Derecho member refused connection because ID {} is already in use!", my_id);
             dbg_default_flush();
             return false;
         }

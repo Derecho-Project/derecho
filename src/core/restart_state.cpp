@@ -123,7 +123,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             uint64_t joiner_version_code;
             client_socket->exchange(my_version_hashcode, joiner_version_code);
             if(joiner_version_code != my_version_hashcode) {
-                rls_warn(vm_logger, "Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket->get_remote_ip());
+                rls_warn(vm_logger, "Rejected a connection from node at {}. Node was running on an incompatible platform or used an incompatible compiler.", client_socket->get_remote_ip());
                 continue;
             }
             JoinRequest join_request;
@@ -131,7 +131,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
                 client_socket->read(join_request);
                 client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
             } catch(tcp::socket_error& ex) {
-                dbg_debug(vm_logger, "Client at {} disconnected before completing initial handshake", client_socket->get_remote_ip());
+                dbg_debug(vm_logger, "Node at {} disconnected before completing initial handshake", client_socket->get_remote_ip());
                 dbg_trace(vm_logger, "Exception description: {}", ex.what());
                 continue;
             }
@@ -141,13 +141,6 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
                 continue;
             }
             rejoined_node_ids.emplace(join_request.joiner_id);
-            //Receive and process the joining node's logs of the last known View and RaggedTrim
-            bool received = receive_joiner_logs(join_request.joiner_id, *client_socket);
-            if(!received) {
-                rejoined_node_ids.erase(join_request.joiner_id);
-                continue;
-            }
-
             //Receive the joining node's ports - this is part of the standard join logic
             uint16_t joiner_gms_port = 0;
             uint16_t joiner_state_transfer_port = 0;
@@ -166,6 +159,13 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
                 rejoined_node_ids.erase(join_request.joiner_id);
                 continue;
             }
+            //Receive and process the joining node's logs of the last known View and RaggedTrim
+            bool received = receive_joiner_logs(join_request.joiner_id, *client_socket);
+            if(!received) {
+                rejoined_node_ids.erase(join_request.joiner_id);
+                continue;
+            }
+
             const ip_addr_t& joiner_ip = client_socket->get_remote_ip();
             rejoined_node_ips_and_ports[join_request.joiner_id] = {joiner_ip, joiner_gms_port,
                                                                    joiner_state_transfer_port, joiner_sst_port,

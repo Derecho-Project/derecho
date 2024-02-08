@@ -21,8 +21,8 @@ constexpr std::size_t DERECHO_MIN_RPC_RESPONSE_SIZE = 128;
 class Conf {
 public:
     //String constants for config options
-    static constexpr const char* DERECHO_LEADER_IP = "DERECHO/leader_ip";
-    static constexpr const char* DERECHO_LEADER_GMS_PORT = "DERECHO/leader_gms_port";
+    static constexpr const char* DERECHO_CONTACT_IP = "DERECHO/contact_ip";
+    static constexpr const char* DERECHO_CONTACT_PORT = "DERECHO/contact_port";
     static constexpr const char* DERECHO_LEADER_EXTERNAL_PORT = "DERECHO/leader_external_port";
     static constexpr const char* DERECHO_RESTART_LEADERS = "DERECHO/restart_leaders";
     static constexpr const char* DERECHO_RESTART_LEADER_PORTS = "DERECHO/restart_leader_ports";
@@ -79,8 +79,8 @@ private:
     // config name --> default value
     std::map<const std::string, std::string> config = {
             // [DERECHO]
-            {DERECHO_LEADER_IP, "127.0.0.1"},
-            {DERECHO_LEADER_GMS_PORT, "23580"},
+            {DERECHO_CONTACT_IP, "127.0.0.1"},
+            {DERECHO_CONTACT_PORT, "23580"},
             {DERECHO_LEADER_EXTERNAL_PORT, "32645"},
             {DERECHO_RESTART_LEADERS, "127.0.0.1"},
             {DERECHO_RESTART_LEADER_PORTS, "23580"},
