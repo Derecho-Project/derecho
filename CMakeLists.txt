@@ -129,7 +129,8 @@ install(TARGETS derecho
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 # Declare that we will install the "include/" directory as a standard include directory
 install(DIRECTORY
-        include/
+        ${CMAKE_SOURCE_DIR}/include/
+        ${CMAKE_BINARY_DIR}/include/
         TYPE INCLUDE)
 
 # Use CMakePackageConfigHelpers to create a package version file and config file
