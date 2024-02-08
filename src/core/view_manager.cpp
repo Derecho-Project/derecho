@@ -141,7 +141,8 @@ bool ViewManager::restart_to_initial_view() {
 
     // First, attempt to contact a current member to see if the system really is in total restart
     // Try the configured contact node, unless that is equal to this node
-    if(my_ip != getConfString(Conf::DERECHO_CONTACT_IP) && my_gms_port != getConfUInt16(Conf::DERECHO_CONTACT_PORT)) {
+    if(!(my_ip == getConfString(Conf::DERECHO_CONTACT_IP) && my_gms_port == getConfUInt16(Conf::DERECHO_CONTACT_PORT))) {
+        dbg_debug(vm_logger, "Attempting to connect to contact node {}:{} before starting in recovery mode", getConfString(Conf::DERECHO_CONTACT_IP), getConfUInt16(Conf::DERECHO_CONTACT_PORT));
         // This timeout might need to be its own config value, but for now, use 1/2 the restart leader's timeout
         bool connection_success = try_connect_to_leader(getConfString(Conf::DERECHO_CONTACT_IP),
                                                         getConfUInt16(Conf::DERECHO_CONTACT_PORT),
@@ -213,7 +214,7 @@ bool ViewManager::restart_to_initial_view() {
                     dbg_debug(vm_logger, "Restart leader failed, moving to leader #{}", restart_state->num_leader_failures);
                 }
             } else if(enable_backup_restart_leaders) {
-                dbg_warn(vm_logger, "Couldn't connect to restart leader at {}", restart_state->restart_leader_ips[restart_state->num_leader_failures]);
+                dbg_warn(vm_logger, "Couldn't connect to restart leader at {}:{}", restart_state->restart_leader_ips[restart_state->num_leader_failures], restart_state->restart_leader_ports[restart_state->num_leader_failures]);
                 restart_state->num_leader_failures++;
                 //If backup_restart_leaders is disabled, keep num_leader_failures at 0 and just keep retrying
             }
