@@ -67,10 +67,6 @@ struct RestartState {
      * replicated state.
      */
     std::vector<std::vector<int64_t>> restart_shard_leaders;
-#ifdef ENABLE_LEADER_REGISTRY
-    // Leader registry will tell who is the current leader. We don't need to test it in the order of 
-    // "restart leaders".
-#else
     /**
      * List of IP addresses of potential restart leaders (of the overall process)
      * in descending priority order
@@ -85,7 +81,6 @@ struct RestartState {
      * into restart_leader_ips.
      */
     uint32_t num_leader_failures;
-#endif
     /**
      * Reads the logs stored at this node and initializes logged_ragged_trim
      */

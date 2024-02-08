@@ -99,8 +99,7 @@ void ViewManager::startup_to_first_view() {
     const uint16_t my_gms_port = getConfUInt16(Conf::DERECHO_GMS_PORT);
     in_total_restart = false;
     //Determine if I am the initial leader for a new group
-    auto leader_tuple = Conf::get()->get_leader();
-    if(my_ip == std::get<0>(leader_tuple) && my_gms_port == std::get<1>(leader_tuple)) {
+    if(my_ip == getConfString(Conf::DERECHO_CONTACT_IP) && my_gms_port == getConfUInt16(Conf::DERECHO_CONTACT_PORT)) {
         curr_view = std::make_unique<View>(
                 0, std::vector<node_id_t>{my_id},
                 std::vector<IpAndPorts>{
@@ -118,13 +117,21 @@ void ViewManager::startup_to_first_view() {
         setup_initial_tcp_connections(*curr_view, my_id);
     } else {
         active_leader = false;
-        dbg_info(vm_logger, "Non-leader node {} initiating a join request at the leader", my_id);
-        leader_connection = std::make_unique<tcp::socket>(std::get<0>(leader_tuple),
-                                                          std::get<1>(leader_tuple));
-        bool success = receive_initial_view();
+        dbg_info(vm_logger, "Node {} starting up, sending a join request to {}", my_id, getConfString(Conf::DERECHO_CONTACT_IP));
+        leader_connection = std::make_unique<tcp::socket>(getConfString(Conf::DERECHO_CONTACT_IP),
+                                                          getConfUInt16(Conf::DERECHO_CONTACT_PORT));
+        // Complete the initial handshake with the contact node, which may involve getting redirected to the leader
+        bool success = send_join_request();
         if(!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+            throw derecho_exception("Connection failure when trying to send a join request to the group! Try joining again at a different node.");
         }
+        // Wait for the leader to send a View, which won't happen until the new View (that includes this node) has been committed
+        success = receive_view_and_leaders();
+        if(!success) {
+            throw derecho_exception("Leader failed while sending the initial View! Try joining again at a different node.");
+        }
+        dbg_debug(vm_logger, "Received initial view {} from leader: {}", curr_view->vid, curr_view->debug_string());
+
         setup_initial_tcp_connections(*curr_view, my_id);
     }
 }
@@ -135,16 +142,44 @@ bool ViewManager::restart_to_initial_view() {
     const uint16_t my_gms_port = getConfUInt16(Conf::DERECHO_GMS_PORT);
     const bool enable_backup_restart_leaders = getConfBoolean(Conf::DERECHO_ENABLE_BACKUP_RESTART_LEADERS);
 
+    // First, attempt to contact a current member to see if the system really is in total restart
+    // Try the configured contact node, unless that is equal to this node
+    if(!(my_ip == getConfString(Conf::DERECHO_CONTACT_IP) && my_gms_port == getConfUInt16(Conf::DERECHO_CONTACT_PORT))) {
+        dbg_debug(vm_logger, "Attempting to connect to contact node {}:{} before starting in recovery mode", getConfString(Conf::DERECHO_CONTACT_IP), getConfUInt16(Conf::DERECHO_CONTACT_PORT));
+        // This timeout might need to be its own config value, but for now, use 1/2 the restart leader's timeout
+        bool connection_success = try_connect_to_leader(getConfString(Conf::DERECHO_CONTACT_IP),
+                                                        getConfUInt16(Conf::DERECHO_CONTACT_PORT),
+                                                        getConfUInt32(Conf::DERECHO_RESTART_TIMEOUT_MS) / 2);
+        if(connection_success) {
+            // The "contact" member responded, so this node is not the leader, and the group is probably already running
+            // There is still a chance the group really is doing a restart, especially if the contact node is also the first restart leader
+            active_leader = false;
+            bool handshake_success = send_join_request();
+            if(handshake_success) {
+                bool got_initial_view = receive_view_and_leaders();
+                if(got_initial_view) {
+                    // If the contact member successfully sent a View, return early; this method is done
+                    setup_initial_tcp_connections(*curr_view, my_id);
+                    return in_total_restart;
+                } else if(!in_total_restart) {
+                    // If the contact member told us that the group is not doing a restart but then crashed,
+                    // behave like a non-restarting node that experienced a failure while joining
+                    throw derecho_exception("Leader failed while sending the initial View! Try joining again at a different node.");
+                } else {
+                    dbg_debug(vm_logger, "Network error while receiving View from {}:{}. Proceeding to attempt restart with restart leaders.", getConfString(Conf::DERECHO_CONTACT_IP), getConfUInt16(Conf::DERECHO_CONTACT_PORT));
+                }
+            } else {
+                dbg_debug(vm_logger, "Network error while attempting to join at {}:{}. Proceeding to attempt restart with restart leaders.", getConfString(Conf::DERECHO_CONTACT_IP), getConfUInt16(Conf::DERECHO_CONTACT_PORT));
+            }
+        }
+        // If try_connect timed out, proceed with the regular total restart logic
+    }
+
     bool got_initial_view = false;
     while(!got_initial_view) {
         //Determine if I am the current restart leader
-#ifdef ENABLE_LEADER_REGISTRY
-        auto leader_tuple = Conf::get()->get_leader();
-        if (my_ip == std::get<0>(leader_tuple) && my_gms_port == std::get<1>(leader_tuple)) {
-#else
         if(my_ip == restart_state->restart_leader_ips[restart_state->num_leader_failures]
            && my_gms_port == restart_state->restart_leader_ports[restart_state->num_leader_failures]) {
-#endif
             in_total_restart = true;
             active_leader = true;
             dbg_info(vm_logger, "Logged View {} found on disk. Restarting in recovery mode as the leader.", curr_view->vid);
@@ -160,37 +195,29 @@ bool ViewManager::restart_to_initial_view() {
             got_initial_view = true;
         } else {
             //If I am not a restart leader, we may or may not be in total restart;
-            //in_total_restart will be set when the leader responds in receive_initial_view
-            using namespace std::chrono;
-            leader_connection = std::make_unique<tcp::socket>();
-            //Heuristic: Wait for half the leader's restart timeout before concluding the leader isn't responding
-            int time_remaining_micro = getConfUInt32(Conf::DERECHO_RESTART_TIMEOUT_MS) * 1000 / 2;
-            int connect_status = -1;
-            //Annoyingly, try_connect will return immediately if the connection is refused,
-            //which is the usual result while waiting for the leader to start up.
-            while(time_remaining_micro > 0 && connect_status != 0) {
-                auto start_time = high_resolution_clock::now();
-                connect_status = leader_connection->try_connect(restart_state->restart_leader_ips[restart_state->num_leader_failures],
-                                                                restart_state->restart_leader_ports[restart_state->num_leader_failures],
-                                                                time_remaining_micro / 1000);
-                auto end_time = high_resolution_clock::now();
-                microseconds time_waited = duration_cast<microseconds>(end_time - start_time);
-                time_remaining_micro -= time_waited.count();
-            }
-            if(connect_status == 0) {
+            //in_total_restart will be set when the leader responds in send_join_request
+            //Timeout heuristic: Wait for half the leader's restart timeout before concluding the leader isn't responding
+            bool connection_success = try_connect_to_leader(restart_state->restart_leader_ips[restart_state->num_leader_failures],
+                                                            restart_state->restart_leader_ports[restart_state->num_leader_failures],
+                                                            getConfUInt32(Conf::DERECHO_RESTART_TIMEOUT_MS) / 2);
+            if(connection_success) {
                 active_leader = false;
-                got_initial_view = receive_initial_view();
+                // If the initial handshake fails, leave got_initial_view false; otherwise proceed to attempt to receive the view
+                if(send_join_request()) {
+                    got_initial_view = receive_view_and_leaders();
+                }
                 if(got_initial_view) {
                     setup_initial_tcp_connections(*curr_view, my_id);
                 } else {
                     if(!enable_backup_restart_leaders) {
                         throw derecho_exception("Restart leader crashed before sending the View, and backup restart leaders are disabled.");
                     }
+                    assert(in_total_restart);
                     restart_state->num_leader_failures++;
                     dbg_debug(vm_logger, "Restart leader failed, moving to leader #{}", restart_state->num_leader_failures);
                 }
             } else if(enable_backup_restart_leaders) {
-                dbg_warn(vm_logger, "Couldn't connect to restart leader at {}", restart_state->restart_leader_ips[restart_state->num_leader_failures]);
+                dbg_warn(vm_logger, "Couldn't connect to restart leader at {}:{}", restart_state->restart_leader_ips[restart_state->num_leader_failures], restart_state->restart_leader_ports[restart_state->num_leader_failures]);
                 restart_state->num_leader_failures++;
                 //If backup_restart_leaders is disabled, keep num_leader_failures at 0 and just keep retrying
             }
@@ -202,7 +229,23 @@ bool ViewManager::restart_to_initial_view() {
     return in_total_restart;
 }
 
-bool ViewManager::receive_initial_view() {
+bool ViewManager::try_connect_to_leader(const ip_addr_t& ip_address, uint16_t port, int timeout_ms) {
+    using namespace std::chrono;
+    // When using try_connect the socket must be default-constructed first
+    leader_connection = std::make_unique<tcp::socket>();
+    int connect_status = -1;
+    int time_remaining_micro = timeout_ms * 1000;
+    while(time_remaining_micro > 0 && connect_status != 0) {
+        auto start_time = high_resolution_clock::now();
+        connect_status = leader_connection->try_connect(ip_address, port, time_remaining_micro / 1000);
+        auto end_time = high_resolution_clock::now();
+        microseconds time_waited = duration_cast<microseconds>(end_time - start_time);
+        time_remaining_micro -= time_waited.count();
+    }
+    return connect_status == 0;
+}
+
+bool ViewManager::send_join_request() {
     assert(leader_connection);
     const node_id_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
     JoinResponse leader_response;
@@ -214,7 +257,7 @@ bool ViewManager::receive_initial_view() {
         try {
             leader_connection->exchange(my_version_hashcode, leader_version_hashcode);
             if(leader_version_hashcode != my_version_hashcode) {
-                throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+                throw derecho_exception("Unable to connect to Derecho group because the contact node is running on an incompatible platform or used an incompatible compiler.");
             }
             leader_connection->write(JoinRequest{my_id, false});
             leader_connection->read(leader_response);
@@ -235,13 +278,24 @@ bool ViewManager::receive_initial_view() {
             ip_addr_t leader_ip(&buffer[0], &buffer[ip_addr_size]);
             uint16_t leader_gms_port;
             leader_connection->read(leader_gms_port);
-            dbg_info(vm_logger, "That node was not the leader! Redirecting to {}:{}", leader_ip, leader_gms_port);
+            dbg_info(vm_logger, "That node was not the leader. Redirecting to {}:{}", leader_ip, leader_gms_port);
             //Use move-assignment to reconnect the socket to the given IP address, and try again
             leader_connection = std::make_unique<tcp::socket>(leader_ip, leader_gms_port);
             leader_redirect = true;
         }
     } while(leader_redirect);
-
+    // Once connected to the correct leader, send this node's port information
+    try {
+        leader_connection->write(getConfUInt16(Conf::DERECHO_GMS_PORT));
+        leader_connection->write(getConfUInt16(Conf::DERECHO_STATE_TRANSFER_PORT));
+        leader_connection->write(getConfUInt16(Conf::DERECHO_SST_PORT));
+        leader_connection->write(getConfUInt16(Conf::DERECHO_RDMC_PORT));
+        leader_connection->write(getConfUInt16(Conf::DERECHO_EXTERNAL_PORT));
+    } catch(tcp::socket_error& e) {
+        return false;
+    }
+    // If the leader's response was TOTAL_RESTART rather than OK, this node needs to also send its logged View
+    // and ragged trims as part of the rejoin request, and we should change the state variable in_total_restart
     in_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
     if(in_total_restart) {
         dbg_info(vm_logger, "Connected to leader in recovery mode.");
@@ -294,24 +348,10 @@ bool ViewManager::receive_initial_view() {
             return false;
         }
     } else {
-        //This might have been constructed even though we don't need it
+        // If the leader responded OK, ensure restart_state is deleted even if this node was expecting a total restart
         restart_state.reset();
     }
-    try {
-        leader_connection->write(getConfUInt16(Conf::DERECHO_GMS_PORT));
-        leader_connection->write(getConfUInt16(Conf::DERECHO_STATE_TRANSFER_PORT));
-        leader_connection->write(getConfUInt16(Conf::DERECHO_SST_PORT));
-        leader_connection->write(getConfUInt16(Conf::DERECHO_RDMC_PORT));
-        leader_connection->write(getConfUInt16(Conf::DERECHO_EXTERNAL_PORT));
-    } catch(tcp::socket_error& e) {
-        return false;
-    }
-    if(receive_view_and_leaders()) {
-        dbg_debug(vm_logger, "Received initial view {} from leader: {}", curr_view->vid, curr_view->debug_string());
-        return true;
-    } else {
-        return false;
-    }
+    return true;
 }
 
 bool ViewManager::receive_view_and_leaders() {
@@ -561,7 +601,12 @@ void ViewManager::reinit_tcp_connections(const View& initial_view, const node_id
 }
 
 bool ViewManager::is_starting_leader() const {
-    return active_leader;
+    if(in_total_restart) {
+        return active_leader;
+    } else {
+        return getConfString(Conf::DERECHO_LOCAL_IP) == getConfString(Conf::DERECHO_CONTACT_IP)
+               && getConfUInt16(Conf::DERECHO_GMS_PORT) == getConfUInt16(Conf::DERECHO_CONTACT_PORT);
+    }
 }
 
 void ViewManager::start() {
@@ -570,7 +615,7 @@ void ViewManager::start() {
 }
 
 void ViewManager::await_first_view() {
-    dbg_info(vm_logger, "Group leader waiting for an initial adequate view");
+    dbg_info(vm_logger, "Startup leader waiting for an initial adequate view");
     const node_id_t my_id = getConfUInt32(Conf::DERECHO_LOCAL_ID);
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
     std::set<node_id_t> members_sent_view;
@@ -589,7 +634,7 @@ void ViewManager::await_first_view() {
                 uint64_t joiner_version_code;
                 client_socket.exchange(my_version_hashcode, joiner_version_code);
                 if(joiner_version_code != my_version_hashcode) {
-                    rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket.get_remote_ip());
+                    rls_default_warn("Rejected a connection from node at {}. Node was running on an incompatible platform or used an incompatible compiler.", client_socket.get_remote_ip());
                     continue;
                 }
                 JoinRequest join_request;
@@ -649,7 +694,7 @@ void ViewManager::await_first_view() {
                 //If any socket operation failed, assume the joining node failed
                 node_id_t failed_joiner_id = waiting_sockets_iter->first;
                 dbg_warn(vm_logger, "Node {} failed after contacting the leader! Removing it from the initial view.", failed_joiner_id);
-                //Remove the failed client and recompute the view
+                //Remove the failed node and recompute the view
                 std::vector<node_id_t> filtered_members(curr_view->members.size() - 1);
                 std::vector<IpAndPorts> filtered_ips_and_ports(curr_view->member_ips_and_ports.size() - 1);
                 std::vector<node_id_t> filtered_joiners(curr_view->joined.size() - 1);
@@ -781,10 +826,10 @@ void ViewManager::initialize_rdmc_sst() {
 
 void ViewManager::create_threads() {
     client_listener_thread = std::thread{[this]() {
-        pthread_setname_np(pthread_self(), "client_thread");
+        pthread_setname_np(pthread_self(), "gms_listener");
         while(!thread_shutdown) {
             tcp::socket client_socket = server_socket.accept();
-            dbg_debug(vm_logger, "Background thread got a client connection from {}", client_socket.get_remote_ip());
+            dbg_debug(vm_logger, "GMS listener got a new connection from {}", client_socket.get_remote_ip());
             pending_new_sockets.locked().access.emplace_back(std::move(client_socket));
         }
     }};
@@ -1011,23 +1056,23 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
     }
 }
 
-void ViewManager::redirect_join_attempt(tcp::socket& client_socket) {
+void ViewManager::redirect_join_attempt(tcp::socket& joiner_socket) {
     try {
-        client_socket.write(JoinResponse{JoinResponseCode::LEADER_REDIRECT,
+        joiner_socket.write(JoinResponse{JoinResponseCode::LEADER_REDIRECT,
                                          curr_view->members[curr_view->my_rank]});
-        // Send the client the IP address of the current leader
+        // Send the node the IP address of the current leader
         const int rank_of_leader = curr_view->find_rank_of_leader();
-        client_socket.write(mutils::bytes_size(
+        joiner_socket.write(mutils::bytes_size(
                 curr_view->member_ips_and_ports[rank_of_leader].ip_address));
-        auto bind_socket_write = [&client_socket](const uint8_t* bytes, std::size_t size) {
-            client_socket.write(bytes, size);
+        auto bind_socket_write = [&joiner_socket](const uint8_t* bytes, std::size_t size) {
+            joiner_socket.write(bytes, size);
         };
         mutils::post_object(bind_socket_write,
                             curr_view->member_ips_and_ports[rank_of_leader].ip_address);
-        client_socket.write(curr_view->member_ips_and_ports[rank_of_leader].gms_port);
+        joiner_socket.write(curr_view->member_ips_and_ports[rank_of_leader].gms_port);
     } catch(tcp::socket_error& ex) {
-        // Log the error, but otherwise ignore it, since we no longer care about this client anyway
-        dbg_debug(vm_logger, "TCP connection to client at {} failed while attempting to send it a leader-redirect message. Description: {}", client_socket.get_remote_ip(), ex.what());
+        // Log the error, but otherwise ignore it, since we no longer care about this connection anyway
+        dbg_debug(vm_logger, "TCP connection to node at {} failed while attempting to send it a leader-redirect message. Description: {}", joiner_socket.get_remote_ip(), ex.what());
     }
 }
 
@@ -1040,11 +1085,11 @@ void ViewManager::process_new_sockets() {
     }
     JoinRequest join_request;
     try {
-        // Exchange version codes; close the socket if the client has an incompatible version
+        // Exchange version codes; close the socket if the remote node has an incompatible version
         uint64_t joiner_version_code;
         client_socket.exchange(my_version_hashcode, joiner_version_code);
         if(joiner_version_code != my_version_hashcode) {
-            rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.",
+            rls_default_warn("Rejected a connection from node at {}. Node was running on an incompatible platform or used an incompatible compiler.",
                              client_socket.get_remote_ip());
             return;
         }
@@ -1692,9 +1737,9 @@ void ViewManager::transition_multicast_group(
     gmssst::set(next_view->gmsSST->vid[next_view->my_rank], next_view->vid);
 }
 
-bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tcp::socket& client_socket) {
+bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tcp::socket& joiner_socket) {
     struct in_addr joiner_ip_packed;
-    inet_aton(client_socket.get_remote_ip().c_str(), &joiner_ip_packed);
+    inet_aton(joiner_socket.get_remote_ip().c_str(), &joiner_ip_packed);
 
     const node_id_t my_id = curr_view->members[curr_view->my_rank];
     uint16_t joiner_gms_port = 0;
@@ -1704,19 +1749,19 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tc
     uint16_t joiner_external_port = 0;
     try {
         if(curr_view->rank_of(joiner_id) != -1) {
-            dbg_warn(vm_logger, "Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joiner_id);
-            client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
+            dbg_warn(vm_logger, "Joining node at IP {} announced it has ID {}, which is already in the View!", joiner_socket.get_remote_ip(), joiner_id);
+            joiner_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
             return false;
         }
-        client_socket.write(JoinResponse{JoinResponseCode::OK, my_id});
+        joiner_socket.write(JoinResponse{JoinResponseCode::OK, my_id});
 
-        client_socket.read(joiner_gms_port);
-        client_socket.read(joiner_state_transfer_port);
-        client_socket.read(joiner_sst_port);
-        client_socket.read(joiner_rdmc_port);
-        client_socket.read(joiner_external_port);
+        joiner_socket.read(joiner_gms_port);
+        joiner_socket.read(joiner_state_transfer_port);
+        joiner_socket.read(joiner_sst_port);
+        joiner_socket.read(joiner_rdmc_port);
+        joiner_socket.read(joiner_external_port);
     } catch(tcp::socket_error& ex) {
-        dbg_warn(vm_logger, "TCP connection to node {} at IP {} failed during join-request handshake. Ignoring request.", joiner_id, client_socket.get_remote_ip());
+        dbg_warn(vm_logger, "TCP connection to node {} at IP {} failed during join-request handshake. Ignoring request.", joiner_id, joiner_socket.get_remote_ip());
         dbg_debug(vm_logger, "Socket error description: {}", ex.what());
         return false;
     }
@@ -2019,7 +2064,6 @@ uint64_t ViewManager::get_subgroup_max_payload_size(subgroup_type_id_t subgroup_
     subgroup_id_t subgroup_id = curr_view->subgroup_ids_by_type_id.at(subgroup_type).at(subgroup_index);
     return max_payload_sizes.at(subgroup_id);
 }
-
 
 std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
 ViewManager::make_member_ips_and_ports_map(const View& view, const PortType port) {

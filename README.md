@@ -34,7 +34,7 @@ Derecho is aimed at supporting what are called "cloud micro-services", meaning p
 
 The functionality of Derecho centers on:
 * Forming a "group" of servers ("processes").  Membership is automatically tracked and changes are reported via upcalls to your code.
-* Structuring your server group into subgroups.  You would typically have one subgroup for each distinct functionality used.  For example, suppose you were implementing a storage service similar to Apache's Hadoop file system (HDFS).  HDFS has a name-node service, a meta-data service and a storage service.  In Derecho, each would be implemented by a subgroup.  Subgroups can have distinct or overlapping membership, under your control.  For scalability, a subgroup would typically be sharded into even smaller subgroups.  For example, a storage service might have an "array" of mini-storage servers, each handling a subset of the files.  There would be one shard per subset, and the members of that shard would replicate the identical contents.  Unlike in Paxos-based systems you may have read about elsewhere, Derecho supports a full replication model: every active (non-failed) replica has identical, complete contents.  
+* Structuring your server group into subgroups.  You would typically have one subgroup for each distinct functionality used.  For example, suppose you were implementing a storage service similar to Apache's Hadoop file system (HDFS).  HDFS has a name-node service, a meta-data service and a storage service.  In Derecho, each would be implemented by a subgroup.  Subgroups can have distinct or overlapping membership, under your control.  For scalability, a subgroup would typically be sharded into even smaller subgroups.  For example, a storage service might have an "array" of mini-storage servers, each handling a subset of the files.  There would be one shard per subset, and the members of that shard would replicate the identical contents.  Unlike in Paxos-based systems you may have read about elsewhere, Derecho supports a full replication model: every active (non-failed) replica has identical, complete contents.
 * Automated repair after crashes, recoveries, and automated initialization (from a checkpoint) when a new member joins.
 * Automated persisted storage (append-only logging) if desired.
 
@@ -52,12 +52,12 @@ Derecho does not have any specific O/S dependency.  We've tested most extensivel
 This project is organized as a standard CMake-built C++ library: all headers are within the include/derecho/ directory, all CPP files are within the src/ directory, and each subdirectory within src/ contains its own CMakeLists.txt that is included by the root directory's CMakeLists.txt. Within the src/ and include/derecho/ directories, there is a subdirectory for each separate module of Derecho, such as RDMC, SST, and Persistence. Some sample applications and test cases that are built on the Derecho library are included in the src/applications/ directory, which is not included when building the Derecho library itself.
 
 ## Installation
-Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.  
+Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.
 * You will start by verifying that you have a compatible operating system (we do our development on Ubuntu but CentOS should be fine) and network (we recommend RDMA or TCP).
 * Next, decide if you prefer to use a pre-compiled container, which is easier, or would like to build from source.
 * If building from source, you will clone the code base in the place you plan to create the release binaries, then follow the instructions for creating a folder in which the binaries will reside.  Then from "prerequisites" run the .sh shell scripts one by one, for example "sudo ./install-foo.sh".  These should complete without error messages -- if you get warnings or errors, stop and post a question about it on the discussions page.
 * Next, if building from source, follow the remainder of the "installing Derecho" instructions.
-* Last, clone and build the Cascade code base.  
+* Last, clone and build the Cascade code base.
 * You should now be able to set up a configuration file and run our demos.
 
 ### Network requirements (important!)
@@ -140,7 +140,7 @@ To use Derecho in your code, you simply need to
 The configuration file consists of three sections: **DERECHO**, **RDMA**, and **PERS**. The **DERECHO** section includes core configuration options for a Derecho instance, which every application will need to customize. The **RDMA** section includes options for RDMA hardware specifications. The **PERS** section allows you to customize the persistent layer's behavior.
 
 #### Configuring Core Derecho
-Applications need to tell the Derecho library which node is the initial leader with the options **leader_ip** and **leader_gms_port**. Each node then specifies its own ID (**local_id**) and the IP address and ports it will use for Derecho component services (**local_ip**, **gms_port**, **state_transfer_port**, **sst_port**, and **rdmc_port**). Also, if using external clients, applications need to specify the ports serving external clients (**leader_external_port** and **external_port**);
+Applications need to tell the Derecho library which node is the initial leader with the options **leader_ip** and **leader_gms_port**. Each node then specifies its own ID (**local_id**) and the IP address and ports it will use for Derecho component services (**local_ip**, **gms_port**, **state_transfer_port**, **sst_port**, and **rdmc_port**). Also, if using external clients, applications need to specify the ports serving external clients (**external_port**);
 
 The other important parameters are the message sizes. Since Derecho pre-allocates buffers for RDMA communication, each application should decide on an optimal buffer size based on the amount of data it expects to send at once. If the buffer size is much larger than the messages an application actually sends, Derecho will pin a lot of memory and leave it underutilized. If the buffer size is smaller than the application's actual message size, it will have to split messages into segments before sending them, causing unnecessary overhead.
 

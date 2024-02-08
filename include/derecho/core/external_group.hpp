@@ -145,7 +145,7 @@ private:
 
     /**
      * requests a new view from group member nid
-     * if nid is -1, then request a view from Conf::DERECHO_LEADER_IP
+     * if nid is -1, then request a view from Conf::DERECHO_CONTACT_IP
      * defined in derecho.cfg
      */
     bool get_view(const node_id_t nid);

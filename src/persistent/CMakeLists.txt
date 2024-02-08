@@ -24,3 +24,6 @@ target_include_directories(persistent_test PRIVATE
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
 )
 target_link_libraries(persistent_test pthread mutils::mutils stdc++fs OpenSSL::Crypto spdlog::spdlog)
+if (${ENABLE_MEMBER_REGISTRY})
+    target_link_libraries(persistent_test rpclib::rpc)
+endif()

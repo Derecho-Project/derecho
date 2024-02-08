@@ -20,7 +20,7 @@ set(ignoreMe "${CMAKE_WARN_DEPRECATED}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
-set(ENABLE_LEADER_REGISTRY 1)
+set(ENABLE_MEMBER_REGISTRY 1)
 
 include(GNUInstallDirs)
 
@@ -63,7 +63,7 @@ find_package(OpenSSL 1.1.1 REQUIRED)
 # Target: nlohmann_json::nlohmann_json
 find_package(nlohmann_json 3.9.0 REQUIRED)
 
-if(${ENABLE_LEADER_REGISTRY})
+if(${ENABLE_MEMBER_REGISTRY})
 # provides the import target rpclib::rpc
 find_package(rpclib 2.3.0 REQUIRED)
 endif()
@@ -94,24 +94,20 @@ add_library(derecho SHARED
     $<TARGET_OBJECTS:tcp>
     $<TARGET_OBJECTS:persistent>
     $<TARGET_OBJECTS:openssl_wrapper>)
-if (${USE_VERBS_API})
-target_link_libraries(derecho
-    rdmacm ibverbs rt pthread atomic stdc++fs
-    spdlog::spdlog
-    ${libfabric_LIBRARIES}
-    mutils::mutils
-    mutils::mutils-containers
-    OpenSSL::Crypto
-    nlohmann_json::nlohmann_json)
-else()
 target_link_libraries(derecho
     rt pthread atomic stdc++fs
     spdlog::spdlog
-    ${libfabric_LIBRARIES}
     mutils::mutils
     mutils::mutils-containers
     OpenSSL::Crypto
     nlohmann_json::nlohmann_json)
+if (${USE_VERBS_API})
+target_link_libraries(derecho rdmacm ibverbs)
+else()
+target_link_libraries(derecho ${libfabric_LIBRARIES})
+endif()
+if (${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(derecho rpclib::rpc)
 endif()
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}

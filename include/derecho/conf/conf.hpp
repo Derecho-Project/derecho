@@ -23,16 +23,14 @@ class Conf {
 public:
 
     //String constants for config options
-#ifdef  ENABLE_LEADER_REGISTRY
-    static constexpr const char* DERECHO_LEADER_REGISTRY_IP     =   "DERECHO/leader_registry_ip";
-    static constexpr const char* DERECHO_LEADER_REGISTRY_PORT   =   "DERECHO/leader_registry_port";
-#else
-    static constexpr const char* DERECHO_LEADER_IP              =   "DERECHO/leader_ip";
-    static constexpr const char* DERECHO_LEADER_GMS_PORT        =   "DERECHO/leader_gms_port";
-    static constexpr const char* DERECHO_LEADER_EXTERNAL_PORT   =   "DERECHO/leader_external_port";
-    static constexpr const char* DERECHO_RESTART_LEADERS        =   "DERECHO/restart_leaders";
-    static constexpr const char* DERECHO_RESTART_LEADER_PORTS   =   "DERECHO/restart_leader_ports";
+    static constexpr const char* DERECHO_CONTACT_IP = "DERECHO/contact_ip";
+    static constexpr const char* DERECHO_CONTACT_PORT = "DERECHO/contact_port";
+#ifdef  ENABLE_MEMBER_REGISTRY
+    static constexpr const char* DERECHO_MEMBER_REGISTRY_IP       =   "DERECHO/view_registry_ip";
+    static constexpr const char* DERECHO_MEMBER_REGISTRY_PORT     =   "DERECHO/view_registry_port";
 #endif
+    static constexpr const char* DERECHO_RESTART_LEADERS = "DERECHO/restart_leaders";
+    static constexpr const char* DERECHO_RESTART_LEADER_PORTS = "DERECHO/restart_leader_ports";
     static constexpr const char* DERECHO_LOCAL_ID = "DERECHO/local_id";
     static constexpr const char* DERECHO_LOCAL_IP = "DERECHO/local_ip";
     static constexpr const char* DERECHO_GMS_PORT = "DERECHO/gms_port";
@@ -86,16 +84,14 @@ private:
     // config name --> default value
     std::map<const std::string, std::string> config = {
             // [DERECHO]
-#ifdef ENABLE_LEADER_REGISTRY
-            {DERECHO_LEADER_REGISTRY_IP, "127.0.0.1"},
-            {DERECHO_LEADER_REGISTRY_PORT, "50182"},
-#else
-            {DERECHO_LEADER_IP, "127.0.0.1"},
-            {DERECHO_LEADER_GMS_PORT, "23580"},
-            {DERECHO_LEADER_EXTERNAL_PORT, "32645"},
+#ifdef ENABLE_MEMBER_REGISTRY
+            {DERECHO_MEMBER_REGISTRY_IP, "127.0.0.1"},
+            {DERECHO_MEMBER_REGISTRY_PORT, "50182"},
+#endif
+            {DERECHO_CONTACT_IP, "127.0.0.1"},
+            {DERECHO_CONTACT_PORT, "23580"},
             {DERECHO_RESTART_LEADERS, "127.0.0.1"},
             {DERECHO_RESTART_LEADER_PORTS, "23580"},
-#endif
             {DERECHO_LOCAL_ID, "0"},
             {DERECHO_LOCAL_IP, "127.0.0.1"},
             {DERECHO_GMS_PORT, "23580"},
@@ -221,20 +217,19 @@ public:
         return (this->config.find(key) != this->config.end());
     }
 
+#ifdef ENABLE_MEMBER_REGISTRY
     /**
-     * @brief Get leader's ip
-     * @return	A tuple of <leader ip,gms port,external port> representing the information of the current leader.
+     * @brief Get published 
+     * @return  A list of active members.
      */
-    const std::tuple<std::string,uint16_t,uint16_t> get_leader() const;
-
-#ifdef ENABLE_LEADER_REGISTRY
+    const std::vector<std::tuple<std::string,uint16_t>> get_active_members() const;
     /**
      * Push a leader to leader registry
      * @param   ip          The ip address of the new leader.
      * @param   gms_port    The GMS port of the new leader.
      * @param   ext_port    The EXT port of the new leader.
      */
-    void push_leader(std::string ip,uint16_t gms_port,uint16_t ext_port);
+    void push_active_members(const std::vector<std::tuple<std::string,uint16_t>>&);
 #endif
 
     // Initialize the singleton from the command line and the configuration file.

@@ -1,2 +1,2 @@
 #pragma once
-#cmakedefine ENABLE_LEADER_REGISTRY
+#cmakedefine ENABLE_MEMBER_REGISTRY

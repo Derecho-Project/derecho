@@ -12,8 +12,8 @@
 
 namespace derecho {
 const char*  help_string_args =
-"--(s)erver <host>      Specify the leader registry hostname/ip, defaulted to 'localhost'\n"
-"--(p)ort <port>        Specify the port number of the leader registry, defaulted to 50182\n"
+"--(s)erver <host>      Specify the member registry hostname/ip, defaulted to 'localhost'\n"
+"--(p)ort <port>        Specify the port number of the member registry, defaulted to 50182\n"
 "--(h)elp               Print this information.\n";
 
 __attribute__ ((visibility("hidden")))
@@ -34,8 +34,8 @@ struct option long_options[] = {
 };
 
 int main(int argc, char** argv) {
-    std::string server =    getConfString(Conf::DERECHO_LEADER_REGISTRY_IP);
-    uint16_t    port =      getConfUInt16(Conf::DERECHO_LEADER_REGISTRY_PORT);
+    std::string server =    getConfString(Conf::DERECHO_MEMBER_REGISTRY_IP);
+    uint16_t    port =      getConfUInt16(Conf::DERECHO_MEMBER_REGISTRY_PORT);
 
     while(true) {
         int option_index = 0;
@@ -60,11 +60,11 @@ int main(int argc, char** argv) {
     }
 
     ::rpc::client client(server,port);
-    auto leader_tuple = client.call("get").as<std::tuple<std::string,uint16_t,uint16_t>>();
-    std::cout << "Leader:" 
-              << std::get<0>(leader_tuple) << ":"
-              << std::get<1>(leader_tuple) << "/" << std::get<2>(leader_tuple)
-              << std::endl;
+    auto members = client.call("get").as<std::vector<std::tuple<std::string,uint16_t>>>();
+    std::cout << members.size() << " active members:" << std::endl;
+    for (auto& member : members) {
+        std::cout << std::get<0>(member) << ":" << std::get<1>(member) << std::endl;
+    }
 
     return 0;
 }

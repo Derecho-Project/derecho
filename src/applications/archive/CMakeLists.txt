@@ -9,121 +9,211 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # subgroup_scaling_test
 add_executable(subgroup_scaling_test subgroup_scaling_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(subgroup_scaling_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(subgroup_scaling_test rpclib::rpc)
+endif()
 
 # subgroup_test
 add_executable(subgroup_test subgroup_test.cpp)
 target_link_libraries(subgroup_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(subgroup_test rpclib::rpc)
+endif()
 
 # typed_subgroup_test
 add_executable(typed_subgroup_test typed_subgroup_test.cpp)
 target_link_libraries(typed_subgroup_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(typed_subgroup_test rpclib::rpc)
+endif()
 
 # long_subgroup_test
 add_executable(long_subgroup_test long_subgroup_test.cpp)
 target_link_libraries(long_subgroup_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(long_subgroup_test rpclib::rpc)
+endif()
 
 # objstore
 add_executable(objstore objstore.cpp)
 target_link_libraries(objstore derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(objstore rpclib::rpc)
+endif()
 
 # volatile_typed_subgroup_bw_test
 add_executable(volatile_typed_subgroup_bw_test volatile_typed_subgroup_bw_test.cpp)
 target_link_libraries(volatile_typed_subgroup_bw_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(volatile_typed_subgroup_bw_test rpclib::rpc)
+endif()
 
 # volatile_temporal_send_test
 add_executable(volatile_temporal_send_test volatile_temporal_send_test.cpp)
 target_link_libraries(volatile_temporal_send_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(volatile_temporal_send_test rpclib::rpc)
+endif()
 
 # persistent_temporal_send_test
 add_executable(persistent_temporal_send_test persistent_temporal_send_test.cpp)
 target_link_libraries(persistent_temporal_send_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(persistent_temporal_send_test rpclib::rpc)
+endif()
 
 # volatile_temporal_stability_test
 add_executable(volatile_temporal_stability_test volatile_temporal_stability_test.cpp)
 target_link_libraries(volatile_temporal_stability_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(volatile_temporal_stability_test rpclib::rpc)
+endif()
 
 # persistent_temporal_stability_test
 add_executable(persistent_temporal_stability_test persistent_temporal_stability_test.cpp)
 target_link_libraries(persistent_temporal_stability_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(persistent_temporal_stability_test rpclib::rpc)
+endif()
 
 # smart_membership_function
 add_executable(smart_membership_function_test smart_membership_function_test.cpp)
 target_link_libraries(smart_membership_function_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(smart_membership_function_test rpclib::rpc)
+endif()
 
 # persistent_typed_subgroup_test
 add_executable(persistent_typed_subgroup_test persistent_typed_subgroup_test.cpp)
 target_link_libraries(persistent_typed_subgroup_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(persistent_typed_subgroup_test rpclib::rpc)
+endif()
 
 # persistent_vector
 add_executable(persistent_vector persistent_vector.cpp)
 target_link_libraries(persistent_vector derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(persistent_vector rpclib::rpc)
+endif()
 
 # shard_iterator_p2p_test
 add_executable(shard_iterator_p2p_test shard_iterator_p2p_test.cpp)
 target_link_libraries(shard_iterator_p2p_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(shard_iterator_p2p_test rpclib::rpc)
+endif()
 
 # persistent_rejoin_test
 add_executable(persistent_rejoin_test persistent_rejoin_test.cpp)
 target_link_libraries(persistent_rejoin_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(persistent_rejoin_test rpclib::rpc)
+endif()
 
 # total_restart_test
 add_executable(total_restart_test total_restart_test.cpp)
 target_link_libraries(total_restart_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(total_restart_test rpclib::rpc)
+endif()
 
 # scaling_subgroup_test
 add_executable(scaling_subgroup_test scaling_subgroup_test.cpp)
 target_link_libraries(scaling_subgroup_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(scaling_subgroup_test rpclib::rpc)
+endif()
 
 # server_client_p2p
 add_executable(server_client_p2p server_client_p2p.cpp)
 target_link_libraries(server_client_p2p derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(server_client_p2p rpclib::rpc)
+endif()
 
 # asynchronous_dht
 add_executable(asynchronous_dht asynchronous_dht.cpp)
 target_link_libraries(asynchronous_dht derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(asynchronous_dht rpclib::rpc)
+endif()
 
 # simple_send
 add_executable(simple_send simple_send.cpp)
 target_link_libraries(simple_send derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(simple_send rpclib::rpc)
+endif()
 
 # debug_failure_test
 add_executable(debug_failure_test debug_failure_test.cpp)
 target_link_libraries(debug_failure_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(debug_failure_test rpclib::rpc)
+endif()
 
 # count_write
 add_executable(count_write count_write.cpp)
 target_link_libraries(count_write derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(count_write rpclib::rpc)
+endif()
 
 # rdma_for_ml.cpp
 add_executable(rdma_for_ml rdma_for_ml.cpp)
 target_link_libraries(rdma_for_ml derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(rdma_for_ml rpclib::rpc)
+endif()
 
 # sst_test
 add_executable(sst_test sst_test.cpp)
 target_link_libraries(sst_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(sst_test rpclib::rpc)
+endif()
 
 # simple_predicate
 add_executable(simple_predicate simple_predicate.cpp)
 target_link_libraries(simple_predicate derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(simple_predicate rpclib::rpc)
+endif()
 
 # test_write
 add_executable(test_write test_write.cpp)
 target_link_libraries(test_write derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(test_write rpclib::rpc)
+endif()
 
 # write_avg_time
 add_executable(write_avg_time write_avg_time.cpp compute_nodes_list.cpp)
 target_link_libraries(write_avg_time derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(write_avg_time rpclib::rpc)
+endif()
 
 # rdma_two_sided
 add_executable(rdma_two_sided rdma_two_sided.cpp)
 target_link_libraries(rdma_two_sided derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(rdma_two_sided rpclib::rpc)
+endif()
 
 # membership_tests
 add_executable(membership_tests membership_tests.cpp)
 target_link_libraries(membership_tests derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(membership_tests rpclib::rpc)
+endif()
 
 add_executable(custom_subgroup_profiles_test custom_subgroup_profiles_test.cpp)
 target_link_libraries(custom_subgroup_profiles_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(custom_subgroup_profiles_test rpclib::rpc)
+endif()
 
 # external_client_tester
 # add_executable(external_client_tester external_client_tester.cpp)
@@ -132,15 +222,27 @@ target_link_libraries(custom_subgroup_profiles_test derecho)
 # external_client_perf_test
 add_executable(external_client_perf_test external_client_perf_test.cpp)
 target_link_libraries(external_client_perf_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(external_client_perf_test rpclib::rpc)
+endif()
 
 #multicast throughput
 add_executable(multicast_throughput multicast_throughput.cpp initialize.cpp aggregate_bandwidth.cpp)
 target_link_libraries(multicast_throughput derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(multicast_throughput rpclib::rpc)
+endif()
 
 #multicast latency
 add_executable(multicast_latency multicast_latency.cpp initialize.cpp aggregate_bandwidth.cpp)
 target_link_libraries(multicast_latency derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(multicast_latency rpclib::rpc)
+endif()
 
 # notification_test
 add_executable(notification_test notification_test.cpp)
 target_link_libraries(notification_test derecho)
+if(${ENABLE_MEMBER_REGISTRY})
+target_link_libraries(notification_test rpclib::rpc)
+endif()
