@@ -42,6 +42,19 @@ ViewManager::ViewManager(
           subgroup_objects(object_pointer_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager(persistence_manager) {
+#ifdef ENABLE_MEMBER_REGISTRY
+    auto update_members_lambda = [](const View& view){
+        std::vector<std::tuple<std::string,uint16_t>> active_members;
+        for (uint32_t idx=0;idx<view.failed.size();idx++) {
+            if (!view.failed[idx]) {
+                active_members.emplace_back(std::tuple{view.member_ips_and_ports[idx].ip_address,
+                                                       view.member_ips_and_ports[idx].gms_port});
+            }
+        }
+        Conf::get()->push_active_members(active_members);
+    };
+    add_view_upcall(update_members_lambda);
+#endif
     rls_default_info("Derecho library running version {}.{}.{} + {} commits",
                      derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION,
                      derecho::COMMITS_AHEAD_OF_VERSION);

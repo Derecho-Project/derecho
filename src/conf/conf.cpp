@@ -184,7 +184,7 @@ const std::vector<std::tuple<std::string,uint16_t>> Conf::get_active_members() c
     return lrc.call("get").as<std::vector<std::tuple<std::string,uint16_t>>>();
 }
 
-void Conf::push_active_members(const std::vector<std::tuple<std::string,uint16_t>>& members) {
+void Conf::push_active_members(const std::vector<std::tuple<std::string,uint16_t>>& members) const {
     ::rpc::client lrc(this->getString(DERECHO_MEMBER_REGISTRY_IP),
                       this->getUInt16(DERECHO_MEMBER_REGISTRY_PORT));
     lrc.call("put",members);

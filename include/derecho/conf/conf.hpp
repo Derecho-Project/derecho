@@ -229,7 +229,7 @@ public:
      * @param   gms_port    The GMS port of the new leader.
      * @param   ext_port    The EXT port of the new leader.
      */
-    void push_active_members(const std::vector<std::tuple<std::string,uint16_t>>&);
+    void push_active_members(const std::vector<std::tuple<std::string,uint16_t>>&) const;
 #endif
 
     // Initialize the singleton from the command line and the configuration file.
