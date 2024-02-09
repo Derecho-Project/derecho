@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 8f40bdf..a74663f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -90,7 +90,7 @@ set(DEP_SOURCES
+   ${RPCLIB_DEPENDENCIES}/src/format.cc
+   ${RPCLIB_DEPENDENCIES}/src/posix.cc)
+ 
+-add_library(${PROJECT_NAME}
++add_library(${PROJECT_NAME} SHARED
+   lib/rpc/dispatcher.cc
+   lib/rpc/server.cc
+   lib/rpc/client.cc

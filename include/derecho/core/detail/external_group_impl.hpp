@@ -273,10 +273,24 @@ ExternalGroupClient<ReplicatedTypes...>::~ExternalGroupClient() {
 template <typename... ReplicatedTypes>
 bool ExternalGroupClient<ReplicatedTypes...>::get_view(const node_id_t nid) {
     try {
-        tcp::socket sock = (nid == INVALID_NODE_ID)
-                                   ? tcp::socket(getConfString(Conf::DERECHO_CONTACT_IP), getConfUInt16(Conf::DERECHO_CONTACT_PORT))
-                                   : tcp::socket(curr_view->member_ips_and_ports[curr_view->rank_of(nid)].ip_address,
-                                                 curr_view->member_ips_and_ports[curr_view->rank_of(nid)].gms_port, false);
+#ifdef ENABLE_MEMBER_REGISTRY
+        auto        members =       Conf::get()->get_active_members();
+        uint32_t    idx =           static_cast<uint32_t>(get_time() % members.size());
+        std::string contact_ip =    std::get<0>(members[idx]);
+        uint16_t    contact_port =  std::get<1>(members[idx]);
+#else
+        std::string contact_ip =    getConfString(Conf::DERECHO_CONTACT_IP);
+        uint16_t    contact_port =  getConfUInt16(Conf::DERECHO_CONTACT_PORT);
+#endif
+        bool        retry = true;
+
+        if (nid != INVALID_NODE_ID) {
+            contact_ip =    curr_view->member_ips_and_ports[curr_view->rank_of(nid)].ip_address;
+            contact_port =  curr_view->member_ips_and_ports[curr_view->rank_of(nid)].gms_port;
+            retry =         false;
+        }
+
+        tcp::socket sock = tcp::socket(contact_ip,contact_port,retry);
 
         JoinResponse leader_response;
         uint64_t leader_version_hashcode;

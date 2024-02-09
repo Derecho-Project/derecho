@@ -26,6 +26,8 @@ jobs:
         run:  ${{ github.workspace }}/scripts/prerequisites/install-mutils.sh ${{ github.workspace }}/opt
       - name: Install mutils-containers
         run:  ${{ github.workspace }}/scripts/prerequisites/install-mutils-containers.sh ${{ github.workspace }}/opt
+      - name: Install rpclib
+        run:  ${{ github.workspace }}/scripts/prerequisites/install-rpclib.sh ${{ github.workspace }}/opt
       - run:  cd ${{ github.workspace }}
       - run:  mkdir build-Release
       - name: Build Derecho
