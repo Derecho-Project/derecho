@@ -1164,7 +1164,7 @@ from_bytes(DeserializationManager* ctx, uint8_t const* buffer) {
         int size = ((int*)buffer)[0];
         auto* buffer2 = buffer + sizeof(int);
         std::size_t accumulated_offset = 0;
-        std::unique_ptr<T> accum{new T()};
+        std::unique_ptr<std::remove_cv_t<T>> accum{new std::remove_cv_t<T>()};
         for(int i = 0; i < size; ++i) {
             std::unique_ptr<member> item = from_bytes<member>(ctx, buffer2 + accumulated_offset);
             accumulated_offset += bytes_size(*item);
