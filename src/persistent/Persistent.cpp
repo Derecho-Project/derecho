@@ -80,6 +80,7 @@ void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer,
         signer.init();
         std::size_t bytes_signed = 0;
         for(auto& field : m_registry) {
+            dbg_trace(m_logger, "PersistentRegistry: Signing persistent field at {}", fmt::ptr(field.second));
             bytes_signed += field.second->updateSignature(cur_nonempty_version, signer);
         }
         if(bytes_signed == 0) {

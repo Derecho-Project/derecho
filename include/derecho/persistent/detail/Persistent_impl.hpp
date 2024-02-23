@@ -585,7 +585,9 @@ void Persistent<ObjectType, storageType>::version(const version_t ver) {
 template <typename ObjectType,
           StorageType storageType>
 std::size_t Persistent<ObjectType, storageType>::updateSignature(version_t ver, openssl::Signer& signer) {
+    dbg_trace(m_logger, "In Persistent<T>: update signature (ver={})", ver);
     if(this->m_pLog->signature_size == 0) {
+        dbg_trace(m_logger, "Returning 0 because signatures are disabled for this object");
         return 0;
     }
     std::size_t bytes_added = 0;

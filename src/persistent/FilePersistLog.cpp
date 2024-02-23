@@ -675,7 +675,10 @@ void FilePersistLog::processEntryAtVersion(version_t ver,
     FPL_UNLOCK;
 
     if(ple != nullptr && ple->fields.ver == ver) {
+        dbg_trace(m_logger, "{} - calling process function on log entry {} of size {}", m_sName, ple->fields.ver, static_cast<size_t>(ple->fields.sdlen - this->signature_size));
         func(LOG_ENTRY_DATA(ple), static_cast<size_t>(ple->fields.sdlen - this->signature_size));
+    } else {
+        dbg_trace(m_logger, "{} - no log entry to process at version {}", m_sName, ver);
     }
 }
 

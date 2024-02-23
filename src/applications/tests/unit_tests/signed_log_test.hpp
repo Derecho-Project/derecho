@@ -107,6 +107,48 @@ public:
 };
 
 /**
+ * Test object that has both a signed and an un-signed persistent field,
+ * and also an RPC function that updates a field with no persistent log at all.
+ */
+class MixedFieldObject : public mutils::ByteRepresentable,
+                         public derecho::GroupReference,
+                         public derecho::SignedPersistentFields {
+    persistent::Persistent<std::string> signed_field;
+    persistent::Persistent<std::string> unsigned_field;
+    std::string non_persistent_field;
+    uint64_t updates_delivered;
+    TestState* test_state;
+
+public:
+    /** Factory constructor */
+    MixedFieldObject(persistent::PersistentRegistry* registry, TestState* test_state);
+    /** Deserialization constructor */
+    MixedFieldObject(persistent::Persistent<std::string>& other_signed_field,
+                     persistent::Persistent<std::string>& other_unsigned_field,
+                     std::string& other_non_persistent_field,
+                     uint64_t other_updates_delivered,
+                     TestState* test_state);
+
+    std::string get_signed_value() const {
+        return *signed_field;
+    }
+    std::string get_unsigned_value() const {
+        return *unsigned_field;
+    }
+
+    void signed_update(const std::string& new_value);
+    void unsigned_update(const std::string& new_value);
+    void non_persistent_update(const std::string& new_value);
+    void update_all(const std::string& new_signed, const std::string& new_unsigned, const std::string& new_non_persistent);
+
+    REGISTER_RPC_FUNCTIONS(MixedFieldObject, P2P_TARGETS(get_signed_value, get_unsigned_value), ORDERED_TARGETS(signed_update, unsigned_update, non_persistent_update, update_all));
+    DEFAULT_SERIALIZE(signed_field, unsigned_field, non_persistent_field, updates_delivered);
+    DEFAULT_DESERIALIZE_NOALLOC(MixedFieldObject);
+    static std::unique_ptr<MixedFieldObject> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
+
+};
+
+/**
  * Test object with one un-signed persistent field
  */
 class UnsignedObject : public mutils::ByteRepresentable,
