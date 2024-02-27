@@ -633,7 +633,7 @@ version_t FilePersistLog::getNextVersionOf(version_t ver) {
         }
         FPL_UNLOCK;
     }
-
+    dbg_trace(m_logger, "{} getNextVersionOf({}): returning {}", this->m_sName, ver, next_ver);
     return next_ver;
 }
 

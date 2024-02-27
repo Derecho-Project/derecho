@@ -55,6 +55,7 @@ version_t PersistentRegistry::getMinimumVersionAfter(version_t version) {
             min = field_next_ver;
         }
     }
+    dbg_trace(m_logger, "PersistentRegistry: getMinimumVersionAfter({}) returning {}", version, min);
     return min;
 }
 
@@ -122,6 +123,7 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     dbg_debug(m_logger, "PersistentRegistry: Verifying signature on version {}", version);
     verifier.init();
     for(auto& field : m_registry) {
+        // Only adds bytes to the verifier for fields that have signatures enabled
         field.second->updateVerifier(version, verifier);
     }
     const std::size_t signature_size = verifier.get_max_signature_size();
@@ -130,6 +132,7 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     // On that field, get the previous signed version, and retrieve that signature
     uint8_t current_sig[signature_size];
     uint8_t previous_sig[signature_size];
+    bool signature_found = false;
     for(auto& field : m_registry) {
         if(field.second->getSignature(version, current_sig, prev_signed_version)) {
             if(prev_signed_version == INVALID_VERSION) {
@@ -140,8 +143,12 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
                 version_t dummy;
                 field.second->getSignature(prev_signed_version, previous_sig, dummy);
             }
+            signature_found = true;
             break;
         }
+    }
+    if(!signature_found) {
+        dbg_warn(m_logger, "PersistentRegistry: Version {} had no fields with a signature! Unable to verify!", version);
     }
     verifier.add_bytes(previous_sig, signature_size);
     return verifier.finalize(signature, signature_size);

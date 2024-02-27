@@ -627,6 +627,7 @@ std::size_t Persistent<ObjectType, storageType>::getSignatureSize() const {
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::updateVerifier(version_t ver, openssl::Verifier& verifier) {
+    dbg_trace(m_logger, "In Persistent<T>: update verifier (ver={})", ver);
     if(this->m_pLog->signature_size == 0) {
         return;
     }

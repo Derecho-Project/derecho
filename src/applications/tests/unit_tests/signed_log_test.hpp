@@ -36,6 +36,30 @@ struct TestState : public derecho::DeserializationContext {
 };
 
 /**
+ * A simple Delta-supporting object that stores a string and has a method that
+ * appends to the string. All data appended since the last call to finalizeCurrentDelta
+ * is stored in the delta, and applyDelta appends the delta to the current string.
+ * (There's no way to delete or truncate the string since this is just for test
+ * purposes). Note that if append() has not been called since the last call to
+ * finalizeCurrentDelta, the delta entry will be empty.
+ */
+class StringWithDelta : public mutils::ByteRepresentable,
+                        public persistent::IDeltaSupport<StringWithDelta> {
+    std::string current_state;
+    std::string delta;
+
+public:
+    StringWithDelta() = default;
+    StringWithDelta(const std::string& init_string);
+    void append(const std::string& str_val);
+    std::string get_current_state() const;
+    virtual void finalizeCurrentDelta(const persistent::DeltaFinalizer& finalizer);
+    virtual void applyDelta(uint8_t const* const data);
+    static std::unique_ptr<StringWithDelta> create(mutils::DeserializationManager* dm);
+    DEFAULT_SERIALIZATION_SUPPORT(StringWithDelta, current_state);
+};
+
+/**
  * Test object with one signed persistent field
  */
 class OneFieldObject : public mutils::ByteRepresentable,
@@ -107,14 +131,17 @@ public:
 };
 
 /**
- * Test object that has both a signed and an un-signed persistent field,
- * and also an RPC function that updates a field with no persistent log at all.
+ * Test object that has both a non-signed persistent field and a signed field
+ * with delta support (and also an RPC function that updates a field with no
+ * persistent log at all). The delta-supporting field creates empty deltas if
+ * it has not been updated, so it's possible for this object to create a log
+ * entry that has nothing to sign.
  */
 class MixedFieldObject : public mutils::ByteRepresentable,
                          public derecho::GroupReference,
                          public derecho::SignedPersistentFields {
-    persistent::Persistent<std::string> signed_field;
     persistent::Persistent<std::string> unsigned_field;
+    persistent::Persistent<StringWithDelta> signed_delta_field;
     std::string non_persistent_field;
     uint64_t updates_delivered;
     TestState* test_state;
@@ -123,29 +150,31 @@ public:
     /** Factory constructor */
     MixedFieldObject(persistent::PersistentRegistry* registry, TestState* test_state);
     /** Deserialization constructor */
-    MixedFieldObject(persistent::Persistent<std::string>& other_signed_field,
-                     persistent::Persistent<std::string>& other_unsigned_field,
+    MixedFieldObject(persistent::Persistent<std::string>& other_unsigned_field,
+                     persistent::Persistent<StringWithDelta>& other_delta_field,
                      std::string& other_non_persistent_field,
                      uint64_t other_updates_delivered,
                      TestState* test_state);
 
     std::string get_signed_value() const {
-        return *signed_field;
+        return signed_delta_field->get_current_state();
     }
     std::string get_unsigned_value() const {
         return *unsigned_field;
     }
 
-    void signed_update(const std::string& new_value);
     void unsigned_update(const std::string& new_value);
+    void signed_delta_update(const std::string& append_value);
     void non_persistent_update(const std::string& new_value);
-    void update_all(const std::string& new_signed, const std::string& new_unsigned, const std::string& new_non_persistent);
+    void update_all(const std::string& new_unsigned,
+                    const std::string& delta_append_value,
+                    const std::string& new_non_persistent);
 
-    REGISTER_RPC_FUNCTIONS(MixedFieldObject, P2P_TARGETS(get_signed_value, get_unsigned_value), ORDERED_TARGETS(signed_update, unsigned_update, non_persistent_update, update_all));
-    DEFAULT_SERIALIZE(signed_field, unsigned_field, non_persistent_field, updates_delivered);
+    REGISTER_RPC_FUNCTIONS(MixedFieldObject, P2P_TARGETS(get_signed_value, get_unsigned_value),
+                           ORDERED_TARGETS(unsigned_update, signed_delta_update, non_persistent_update, update_all));
+    DEFAULT_SERIALIZE(unsigned_field, signed_delta_field, non_persistent_field, updates_delivered);
     DEFAULT_DESERIALIZE_NOALLOC(MixedFieldObject);
     static std::unique_ptr<MixedFieldObject> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
-
 };
 
 /**

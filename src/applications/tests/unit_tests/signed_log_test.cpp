@@ -55,6 +55,45 @@ void TestState::notify_global_verified(derecho::subgroup_id_t subgroup_id, persi
     }
 }
 
+/* --- StringWithDelta implementation --- */
+
+StringWithDelta::StringWithDelta(const std::string& init_string) : current_state(init_string) {}
+
+void StringWithDelta::append(const std::string& str_val) {
+    dbg_default_trace("StringWithDelta: append called, adding {} to delta", str_val);
+    current_state.append(str_val);
+    delta.append(str_val);
+}
+
+std::string StringWithDelta::get_current_state() const {
+    return current_state;
+}
+
+void StringWithDelta::finalizeCurrentDelta(const persistent::DeltaFinalizer& finalizer) {
+    if(delta.size() == 0) {
+        dbg_default_trace("StringWithDelta: Calling finalizer with null buffer");
+        finalizer(nullptr, 0);
+    } else {
+        // Serialize the string to a byte buffer and give that buffer to the DeltaFinalizer
+        // (this will create an unnecessary extra copy of the string, but efficiency isn't important here)
+        std::vector<uint8_t> delta_buffer(mutils::bytes_size(delta));
+        dbg_default_trace("StringWithDelta: Serializing delta string to a buffer of size {}", delta_buffer.size());
+        mutils::to_bytes(delta, delta_buffer.data());
+        finalizer(delta_buffer.data(), delta_buffer.size());
+        delta.clear();
+    }
+}
+
+void StringWithDelta::applyDelta(uint8_t const* const data) {
+    dbg_default_trace("StringWithDelta: Appending a serialized string in applyDelta");
+    // The delta is a serialized std::string that we want to pass to the string::append function on current_state
+    mutils::deserialize_and_run(nullptr, data, [this](const std::string& arg) { current_state.append(arg); });
+}
+
+std::unique_ptr<StringWithDelta> StringWithDelta::create(mutils::DeserializationManager* dm) {
+    return std::make_unique<StringWithDelta>();
+}
+
 /* --- OneFieldObject implementation --- */
 
 OneFieldObject::OneFieldObject(persistent::PersistentRegistry* registry, TestState* test_state)
@@ -142,20 +181,20 @@ std::unique_ptr<TwoFieldObject> TwoFieldObject::from_bytes(mutils::Deserializati
 /* --- MixedFieldObject implementation --- */
 
 MixedFieldObject::MixedFieldObject(persistent::PersistentRegistry* registry, TestState* test_state)
-        : signed_field(std::make_unique<std::string>, "MixedFieldObjectSignedField", registry, true),
-          unsigned_field(std::make_unique<std::string>, "MixedFieldObjectUnsignedField", registry, false),
+        : unsigned_field(std::make_unique<std::string>, "MixedFieldObjectUnsignedField", registry, false),
+          signed_delta_field(std::make_unique<StringWithDelta>, "MixedFieldObjectDeltaString", registry, true),
           updates_delivered(0),
           test_state(test_state) {
     assert(test_state);
 }
 
-MixedFieldObject::MixedFieldObject(persistent::Persistent<std::string>& other_signed_field,
-                                   persistent::Persistent<std::string>& other_unsigned_field,
+MixedFieldObject::MixedFieldObject(persistent::Persistent<std::string>& other_unsigned_field,
+                                   persistent::Persistent<StringWithDelta>& other_delta_field,
                                    std::string& other_non_persistent_field,
                                    uint64_t other_updates_delivered,
                                    TestState* test_state)
-        : signed_field(std::move(other_signed_field)),
-          unsigned_field(std::move(other_unsigned_field)),
+        : unsigned_field(std::move(other_unsigned_field)),
+          signed_delta_field(std::move(other_delta_field)),
           non_persistent_field(std::move(other_non_persistent_field)),
           updates_delivered(other_updates_delivered),
           test_state(test_state) {
@@ -163,29 +202,21 @@ MixedFieldObject::MixedFieldObject(persistent::Persistent<std::string>& other_si
 }
 
 std::unique_ptr<MixedFieldObject> MixedFieldObject::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer) {
-    auto signed_field_ptr = mutils::from_bytes<persistent::Persistent<std::string>>(dsm, buffer);
-    std::size_t bytes_read = mutils::bytes_size(*signed_field_ptr);
+    std::size_t bytes_read = 0;
     auto unsigned_field_ptr = mutils::from_bytes<persistent::Persistent<std::string>>(dsm, buffer + bytes_read);
     bytes_read += mutils::bytes_size(*unsigned_field_ptr);
+    auto delta_field_ptr = mutils::from_bytes<persistent::Persistent<StringWithDelta>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*delta_field_ptr);
     auto non_persistent_ptr = mutils::from_bytes<std::string>(dsm, buffer + bytes_read);
     bytes_read += mutils::bytes_size(*non_persistent_ptr);
     auto update_counter_ptr = mutils::from_bytes<uint64_t>(dsm, buffer + bytes_read);
     assert(dsm);
     assert(dsm->registered<TestState>());
     TestState* test_state_ptr = &(dsm->mgr<TestState>());
-    return std::make_unique<MixedFieldObject>(*signed_field_ptr, *unsigned_field_ptr,
+    return std::make_unique<MixedFieldObject>(*unsigned_field_ptr, *delta_field_ptr,
                                               *non_persistent_ptr, *update_counter_ptr, test_state_ptr);
 }
 
-void MixedFieldObject::signed_update(const std::string& new_value) {
-    auto& this_subgroup_reference = this->group->template get_subgroup<MixedFieldObject>(this->subgroup_index);
-    auto version_and_hlc = this_subgroup_reference.get_current_version();
-    dbg_default_debug("MixedFieldObject: Entering signed_update, current version is {}", std::get<0>(version_and_hlc));
-    ++updates_delivered;
-    *signed_field = new_value;
-    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc));
-    dbg_default_debug("MixedFieldObject: Leaving signed_update");
-}
 
 void MixedFieldObject::unsigned_update(const std::string& new_value) {
     auto& this_subgroup_reference = this->group->template get_subgroup<MixedFieldObject>(this->subgroup_index);
@@ -197,6 +228,15 @@ void MixedFieldObject::unsigned_update(const std::string& new_value) {
     dbg_default_debug("MixedFieldObject: Leaving unsigned_update");
 }
 
+void MixedFieldObject::signed_delta_update(const std::string& append_value) {
+    auto& this_subgroup_reference = this->group->template get_subgroup<MixedFieldObject>(this->subgroup_index);
+    auto version_and_hlc = this_subgroup_reference.get_current_version();
+    dbg_default_debug("MixedFieldObject: Entering signed_delta_update, current version is {}", std::get<0>(version_and_hlc));
+    ++updates_delivered;
+    signed_delta_field->append(append_value);
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc));
+    dbg_default_debug("MixedFieldObject: Leaving signed_delta_update");
+}
 
 void MixedFieldObject::non_persistent_update(const std::string& new_value) {
     auto& this_subgroup_reference = this->group->template get_subgroup<MixedFieldObject>(this->subgroup_index);
@@ -208,13 +248,15 @@ void MixedFieldObject::non_persistent_update(const std::string& new_value) {
     dbg_default_debug("MixedFieldObject: Leaving non_persistent_update");
 }
 
-void MixedFieldObject::update_all(const std::string& new_signed, const std::string& new_unsigned, const std::string& new_non_persistent) {
+void MixedFieldObject::update_all(const std::string& new_unsigned,
+                                  const std::string& delta_append_value,
+                                  const std::string& new_non_persistent) {
     auto& this_subgroup_reference = this->group->template get_subgroup<MixedFieldObject>(this->subgroup_index);
     auto version_and_hlc = this_subgroup_reference.get_current_version();
     dbg_default_debug("MixedFieldObject: Entering update_all, current version is {}", std::get<0>(version_and_hlc));
     ++updates_delivered;
-    *signed_field = new_signed;
     *unsigned_field = new_unsigned;
+    signed_delta_field->append(delta_append_value);
     non_persistent_field = new_non_persistent;
     test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc));
     dbg_default_debug("MixedFieldObject: Leaving update_all");
@@ -366,7 +408,7 @@ int main(int argc, char** argv) {
                           [&]() { return characters[char_distribution(random_generator)]; });
             object_handle.ordered_send<RPC_NAME(update)>(new_foo, new_bar);
         }
-    }  else if(my_shard_mixed_subgroup != -1) {
+    } else if(my_shard_mixed_subgroup != -1) {
         std::cout << "In the MixedFieldObject subgroup" << std::endl;
         derecho::Replicated<MixedFieldObject>& object_handle = group.get_subgroup<MixedFieldObject>();
         test_state.subgroup_total_updates = subgroup_total_messages[2];
@@ -377,14 +419,12 @@ int main(int argc, char** argv) {
             std::string new_string_value('a', 32);
             std::generate(new_string_value.begin(), new_string_value.end(),
                           [&]() { return characters[char_distribution(random_generator)]; });
-            if (counter % 4 == 0) {
-                object_handle.ordered_send<RPC_NAME(signed_update)>(new_string_value);
-            } else if(counter % 4 == 1) {
+            if(counter % 3 == 0) {
+                object_handle.ordered_send<RPC_NAME(signed_delta_update)>(new_string_value);
+            } else if(counter % 3 == 1) {
                 object_handle.ordered_send<RPC_NAME(unsigned_update)>(new_string_value);
-            } else if(counter % 4 == 2) {
-                object_handle.ordered_send<RPC_NAME(non_persistent_update)>(new_string_value);
             } else {
-                object_handle.ordered_send<RPC_NAME(update_all)>(new_string_value, new_string_value, new_string_value);
+                object_handle.ordered_send<RPC_NAME(non_persistent_update)>(new_string_value);
             }
         }
     } else if(my_shard_unsigned_subgroup != -1) {
