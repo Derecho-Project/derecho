@@ -111,9 +111,10 @@ public:
      * Register Out-of-band memory region
      * @param addr      The address of the memory region
      * @param size      The size in bytes of the memory region
+     * @param attr      The memory's attribute
      * @throw           derecho::derecho_exception on failure
      */
-    static void register_oob_memory(void* addr, size_t size);
+    static void register_oob_memory_ex(void* addr, size_t size, const memory_attribute_t& attr);
 
     /**
      * Deregister Out-of-band memory region

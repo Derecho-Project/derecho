@@ -18,7 +18,10 @@
 #include <string>
 #include <vector>
 
+
 namespace rdmc {
+
+using ip_addr_t = derecho::ip_addr_t;
 
 class exception {};
 class connection_broken : public exception {};

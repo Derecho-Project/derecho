@@ -628,7 +628,9 @@ void Group<ReplicatedTypes...>::debug_print_status() const {
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::register_oob_memory(void* addr, size_t size) {
-    sst::P2PConnection::register_oob_memory(addr, size);
+    memory_attribute_t attr;
+    attr.type = memory_attribute_t::memory_type_t::SYSTEM;
+    sst::P2PConnection::register_oob_memory_ex(addr, size, attr);
 }
 
 template <typename... ReplicatedTypes>

@@ -543,6 +543,19 @@ public:
     void register_oob_memory(void* addr, size_t size);
 
     /**
+     * @brief Register Out-of-band memory region with extended arguments
+     * Please check fi_mr_regattr documentation for more explanation:
+     * https://ofiwg.github.io/libfabric/v1.12.1/man/fi_mr.3.html
+     * 
+     * @param addr      The address of the memory region
+     * @param size      The size in bytes of the memory region
+     * @param attr      The memory attribute
+     *
+     * @throw           derecho::derecho_exception on failure
+     */
+    void register_oob_memory_ex(void* addr, size_t size, const memory_attribute_t& attr);
+
+    /**
      * Get the Out-of-band memory region's remote access key
      *
      * @param[in]   addr    The address of the memory region
