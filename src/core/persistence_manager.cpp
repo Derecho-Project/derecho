@@ -29,8 +29,6 @@ PersistenceManager::PersistenceManager(
     if(any_signed_objects) {
         openssl::EnvelopeKey signing_key = openssl::EnvelopeKey::from_pem_private(getConfString(Conf::PERS_PRIVATE_KEY_FILE));
         signature_size = signing_key.get_max_size();
-        //The Verifier only needs the public key, but we loaded both public and private components from the private key file
-        signature_verifier = std::make_unique<openssl::Verifier>(signing_key, openssl::DigestAlgorithm::SHA256);
     }
 }
 
@@ -176,14 +174,24 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
             gmssst::set(other_signature.data(),
                         &Vc.gmsSST->signatures[shard_member_rank][subgroup_id * signature_size],
                         signature_size);
+            // The "version" argument to handle_verify_request is min_persisted_num across the whole subgroup
             assert(other_signed_version >= version);
-            assert(subgroup_object->get_minimum_latest_persisted_version() >= other_signed_version);
-            bool verification_success = subgroup_object->verify_log(
-                    other_signed_version, *signature_verifier, other_signature.data());
-            if(verification_success) {
+            assert(subgroup_object->get_minimum_latest_persisted_version() >= version);
+            // Retrieve this node's signature on that version
+            std::vector<std::uint8_t> my_signature = subgroup_object->get_signature(other_signed_version);
+            // If this node has no signature on that version, there are two possibilities:
+            // 1) This node hasn't finished persisting that version yet (and hence hasn't signed it), because the other node's persisted_num has advanced faster
+            // 2) The other node's signature doesn't correspond to its persisted_num after all - persisted_num is a version that contains only non-signed fields
+            // For now, just skip this version, but we should really have a separate signed_num field in the SST
+            if(my_signature.size() == 0) {
+                dbg_debug(persistence_logger, "PersistenceManager: Skipping signature check on version {} from node {} because there is no signature on this version", other_signed_version, Vc.members[shard_member_rank]);
+                continue;
+            }
+            if(my_signature == other_signature) {
+                dbg_debug(persistence_logger, "PersistenceManager: Signature for version {} from node {} matched", other_signed_version, Vc.members[shard_member_rank]);
                 minimum_verified_version = std::min(minimum_verified_version, other_signed_version);
             } else {
-                dbg_warn(persistence_logger, "Verification of version {} from node {} failed! {}", other_signed_version, Vc.members[shard_member_rank], openssl::get_error_string(ERR_get_error(), "OpenSSL error"));
+                dbg_warn(persistence_logger, "Signature for version {} from node {} did not match my signature!", other_signed_version, Vc.members[shard_member_rank]);
             }
         }
         //Update verified_num to the lowest version number that successfully verified across all shard members

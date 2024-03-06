@@ -67,12 +67,6 @@ private:
      * (indexed by subgroup number). Updated each time a persistence request completes.
      */
     std::vector<persistent::version_t> last_persisted_version;
-    /**
-     * The Verifier to use for verifying other replicas' signatures over
-     * persistent log entries, if signatures are enabled. This will be null if
-     * signatures are disabled.
-     */
-    std::unique_ptr<openssl::Verifier> signature_verifier;
     /** The size of a signature (which is a constant), or 0 if signatures are disabled. */
     std::size_t signature_size;
     /**
