@@ -6,12 +6,12 @@
 #include "PersistException.hpp"
 #include "PersistNoLog.hpp"
 #include "PersistentInterface.hpp"
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <derecho/utils/logger.hpp>
-#include <derecho/utils/time.h>
 #include "detail/FilePersistLog.hpp"
 #include "detail/PersistLog.hpp"
 #include "detail/logger.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/utils/logger.hpp>
+#include <derecho/utils/time.h>
 
 #include <functional>
 #include <inttypes.h>
@@ -123,15 +123,17 @@ public:
 
     /**
      * Adds signatures to the log up to the specified version, and returns the
-     * signature for the latest version. The version specified should be the
-     * result of calling getMinimumLatestVersion().
+     * signature for the latest version signed. The version specified should be
+     * the caller's best guess at the "current version" of the object.
      * @param latest_version The version to add signatures up through
      * @param signer The Signer object to use for generating signatures,
      * initialized with the appropriate private key
      * @param signature_buffer A byte buffer in which the latest signature will
      * be placed after running this function
+     * @return The largest version actually signed, which may be earlier than the
+     * current (latest) version if the current version only exists in non-signed fields
      */
-    void sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer);
+    version_t sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer);
 
     /**
      * Retrieves a signature from the log for a specific version of the object,
@@ -225,7 +227,7 @@ public:
             return m_temporalQueryFrontierProvider->getFrontier();
 #endif  //NDEBUG
         } else {
-            return HLC(get_walltime()/INT64_1E3, (uint64_t)0);
+            return HLC(get_walltime() / INT64_1E3, (uint64_t)0);
         }
     }
 

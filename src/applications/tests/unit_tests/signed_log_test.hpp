@@ -28,7 +28,7 @@ struct TestState : public derecho::DeserializationContext {
     // Boolean to set to true when signaling the condition variable
     bool subgroup_finished;
     // Called from replicated object update_state methods to notify the main thread that an update was delivered
-    void notify_update_delivered(uint64_t update_counter, persistent::version_t version);
+    void notify_update_delivered(uint64_t update_counter, persistent::version_t version, bool is_signed);
     // Called by Derecho's global persistence callback
     void notify_global_persistence(derecho::subgroup_id_t subgroup_id, persistent::version_t version);
     // Called by Derecho's global verified callback

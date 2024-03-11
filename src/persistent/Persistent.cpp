@@ -43,6 +43,7 @@ version_t PersistentRegistry::getMinimumLatestVersion() {
             min = ver;
         }
     }
+    dbg_trace(m_logger, "PersistentRegistry: getMinimumLatestVersion() returning {}", min);
     return min;
 }
 
@@ -91,7 +92,7 @@ void PersistentRegistry::initializeLastSignature(version_t version,
     }
 }
 
-void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer) {
+version_t PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer) {
     version_t cur_nonempty_version = getNextSignedVersion(m_lastSignedVersion);
     dbg_debug(m_logger, "PersistentRegistry: sign() called with lastSignedVersion = {}, latest_version = {}. First version to sign = {}", m_lastSignedVersion, latest_version, cur_nonempty_version);
     while(cur_nonempty_version != INVALID_VERSION && cur_nonempty_version <= latest_version) {
@@ -121,6 +122,7 @@ void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer,
         // Advance the current version to the next non-empty version, or INVALID_VERSION if it is already at the latest version
         cur_nonempty_version = getNextSignedVersion(cur_nonempty_version);
     }
+    return m_lastSignedVersion;
 }
 
 bool PersistentRegistry::getSignature(version_t version, uint8_t* signature_buffer) {

@@ -21,11 +21,18 @@
 
 /* --- TestState implementation --- */
 
-void TestState::notify_update_delivered(uint64_t update_counter, persistent::version_t version) {
+void TestState::notify_update_delivered(uint64_t update_counter, persistent::version_t version, bool is_signed) {
     dbg_default_debug("Update {}/{} delivered", update_counter, subgroup_total_updates);
-    if(update_counter == subgroup_total_updates) {
-        dbg_default_info("Final update (#{}) delivered, version is {}", update_counter, version);
+    // For signed subgroups, record every signed-update version, in case the last update is not a signed update
+    if(!my_subgroup_is_unsigned && is_signed) {
         last_version = version;
+    }
+    if(update_counter == subgroup_total_updates) {
+        // For signed subgroups, only update last_version if this is a signed update
+        if(my_subgroup_is_unsigned || is_signed) {
+            last_version = version;
+        }
+        dbg_default_info("Final update (#{}) delivered, last version is {}", update_counter, last_version);
         last_version_ready = true;
     }
 }
@@ -46,7 +53,7 @@ void TestState::notify_global_verified(derecho::subgroup_id_t subgroup_id, persi
     dbg_default_flush();
     // Each node should only be placed in one subgroup, so this callback should not be invoked for any other subgroup IDs
     assert(subgroup_id == my_subgroup_id);
-    if(last_version_ready && version == last_version) {
+    if(last_version_ready && version >= last_version) {
         {
             std::unique_lock<std::mutex> finish_lock(finish_mutex);
             subgroup_finished = true;
@@ -119,7 +126,7 @@ void OneFieldObject::update_state(const std::string& new_value) {
     dbg_default_debug("OneFieldObject: Entering update (RPC function), current version is {}", std::get<0>(version_and_hlc));
     ++updates_delivered;
     *string_field = new_value;
-    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc));
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc), true);
     dbg_default_debug("OneFieldObject: Leaving update");
 }
 
@@ -162,7 +169,7 @@ void TwoFieldObject::update(const std::string& new_foo, const std::string& new_b
     ++updates_delivered;
     *foo = new_foo;
     *bar = new_bar;
-    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc));
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc), true);
     dbg_default_debug("TwoFieldObject: Leaving update");
 }
 
@@ -217,14 +224,13 @@ std::unique_ptr<MixedFieldObject> MixedFieldObject::from_bytes(mutils::Deseriali
                                               *non_persistent_ptr, *update_counter_ptr, test_state_ptr);
 }
 
-
 void MixedFieldObject::unsigned_update(const std::string& new_value) {
     auto& this_subgroup_reference = this->group->template get_subgroup<MixedFieldObject>(this->subgroup_index);
     auto version_and_hlc = this_subgroup_reference.get_current_version();
     dbg_default_debug("MixedFieldObject: Entering unsigned_update, current version is {}", std::get<0>(version_and_hlc));
     ++updates_delivered;
     *unsigned_field = new_value;
-    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc));
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc), false);
     dbg_default_debug("MixedFieldObject: Leaving unsigned_update");
 }
 
@@ -234,7 +240,7 @@ void MixedFieldObject::signed_delta_update(const std::string& append_value) {
     dbg_default_debug("MixedFieldObject: Entering signed_delta_update, current version is {}", std::get<0>(version_and_hlc));
     ++updates_delivered;
     signed_delta_field->append(append_value);
-    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc));
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc), true);
     dbg_default_debug("MixedFieldObject: Leaving signed_delta_update");
 }
 
@@ -244,7 +250,7 @@ void MixedFieldObject::non_persistent_update(const std::string& new_value) {
     dbg_default_debug("MixedFieldObject: Entering non_persistent_update, current version is {}", std::get<0>(version_and_hlc));
     ++updates_delivered;
     non_persistent_field = new_value;
-    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc));
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc), false);
     dbg_default_debug("MixedFieldObject: Leaving non_persistent_update");
 }
 
@@ -258,7 +264,7 @@ void MixedFieldObject::update_all(const std::string& new_unsigned,
     *unsigned_field = new_unsigned;
     signed_delta_field->append(delta_append_value);
     non_persistent_field = new_non_persistent;
-    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc));
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_hlc), true);
     dbg_default_debug("MixedFieldObject: Leaving update_all");
 }
 
@@ -285,7 +291,7 @@ void UnsignedObject::update_state(const std::string& new_value) {
     auto version_and_timestamp = this_subgroup_reference.get_current_version();
     ++updates_delivered;
     *string_field = new_value;
-    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_timestamp));
+    test_state->notify_update_delivered(updates_delivered, std::get<0>(version_and_timestamp), false);
 }
 
 std::unique_ptr<UnsignedObject> UnsignedObject::from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer) {
