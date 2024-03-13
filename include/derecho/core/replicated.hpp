@@ -78,12 +78,12 @@ public:
 /**
  * A template whose member field "value" will be true if type T inherits
  * from GetsViewChangeCallback.
-*/
-template<typename T>
+ */
+template <typename T>
 using view_callback_enabled = std::is_base_of<GetsViewChangeCallback, T>;
 
 /** Shortcut for view_callback_enabled<T>::value */
-template<typename T>
+template <typename T>
 inline constexpr bool view_callback_enabled_v = view_callback_enabled<T>::value;
 
 /**
@@ -206,6 +206,8 @@ public:
     Replicated(const Replicated&) = delete;
     virtual ~Replicated();
 
+    /* ---- Public API Functions - can be called by user code ---- */
+
     /**
      * @return The value of has_persistent_fields<T> for this Replicated<T>'s
      * template parameter. This is true if any field of the user object T is
@@ -229,7 +231,7 @@ public:
      * replicated object, false if it is "empty" because this node is not a
      * member of the subgroup that replicates T.
      */
-    bool is_valid() const {
+    virtual bool is_valid() const {
         return *user_object_ptr && true;
     }
 
@@ -281,41 +283,6 @@ public:
     void send(unsigned long long int payload_size, const std::function<void(uint8_t* buf)>& msg_generator);
 
     /**
-     * @return The serialized size of the object, of type T, that holds the
-     * state of this Replicated<T>.
-     */
-    std::size_t object_size() const;
-
-    /**
-     * Serializes and sends the state of the "wrapped" object (of type T) for
-     * this Replicated<T> over the given socket. (This includes sending the
-     * object's size before its data, so the receiver knows the size of buffer
-     * to allocate).
-     * @param receiver_socket
-     */
-    void send_object(tcp::socket& receiver_socket) const;
-
-    /**
-     * Serializes and sends the state of the "wrapped" object (of type T) for
-     * this Replicated<T> over the given socket *without* first sending its size.
-     * Should only be used when sending a list of objects, preceded by their
-     * total size, otherwise the recipient will have no way of knowing how large
-     * a buffer to allocate for this object.
-     * @param receiver_socket
-     */
-    void send_object_raw(tcp::socket& receiver_socket) const;
-
-    /**
-     * Updates the state of the "wrapped" object by replacing it with the object
-     * serialized in a buffer. Returns the number of bytes read from the buffer,
-     * in case the caller needs to know.
-     * @param buffer A buffer containing a serialized T, which will replace this
-     * Replicated<T>'s wrapped T
-     * @return The number of bytes read from the buffer.
-     */
-    std::size_t receive_object(uint8_t* buffer);
-
-    /**
      * A function called by Group to notify this Replicated object that a new
      * view has been installed. Forwards the notification to the wrapped object
      * of type T if T derives from GetsViewChangeCallback.
@@ -324,9 +291,19 @@ public:
      */
     void new_view_callback(const View& new_view);
 
+    /**
+     * Computes the minimum timestamp, in nanoseconds, that corresponds to a stable
+     * message across all members of the Group. This is the latest timestamp that
+     * can be considered stable, i.e., no messages will be delivered with an earlier
+     * timestamp. Note that this is derived from the local stability frontier at each
+     * replica, which is updated only by the timeout-checking thread, so its
+     * granularity depends on the configured Derecho heartbeat timeout.
+     *
+     * @return The stability frontier timestamp in nanoseconds
+     */
     const uint64_t compute_global_stability_frontier();
 
-    inline const HLC getFrontier() {
+    virtual inline const HLC getFrontier() {
         // transform from ns to us:
         HLC hlc(this->compute_global_stability_frontier() / INT64_1E3, 0);
         return hlc;
@@ -343,50 +320,30 @@ public:
      * Returns the current global persistence frontier, aka, stable frontier that will survive whole system restart.
      * Please note this applies to persistent data ONLY. The data not in Persistent<> are not saved.
      */
-    virtual persistent::version_t get_global_persistence_frontier();
+    persistent::version_t get_global_persistence_frontier();
 
     /**
      * Wait until the current global persistence frontier advanced beyond a version.
      * @param version   the version
      * @return false if the given version is beyond the latest atomic broadcast.
      */
-    virtual bool wait_for_global_persistence_frontier(persistent::version_t version);
+    bool wait_for_global_persistence_frontier(persistent::version_t version);
 
     /**
      * Returns the current global verified frontier, aka, stable frontier that will survive whole system restart.
      * Please note this applies to persistent data ONLY. The data not in Persistent<> are not saved.
      */
-    virtual persistent::version_t get_global_verified_frontier();
+    persistent::version_t get_global_verified_frontier();
 
     /**
-     * make a version for all the persistent<T> members.
-     * @param ver   the version number to be made
-     * @param hlc   the hybrid clock
-     */
-    virtual void make_version(persistent::version_t ver, const HLC& hlc);
-
-    /**
-     * Persists the object's data up to at least the specified version; due to
-     * batching, a later version may actually be persisted if it is available.
-     * Returns the latest version actually persisted. If the signed log is
-     * enabled, also returns the signature over the latest persisted version in
-     * the provided buffer.
-     * @param version The version to persist up to.
-     * @param signature The byte array in which to put the signature, assumed to be
-     * the correct length for this node's signing key.
-     * @return The version actually persisted (and signed)
-     */
-    virtual persistent::version_t persist(persistent::version_t version,
-                                          uint8_t* signature);
-
-    /**
-     * Retreives a copy of the signature in the persistent log for a specified
+     * Retrieves a copy of the signature in the persistent log for a specified
      * version of this object.
      * @param version The logged version to retrieve the signature for
      * @return The signature in the log for the requested version, or an empty
      * vector if signatures are disabled or the requested version doesn't exist
      */
     virtual std::vector<uint8_t> get_signature(persistent::version_t version);
+
     /**
      * Verifies the persistent log entry at the specified version against the
      * provided signature.
@@ -401,29 +358,6 @@ public:
                             const uint8_t* other_signature);
 
     /**
-     * trim the logs to a version, inclusively.
-     * @param earliest_version - the version number, before which, logs are
-     * going to be trimmed
-     */
-    virtual void trim(persistent::version_t earliest_version);
-
-    /**
-     * Truncate the logs of all Persistent<T> members back to the version
-     * specified. This deletes recently-used data, so it should only be called
-     * during failure recovery when some versions must be rolled back.
-     * @param latest_version The latest version number that should remain in the logs
-     */
-    virtual void truncate(persistent::version_t latest_version);
-
-    /**
-     * Post the next version to be assigned to an update. Called immediately
-     * before invoking an ordered_send RPC function to update current_version.
-     * @return version The new update's persistent version number
-     * @return ts_us The new update's timestamp in microseconds
-     */
-    virtual void post_next_version(persistent::version_t version, uint64_t ts_us);
-
-    /**
      * Get the current version, set by the most recent ordered_send update.
      * During the execution of an ordered_send RPC method, this represents the
      * version that will be assigned to that method's update.
@@ -433,13 +367,7 @@ public:
      * the value of current_version.
      * @return an ordered pair (version number, HLC)
      */
-    virtual std::tuple<persistent::version_t,HLC> get_current_version();
-
-    /**
-     * Register a persistent member
-     */
-    virtual void register_persistent_member(const char* object_name,
-                                            persistent::PersistentObject* member_pointer);
+    std::tuple<persistent::version_t, HLC> get_current_version();
 
     /**
      * @brief   Expose reference to the wrapped user object.
@@ -450,7 +378,9 @@ public:
      *
      * @return a reference to the wrapped user object.
      */
-    virtual const T& get_ref() const;
+    const T& get_ref() const;
+
+    /* ---- Out-Of-Band (OOB) Memory API functions, also part of the public API ---- */
 
     /**
      * @brief   One-sided RDMA write to remote OOB memory.
@@ -470,7 +400,7 @@ public:
      */
     virtual void oob_remote_write(
             const node_id_t& remote_node,
-            const struct iovec* iov, int iovcnt, 
+            const struct iovec* iov, int iovcnt,
             uint64_t remote_dest_addr, uint64_t rkey, size_t size);
 
     /**
@@ -533,6 +463,102 @@ public:
      * @throw                   derecho::derecho_exception on error
      */
     virtual void wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us);
+
+    /* ---- End public API ---- */
+    /* ---- Internal-Only API Functions - used by Derecho components but should NOT be called by user code ---- */
+
+    /**
+     * @return The serialized size of the object, of type T, that holds the
+     * state of this Replicated<T>.
+     */
+    virtual std::size_t object_size() const;
+
+    /**
+     * Serializes and sends the state of the "wrapped" object (of type T) for
+     * this Replicated<T> over the given socket. (This includes sending the
+     * object's size before its data, so the receiver knows the size of buffer
+     * to allocate).
+     * @param receiver_socket
+     */
+    virtual void send_object(tcp::socket& receiver_socket) const;
+
+    /**
+     * Serializes and sends the state of the "wrapped" object (of type T) for
+     * this Replicated<T> over the given socket *without* first sending its size.
+     * Should only be used when sending a list of objects, preceded by their
+     * total size, otherwise the recipient will have no way of knowing how large
+     * a buffer to allocate for this object.
+     * @param receiver_socket
+     */
+    virtual void send_object_raw(tcp::socket& receiver_socket) const;
+
+    /**
+     * Updates the state of the "wrapped" object by replacing it with the object
+     * serialized in a buffer. Returns the number of bytes read from the buffer,
+     * in case the caller needs to know.
+     * @param buffer A buffer containing a serialized T, which will replace this
+     * Replicated<T>'s wrapped T
+     * @return The number of bytes read from the buffer.
+     */
+    virtual std::size_t receive_object(uint8_t* buffer);
+
+    /**
+     * make a version for all the persistent<T> members.
+     * @param ver   the version number to be made
+     * @param hlc   the hybrid clock
+     */
+    virtual void make_version(persistent::version_t ver, const HLC& hlc);
+
+    /**
+     * Adds signatures to the object's versioned data up through the current
+     * version, and returns the signature over the latest signed version in the
+     * provided buffer. Returns the latest version actually signed, which may
+     * be earlier than the parameter version if the parameter version does not
+     * exist for any signed fields (even though it does exist in persistent-but-
+     * not-signed fields), or later than the parameter version if the parameter
+     * version is older than the current version.
+     *
+     * @param version A hint indicating what PersistenceManager thinks is the
+     * current version of the object
+     * @param signature The byte array in which to put the signature, assumed
+     * to be the correct length for this node's signing key.
+     * @return The latest version actually signed
+     */
+    virtual persistent::version_t sign(persistent::version_t version,
+                                       uint8_t* signature);
+
+    /**
+     * Persists the object's data up to at least the specified version; due to
+     * batching, a later version may actually be persisted if it is available.
+     * Returns the latest version actually persisted.
+     *
+     * @param version The version to persist up to.
+     * @return The version actually persisted
+     */
+    virtual persistent::version_t persist(persistent::version_t version);
+
+    /**
+     * trim the logs to a version, inclusively.
+     * @param earliest_version - the version number, before which, logs are
+     * going to be trimmed
+     */
+    virtual void trim(persistent::version_t earliest_version);
+
+    /**
+     * Truncate the logs of all Persistent<T> members back to the version
+     * specified. This deletes recently-used data, so it should only be called
+     * during failure recovery when some versions must be rolled back.
+     * @param latest_version The latest version number that should remain in the logs
+     */
+    virtual void truncate(persistent::version_t latest_version);
+
+    /**
+     * Post the next version to be assigned to an update. Called immediately
+     * before invoking an ordered_send RPC function to update current_version.
+     * @return version The new update's persistent version number
+     * @return ts_us The new update's timestamp in microseconds
+     */
+    virtual void post_next_version(persistent::version_t version, uint64_t ts_us);
 };
 
 template <typename T>

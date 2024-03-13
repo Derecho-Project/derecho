@@ -43,6 +43,7 @@ version_t PersistentRegistry::getMinimumLatestVersion() {
             min = ver;
         }
     }
+    dbg_trace(m_logger, "PersistentRegistry: getMinimumLatestVersion() returning {}", min);
     return min;
 }
 
@@ -55,6 +56,25 @@ version_t PersistentRegistry::getMinimumVersionAfter(version_t version) {
             min = field_next_ver;
         }
     }
+    dbg_trace(m_logger, "PersistentRegistry: getMinimumVersionAfter({}) returning {}", version, min);
+    return min;
+}
+
+version_t PersistentRegistry::getNextSignedVersion(version_t version) {
+    version_t min = -1;
+    bool min_initialized = false;
+    for(auto registry_itr = m_registry.begin(); registry_itr != m_registry.end(); ++registry_itr) {
+        // Skip non-signed fields
+        if(registry_itr->second->getSignatureSize() == 0) {
+            continue;
+        }
+        version_t field_next_ver = registry_itr->second->getNextVersionOf(version);
+        if(field_next_ver != INVALID_VERSION && (!min_initialized || field_next_ver < min)) {
+            min = field_next_ver;
+            min_initialized = true;
+        }
+    }
+    dbg_trace(m_logger, "PersistentRegistry: getNextSignedVersion({}) returning {}", version, min);
     return min;
 }
 
@@ -72,20 +92,21 @@ void PersistentRegistry::initializeLastSignature(version_t version,
     }
 }
 
-void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer) {
-    version_t cur_nonempty_version = getMinimumVersionAfter(m_lastSignedVersion);
+version_t PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer) {
+    version_t cur_nonempty_version = getNextSignedVersion(m_lastSignedVersion);
     dbg_debug(m_logger, "PersistentRegistry: sign() called with lastSignedVersion = {}, latest_version = {}. First version to sign = {}", m_lastSignedVersion, latest_version, cur_nonempty_version);
     while(cur_nonempty_version != INVALID_VERSION && cur_nonempty_version <= latest_version) {
         dbg_trace(m_logger, "PersistentRegistry: Attempting to sign version {} out of {}", cur_nonempty_version, latest_version);
         signer.init();
         std::size_t bytes_signed = 0;
         for(auto& field : m_registry) {
+            dbg_trace(m_logger, "PersistentRegistry: Signing persistent field at {}", fmt::ptr(field.second));
             bytes_signed += field.second->updateSignature(cur_nonempty_version, signer);
         }
         if(bytes_signed == 0) {
-            // That version did not exist in any field, so there was nothing to sign. This should not happen with getMinimumVersionAfter().
-            dbg_warn(m_logger, "Logic error in PersistentRegistry: Version {} was returned by getMinimumVersionAfter(), but it did not exist in any field", cur_nonempty_version);
-            cur_nonempty_version = getMinimumVersionAfter(cur_nonempty_version);
+            // That version did not exist in any field, so there was nothing to sign. This should not happen with getNextSignedVersion().
+            dbg_warn(m_logger, "Logic error in PersistentRegistry: Version {} was returned by getNextSignedVersion(), but no field signed any data for it", cur_nonempty_version);
+            cur_nonempty_version = getNextSignedVersion(cur_nonempty_version);
             continue;
         }
         signer.add_bytes(m_lastSignature.data(), m_lastSignature.size());
@@ -99,8 +120,9 @@ void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer,
         memcpy(m_lastSignature.data(), signature_buffer, m_lastSignature.size());
         m_lastSignedVersion = cur_nonempty_version;
         // Advance the current version to the next non-empty version, or INVALID_VERSION if it is already at the latest version
-        cur_nonempty_version = getMinimumVersionAfter(cur_nonempty_version);
+        cur_nonempty_version = getNextSignedVersion(cur_nonempty_version);
     }
+    return m_lastSignedVersion;
 }
 
 bool PersistentRegistry::getSignature(version_t version, uint8_t* signature_buffer) {
@@ -121,6 +143,7 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     dbg_debug(m_logger, "PersistentRegistry: Verifying signature on version {}", version);
     verifier.init();
     for(auto& field : m_registry) {
+        // Only adds bytes to the verifier for fields that have signatures enabled
         field.second->updateVerifier(version, verifier);
     }
     const std::size_t signature_size = verifier.get_max_signature_size();
@@ -129,6 +152,7 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     // On that field, get the previous signed version, and retrieve that signature
     uint8_t current_sig[signature_size];
     uint8_t previous_sig[signature_size];
+    bool signature_found = false;
     for(auto& field : m_registry) {
         if(field.second->getSignature(version, current_sig, prev_signed_version)) {
             if(prev_signed_version == INVALID_VERSION) {
@@ -139,8 +163,12 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
                 version_t dummy;
                 field.second->getSignature(prev_signed_version, previous_sig, dummy);
             }
+            signature_found = true;
             break;
         }
+    }
+    if(!signature_found) {
+        dbg_warn(m_logger, "PersistentRegistry: Version {} had no fields with a signature! Unable to verify!", version);
     }
     verifier.add_bytes(previous_sig, signature_size);
     return verifier.finalize(signature, signature_size);
@@ -175,6 +203,7 @@ int64_t PersistentRegistry::getMinimumLatestPersistedVersion() {
             min = ver;
         }
     }
+    dbg_trace(m_logger, "PersistentRegistry: getMinimumLatestPersistedVersion() returning {}", min);
     return min;
 }
 

@@ -87,7 +87,7 @@ public:
      * @param enable_signatures True if this log should sign every entry, false
      * if there are no signatures.
      */
-    PersistLog(const std::string& name, bool enable_signatures) noexcept(true);
+    PersistLog(const std::string& name, bool enable_signatures);
     virtual ~PersistLog() noexcept(true);
     /** Persistent Append
      * @param pdata - serialized data to be append

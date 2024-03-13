@@ -6,12 +6,12 @@
 #include "PersistException.hpp"
 #include "PersistNoLog.hpp"
 #include "PersistentInterface.hpp"
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <derecho/utils/logger.hpp>
-#include <derecho/utils/time.h>
 #include "detail/FilePersistLog.hpp"
 #include "detail/PersistLog.hpp"
 #include "detail/logger.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/utils/logger.hpp"
+#include "derecho/utils/time.h"
 
 #include <functional>
 #include <inttypes.h>
@@ -123,15 +123,17 @@ public:
 
     /**
      * Adds signatures to the log up to the specified version, and returns the
-     * signature for the latest version. The version specified should be the
-     * result of calling getMinimumLatestVersion().
+     * signature for the latest version signed. The version specified should be
+     * the caller's best guess at the "current version" of the object.
      * @param latest_version The version to add signatures up through
      * @param signer The Signer object to use for generating signatures,
      * initialized with the appropriate private key
      * @param signature_buffer A byte buffer in which the latest signature will
      * be placed after running this function
+     * @return The largest version actually signed, which may be earlier than the
+     * current (latest) version if the current version only exists in non-signed fields
      */
-    void sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer);
+    version_t sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer);
 
     /**
      * Retrieves a signature from the log for a specific version of the object,
@@ -225,7 +227,7 @@ public:
             return m_temporalQueryFrontierProvider->getFrontier();
 #endif  //NDEBUG
         } else {
-            return HLC(get_walltime()/INT64_1E3, (uint64_t)0);
+            return HLC(get_walltime() / INT64_1E3, (uint64_t)0);
         }
     }
 
@@ -262,7 +264,7 @@ public:
     static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num);
 
     /** match prefix
-     * @param str               a string begin with a prefix like 
+     * @param str               a string begin with a prefix like
      *                          [hex64 of subgroup_type]-[subgroup_index]-[shard_num]-
      * @param subgroup_type     the type information of a subgroup
      * @param subgroup_index    the index of a subgroup
@@ -308,6 +310,14 @@ protected:
      * Set the earliest version to serialize for recovery.
      */
     static thread_local int64_t earliest_version_to_serialize;
+
+    /**
+     * Determines the next version in any signed field after the provided version,
+     * skipping both nonexistant versions and versions that only exist in non-
+     * signed fields. Similar to getMinimumVersionAfter but only considers signed
+     * fields. Only used internally by this class's sign() method.
+     */
+    version_t getNextSignedVersion(version_t version);
 };
 
 /* ---------------------------- DeltaSupport Interface ---------------------------- */

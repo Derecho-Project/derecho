@@ -80,12 +80,22 @@ public:
      */
     SSTFieldVector<persistent::version_t> persisted_num;
     /**
+     * This represents the highest persistent version number that has a
+     * signature in its log at this node, if any persistent fields have
+     * signatures enabled. Since signatures are added to log entries at
+     * the same time as persistence, this is usually equal to persisted_num,
+     * but it may lag behind if there are persistent fields that do not have
+     * signatures enabled (hence there may be persistent versions with no
+     * corresponding signature). Contains one entry per subgroup.
+     */
+    SSTFieldVector<persistent::version_t> signed_num;
+    /**
      * This represents the highest persistent version number for which this
      * node has verified a signature from all other nodes in the subgroup, if
-     * signatures are enabled. There is updated by the PersistenceManager, and
-     * contains one entry per subgroup. It will generally lag behind
-     * persisted_num, since updates are only verified once they have been
-     * signed locally.
+     * any persistent fields have signatures enabled. This is updated by the
+     * PersistenceManager, and contains one entry per subgroup. It will
+     * generally lag behind persisted_num, since updates are only verified once
+     * they have been signed locally.
      */
     SSTFieldVector<persistent::version_t> verified_num;
 
@@ -181,7 +191,7 @@ public:
      *                      standard SST constructor.
      * @param   num_subgroups       Number of the subgroups
      * @param   signature_size      Size of the signature
-     * @param   num_received_size   
+     * @param   num_received_size
      * @param   slot_size
      * @param   index_field_size
      */
@@ -191,6 +201,7 @@ public:
               delivered_num(num_subgroups),
               signatures(num_subgroups * signature_size),
               persisted_num(num_subgroups),
+              signed_num(num_subgroups),
               verified_num(num_subgroups),
               suspected(parameters.members.size()),
               changes(100 + parameters.members.size()),  //The extra 100 entries allows for more joins at startup, when the group is very small
@@ -208,7 +219,7 @@ public:
               index(index_field_size),
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, delivered_num, signatures,
-                persisted_num, verified_num,
+                persisted_num, signed_num, verified_num,
                 vid, suspected, changes, joiner_ips,
                 joiner_gms_ports, joiner_state_transfer_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports,
                 num_changes, num_committed, num_acked, num_installed,
