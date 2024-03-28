@@ -481,6 +481,13 @@ version_t FilePersistLog::getLatestVersion() {
     return ver;
 }
 
+version_t FilePersistLog::getCurrentVersion() {
+    FPL_RDLOCK;
+    version_t ver = m_currMetaHeader.fields.ver;
+    FPL_UNLOCK;
+    return ver;
+}
+
 version_t FilePersistLog::getLastPersistedVersion() {
     version_t last_persisted = INVALID_VERSION;
     ;

@@ -106,11 +106,14 @@ public:
     void makeVersion(version_t ver, const HLC& mhlc);
 
     /**
-     * Returns the minumum of the latest version across all Persistent fields.
-     * This is effectively the "current version" of the object, since all the
-     * Persistent fields should advance their version numbers at the same rate.
+     * Returns the minumum value of getCurrentVersion() across all Persistent
+     * fields, which is their current in-memory version regardless of whether
+     * it has any associated log data. This represents the current version of
+     * the whole object, since all the Persistent fields should advance their
+     * "current" version numbers at the same rate even if they don't all create
+     * log entries for every version.
      */
-    version_t getMinimumLatestVersion();
+    version_t getCurrentVersion() const;
 
     /**
      * Returns the minimum value of getNextVersionOf(version) across all
@@ -119,7 +122,7 @@ public:
      * versions. Returns INVALID_VERSION if there is no valid version later
      * than the argument.
      */
-    version_t getMinimumVersionAfter(version_t version);
+    version_t getMinimumVersionAfter(version_t version) const;
 
     /**
      * Adds signatures to the log up to the specified version, and returns the
@@ -317,7 +320,7 @@ protected:
      * signed fields. Similar to getMinimumVersionAfter but only considers signed
      * fields. Only used internally by this class's sign() method.
      */
-    version_t getNextSignedVersion(version_t version);
+    version_t getNextSignedVersion(version_t version) const;
 };
 
 /* ---------------------------- DeltaSupport Interface ---------------------------- */
@@ -884,9 +887,10 @@ public:
     virtual int64_t getEarliestIndex() const;
 
     /**
-     * getEarlisestVersion()
+     * getEarliestVersion()
      *
-     * Get the earliest  version excluding trimmed ones.
+     * Get the earliest version excluding trimmed ones. This is the version
+     * corresponding to getEarliestIndex().
      *
      * @return the earliest version.
      */
@@ -904,11 +908,25 @@ public:
     /**
      * getLatestVersion()
      *
-     * Get the lastest version excluding truncated ones.
+     * Get the latest logged version excluding truncated ones. This is the version
+     * corresponding to getLatestIndex().
      *
-     * @return the latest version.
+     * @return the latest version with log data
      */
     virtual version_t getLatestVersion() const;
+
+    /**
+     * getCurrentVersion()
+     *
+     * Get the current in-memory version of the object, regardless of whether
+     * it has any log data associated with it. This may or may not match the
+     * version returned by getLatestVersion(), depending on whether ObjectType
+     * implements the IDeltaSupport interface (IDeltaSupport objects can create
+     * versions with no log data).
+     *
+     * @return the current version
+     */
+    virtual version_t getCurrentVersion() const;
 
     /**
      * getLastPersistedVersion()

@@ -84,7 +84,11 @@ public:
      */
     virtual void trim(version_t earliest_version) = 0;
     /**
-     * @return the Persistent object's current version number
+     * @return the Persistent object's current in-memory version number
+     */
+    virtual version_t getCurrentVersion() const = 0;
+    /**
+     * @return the Persistent object's newest version with log data
      */
     virtual version_t getLatestVersion() const = 0;
     /**

@@ -230,14 +230,11 @@ persistent::version_t Replicated<T>::sign(persistent::version_t version,
         return version;
     }
     // The version argument is supposed to be the current version (originating from PersistenceManager), but
-    // it might be "stale" due to requests piling up in PersistenceManager, so we might need to advance it to
-    // getMinimumLatestVersion(). But getMinimumLatestVersion() might return a version older than the current
-    // version too, if the current version has no data in a Delta-supporting field - getLatestVersion() on
-    // a Delta-supporting field will only return the latest version that has log data.
-    persistent::version_t version_to_sign = std::max(version, persistent_registry->getMinimumLatestVersion());
+    // it might be "stale" due to requests piling up in PersistenceManager, so advance it to the current
+    // version according to the PersistentRegistry.
+    persistent::version_t version_to_sign = persistent_registry->getCurrentVersion();
     // Return the version actually signed, which might be earlier or later than the argument
-    persistent::version_t signed_ver = persistent_registry->sign(version_to_sign, *signer, signature);
-    return signed_ver;
+    return persistent_registry->sign(version_to_sign, *signer, signature);
 }
 
 template <typename T>

@@ -198,6 +198,7 @@ public:
     virtual version_t getNextVersionOf(const version_t ver) override;
     virtual version_t getEarliestVersion() override;
     virtual version_t getLatestVersion() override;
+    virtual version_t getCurrentVersion() override;
     virtual version_t getLastPersistedVersion() override;
     virtual const void* getEntryByIndex(int64_t eno) override;
     virtual const void* getEntry(version_t ver, bool exact = false) override;

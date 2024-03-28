@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
         registry.makeVersion(new_ver, HLC{timestamp,0});
         //Simulate Replicated<T>::persist
         std::vector<unsigned char> signature(signer.get_max_signature_size());
-        version_t next_persisted_ver = registry.getMinimumLatestVersion();
+        version_t next_persisted_ver = registry.getCurrentVersion();
         registry.sign(next_persisted_ver, signer, signature.data());
         registry.persist(next_persisted_ver);
         assert(next_persisted_ver == new_ver);

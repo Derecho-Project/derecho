@@ -105,10 +105,9 @@ public:
             = 0;
 
     /**
-     * Advance the version number without appendding a log. This is useful
+     * Advance the version number without appending a log. This is useful
      * to create gap between versions.
      */
-    // virtual void advanceVersion(const __int128 & ver) = 0;
     virtual void advanceVersion(version_t ver) = 0;
 
     // Get the length of the log
@@ -140,8 +139,16 @@ public:
     // Get the Earlist version
     virtual version_t getEarliestVersion() = 0;
 
-    // Get the Latest version
+    /**
+     * Get the latest version with a log entry
+     */
     virtual version_t getLatestVersion() = 0;
+
+    /**
+     * Get the current in-memory version, even if it has no corresponding log
+     * entry due to a call to advanceVersion().
+     */
+    virtual version_t getCurrentVersion() = 0;
 
     // return the last persisted version
     virtual version_t getLastPersistedVersion() = 0;

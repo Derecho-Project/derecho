@@ -498,6 +498,12 @@ version_t Persistent<ObjectType, storageType>::getLatestVersion() const {
 
 template <typename ObjectType,
           StorageType storageType>
+version_t Persistent<ObjectType, storageType>::getCurrentVersion() const {
+    return this->m_pLog->getCurrentVersion();
+}
+
+template <typename ObjectType,
+          StorageType storageType>
 version_t Persistent<ObjectType, storageType>::getLastPersistedVersion() const {
     return this->m_pLog->getLastPersistedVersion();
 }

@@ -32,22 +32,22 @@ void PersistentRegistry::makeVersion(version_t ver, const HLC& mhlc) {
     }
 };
 
-version_t PersistentRegistry::getMinimumLatestVersion() {
+version_t PersistentRegistry::getCurrentVersion() const {
     version_t min = -1;
     for(auto itr = m_registry.begin();
         itr != m_registry.end(); ++itr) {
-        version_t ver = itr->second->getLatestVersion();
+        version_t ver = itr->second->getCurrentVersion();
         if(itr == m_registry.begin()) {
             min = ver;
         } else if(min > ver) {
             min = ver;
         }
     }
-    dbg_trace(m_logger, "PersistentRegistry: getMinimumLatestVersion() returning {}", min);
+    dbg_trace(m_logger, "PersistentRegistry: getCurrentVersion() returning {}", min);
     return min;
 }
 
-version_t PersistentRegistry::getMinimumVersionAfter(version_t version) {
+version_t PersistentRegistry::getMinimumVersionAfter(version_t version) const {
     version_t min = -1;
     for(auto registry_itr = m_registry.begin(); registry_itr != m_registry.end(); ++registry_itr) {
         version_t field_next_ver = registry_itr->second->getNextVersionOf(version);
@@ -60,7 +60,7 @@ version_t PersistentRegistry::getMinimumVersionAfter(version_t version) {
     return min;
 }
 
-version_t PersistentRegistry::getNextSignedVersion(version_t version) {
+version_t PersistentRegistry::getNextSignedVersion(version_t version) const {
     version_t min = -1;
     bool min_initialized = false;
     for(auto registry_itr = m_registry.begin(); registry_itr != m_registry.end(); ++registry_itr) {
