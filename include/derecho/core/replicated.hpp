@@ -511,7 +511,7 @@ public:
 
     /**
      * Adds signatures to the object's versioned data up through the current
-     * version, and returns the signature over the latest signed version in the
+     * version, and places the signature over the latest signed version in the
      * provided buffer. Returns the latest version actually signed, which may
      * be earlier than the parameter version if the parameter version does not
      * exist for any signed fields (even though it does exist in persistent-but-
@@ -520,12 +520,12 @@ public:
      *
      * @param version A hint indicating what PersistenceManager thinks is the
      * current version of the object
-     * @param signature The byte array in which to put the signature, assumed
-     * to be the correct length for this node's signing key.
+     * @param signature_buffer The byte array in which to put the signature,
+     * assumed to be the correct length for this node's signing key.
      * @return The latest version actually signed
      */
     virtual persistent::version_t sign(persistent::version_t version,
-                                       uint8_t* signature);
+                                       uint8_t* signature_buffer);
 
     /**
      * Persists the object's data up to at least the specified version; due to

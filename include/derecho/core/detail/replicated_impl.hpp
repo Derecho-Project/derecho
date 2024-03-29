@@ -224,7 +224,7 @@ void Replicated<T>::make_version(persistent::version_t ver, const HLC& hlc) {
 
 template <typename T>
 persistent::version_t Replicated<T>::sign(persistent::version_t version,
-                                          uint8_t* signature) {
+                                          uint8_t* signature_buffer) {
     if constexpr(!has_signed_fields_v<T>) {
         // If there are no signed fields, tell persistent_manager the version was "signed"
         return version;
@@ -234,7 +234,7 @@ persistent::version_t Replicated<T>::sign(persistent::version_t version,
     // version according to the PersistentRegistry.
     persistent::version_t version_to_sign = persistent_registry->getCurrentVersion();
     // Return the version actually signed, which might be earlier or later than the argument
-    return persistent_registry->sign(version_to_sign, *signer, signature);
+    return persistent_registry->sign(version_to_sign, *signer, signature_buffer);
 }
 
 template <typename T>

@@ -95,6 +95,11 @@ void PersistentRegistry::initializeLastSignature(version_t version,
 version_t PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer) {
     version_t cur_nonempty_version = getNextSignedVersion(m_lastSignedVersion);
     dbg_debug(m_logger, "PersistentRegistry: sign() called with lastSignedVersion = {}, latest_version = {}. First version to sign = {}", m_lastSignedVersion, latest_version, cur_nonempty_version);
+    // If there is nothing to do because the latest non-empty version has already been signed,
+    // ensure the latest signature still gets returned in the output buffer
+    if(cur_nonempty_version == INVALID_VERSION || cur_nonempty_version > latest_version) {
+        memcpy(signature_buffer, m_lastSignature.data(), m_lastSignature.size());
+    }
     while(cur_nonempty_version != INVALID_VERSION && cur_nonempty_version <= latest_version) {
         dbg_trace(m_logger, "PersistentRegistry: Attempting to sign version {} out of {}", cur_nonempty_version, latest_version);
         signer.init();

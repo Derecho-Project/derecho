@@ -8,6 +8,7 @@
 #include "derecho/persistent/detail/logger.hpp"
 
 #include <map>
+#include <spdlog/fmt/bin_to_hex.h>
 #include <string>
 #include <thread>
 
@@ -33,7 +34,7 @@ PersistenceManager::PersistenceManager(
 }
 
 PersistenceManager::~PersistenceManager() {
-    if (this->persist_thread.joinable()) {
+    if(this->persist_thread.joinable()) {
         this->persist_thread.join();
     }
     sem_destroy(&persistence_request_sem);
@@ -107,6 +108,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
         //and copy it into the SST once signing is done. (We could use the SST signatures field
         //directly as the signature array, but that would require holding the lock for longer.)
         uint8_t signature[signature_size];
+        memset(signature, 0, signature_size);
 
         bool object_has_signature = false;
         auto search = objects_by_subgroup_id.find(subgroup_id);
@@ -124,7 +126,11 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
                 // If persist() advanced persisted_version beyond the requested version,
                 // repeat the call to sign() and then persist again to make sure all
                 // persisted versions are signed.
+                // ISSUE: This assumes signed_version <= version_to_sign, but sometimes signed_version > version_to_sign. In that case we will do an extra loop iteration unnecessarily.
             } while(version_to_sign < persisted_version);
+            if(object_has_signature) {
+                dbg_trace(persistence_logger, "PersistenceManager: Done signing {}, signature bytes: {}", signed_version, spdlog::to_hex(signature, signature + signature_size));
+            }
         }
         // Call the local persistence callbacks before updating the SST
         // (as soon as the SST is updated, the global persistence callback may fire)
@@ -135,13 +141,16 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
         }
         // read lock the view
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
-        dbg_debug(persistence_logger, "PersistenceManager: updating subgroup {} persisted_num to {} (and signed_num to {} if applicable) ", subgroup_id, persisted_version, signed_version);
-        // update the signature, signed_num, and persisted_num in SST
         View& Vc = view_and_lock.get();
-        if(object_has_signature) {
+        dbg_debug(persistence_logger, "PersistenceManager: updating subgroup {} persisted_num to {} (and signed_num to {} if applicable) ", subgroup_id, persisted_version, signed_version);
+        // Only update the signature and signed_num in SST if signed_num has in fact advanced
+        if(object_has_signature
+           && Vc.gmsSST->signed_num[Vc.gmsSST->get_local_index()][subgroup_id] < signed_version) {
             gmssst::set(&(Vc.gmsSST->signatures[Vc.gmsSST->get_local_index()][subgroup_id * signature_size]),
                         signature, signature_size);
+            dbg_trace(persistence_logger, "PersistenceManager: Updated signature in SST to: {}", spdlog::to_hex(&Vc.gmsSST->signatures[Vc.gmsSST->get_local_index()][subgroup_id * signature_size], &Vc.gmsSST->signatures[Vc.gmsSST->get_local_index()][subgroup_id * signature_size] + signature_size));
             gmssst::set(Vc.gmsSST->signed_num[Vc.gmsSST->get_local_index()][subgroup_id], signed_version);
+            dbg_trace(persistence_logger, "PersistenceManager: Updated signed_num in SST to: {}", Vc.gmsSST->signed_num[Vc.gmsSST->get_local_index()][subgroup_id]);
             Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
                            (uint8_t*)(&Vc.gmsSST->signatures[0][subgroup_id * signature_size]) - Vc.gmsSST->getBaseAddress(),
                            signature_size);
@@ -150,6 +159,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
                            Vc.gmsSST->signed_num,
                            subgroup_id);
         }
+        // Update persisted_num in SST
         gmssst::set(Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id], persisted_version);
         Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
                        Vc.gmsSST->persisted_num,
@@ -177,17 +187,24 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
         View& Vc = view_and_lock.get();
         std::vector<uint32_t> shard_member_ranks = Vc.multicast_group->get_shard_sst_indices(subgroup_id);
         persistent::version_t minimum_verified_version = std::numeric_limits<persistent::version_t>::max();
+        persistent::version_t my_signed_version = Vc.gmsSST->signed_num[Vc.gmsSST->get_local_index()][subgroup_id];
         // Special case for a shard of size 1: There are no other members to verify, so just advance verified_num to match signed_num
         if(shard_member_ranks.size() == 1) {
-            minimum_verified_version = Vc.gmsSST->signed_num[Vc.gmsSST->get_local_index()][subgroup_id];
+            minimum_verified_version = my_signed_version;
         }
         //For each other member of this node's shard, try to verify the signature in its SST row
         for(const uint32_t shard_member_rank : shard_member_ranks) {
             if(shard_member_rank == Vc.gmsSST->get_local_index()) {
                 continue;
             }
-            //The signature in the other node's "signatures" column corresponds to the version in its "signed_num" column
+            // The signature in the other node's "signatures" column corresponds to the version in its "signed_num" column
             const persistent::version_t other_signed_version = Vc.gmsSST->signed_num[shard_member_rank][subgroup_id];
+            // If this node hasn't finished signing that version yet, we won't be able to check that the other node's signature
+            // matches the local signature. It also means the minimum signed version can't advance past my_signed_version anyway.
+            if(other_signed_version > my_signed_version) {
+                dbg_debug(persistence_logger, "PersistenceManager: Skipping signature check on version {} from node {} because this node hasn't signed that version yet", other_signed_version, Vc.members[shard_member_rank]);
+                continue;
+            }
             //Copy out the signature so it can't change during verification
             std::vector<uint8_t> other_signature(signature_size);
             gmssst::set(other_signature.data(),
@@ -195,24 +212,24 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
                         signature_size);
             // Retrieve this node's signature on that version
             std::vector<std::uint8_t> my_signature = subgroup_object->get_signature(other_signed_version);
-            // If this node has no signature on that version, it means this node hasn't finished signing and persisting that version yet,
-            // i.e. the other node's signed_num/persisted_num has advanced faster. We should get another chance to verify that version
-            // when this node's persisted_num advances, so just skip verifying it.
             if(my_signature.size() == 0) {
-                dbg_debug(persistence_logger, "PersistenceManager: Skipping signature check on version {} from node {} because there is no local signature on this version yet", other_signed_version, Vc.members[shard_member_rank]);
+                dbg_warn(persistence_logger, "PersistenceManager: Could not find a local signature on version {} even though this node's highest signed version is {}", other_signed_version, my_signed_version);
                 continue;
             }
             if(my_signature == other_signature) {
                 dbg_debug(persistence_logger, "PersistenceManager: Signature for version {} from node {} matched", other_signed_version, Vc.members[shard_member_rank]);
+                dbg_trace(persistence_logger, "PersistenceManager: Matching signature bytes were: {}", spdlog::to_hex(other_signature));
                 minimum_verified_version = std::min(minimum_verified_version, other_signed_version);
             } else {
                 dbg_warn(persistence_logger, "Signature for version {} from node {} did not match my signature!", other_signed_version, Vc.members[shard_member_rank]);
+                dbg_trace(persistence_logger, "Other signature bytes: {}. \nMy signature bytes: {}", spdlog::to_hex(other_signature), spdlog::to_hex(my_signature));
             }
         }
         //Update verified_num to the lowest version number that successfully verified across all shard members
         if(minimum_verified_version != std::numeric_limits<persistent::version_t>::max()) {
             gmssst::set(Vc.gmsSST->verified_num[Vc.gmsSST->get_local_index()][subgroup_id], minimum_verified_version);
             Vc.gmsSST->put(shard_member_ranks, Vc.gmsSST->verified_num, subgroup_id);
+            dbg_debug(persistence_logger, "PersistenceManager: Updated verified_num to {}", minimum_verified_version);
         }
     }
 }
@@ -259,7 +276,7 @@ void PersistenceManager::shutdown(bool wait) {
     sem_post(&persistence_request_sem);  // kick the persistence thread in case it is sleeping
 
     if(wait) {
-        if (this->persist_thread.joinable()) {
+        if(this->persist_thread.joinable()) {
             this->persist_thread.join();
         }
     }
