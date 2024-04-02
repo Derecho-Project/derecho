@@ -28,7 +28,7 @@ public:
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(uint8_t* buffer) = 0;
     virtual void make_version(persistent::version_t ver, const HLC& hlc) = 0;
-    virtual persistent::version_t sign(persistent::version_t version, uint8_t* signature_buffer) = 0;
+    virtual persistent::version_t sign(uint8_t* signature_buffer) = 0;
     virtual persistent::version_t persist(persistent::version_t version) = 0;
     virtual void truncate(persistent::version_t latest_version) = 0;
     virtual void post_next_version(persistent::version_t version, uint64_t msg_ts) = 0;

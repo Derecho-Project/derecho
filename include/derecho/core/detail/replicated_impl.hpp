@@ -223,15 +223,11 @@ void Replicated<T>::make_version(persistent::version_t ver, const HLC& hlc) {
 }
 
 template <typename T>
-persistent::version_t Replicated<T>::sign(persistent::version_t version,
-                                          uint8_t* signature_buffer) {
+persistent::version_t Replicated<T>::sign(uint8_t* signature_buffer) {
     if constexpr(!has_signed_fields_v<T>) {
-        // If there are no signed fields, tell persistent_manager the version was "signed"
-        return version;
+        return persistent::INVALID_VERSION;
     }
-    // The version argument is supposed to be the current version (originating from PersistenceManager), but
-    // it might be "stale" due to requests piling up in PersistenceManager, so advance it to the current
-    // version according to the PersistentRegistry.
+    // Get the current version according to PersistentRegistry, and try to sign up through that version
     persistent::version_t version_to_sign = persistent_registry->getCurrentVersion();
     // Return the version actually signed, which might be earlier or later than the argument
     return persistent_registry->sign(version_to_sign, *signer, signature_buffer);
@@ -244,14 +240,8 @@ persistent::version_t Replicated<T>::persist(persistent::version_t version) {
         // tell the persistent thread that we are done.
         return version;
     }
-    persistent::version_t persisted_ver;
-    // If persist() returns a version less than the requested version, loop again.
-    // Return the version actually persisted, which might be later than the requested
-    // version due to batching.
-    do {
-        persisted_ver = persistent_registry->persist(version);
-    } while(persisted_ver < version);
-    return persisted_ver;
+
+    return persistent_registry->persist(version);
 };
 
 template <typename T>

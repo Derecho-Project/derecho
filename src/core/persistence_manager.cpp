@@ -117,7 +117,11 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
             do {
                 // Initially, version_to_sign = persisted_version = version (the argument)
                 version_to_sign = persisted_version;
-                signed_version = search->second->sign(version_to_sign, signature);
+                if(object_has_signature) {
+                    signed_version = search->second->sign(signature);
+                } else {
+                    signed_version = version;
+                }
                 dbg_trace(persistence_logger, "PersistenceManager: Asked Replicated to sign version {}, version actually signed = {}", version_to_sign, signed_version);
                 // Request to persist the same version that was signed
                 persisted_version = search->second->persist(signed_version);

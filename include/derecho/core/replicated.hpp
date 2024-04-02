@@ -510,29 +510,24 @@ public:
     virtual void make_version(persistent::version_t ver, const HLC& hlc);
 
     /**
-     * Adds signatures to the object's versioned data up through the current
+     * Adds signatures to the object's versioned data up through the latest
      * version, and places the signature over the latest signed version in the
      * provided buffer. Returns the latest version actually signed, which may
-     * be earlier than the parameter version if the parameter version does not
+     * be earlier than the current version if the current version does not
      * exist for any signed fields (even though it does exist in persistent-but-
-     * not-signed fields), or later than the parameter version if the parameter
-     * version is older than the current version.
+     * not-signed fields).
      *
-     * @param version A hint indicating what PersistenceManager thinks is the
-     * current version of the object
      * @param signature_buffer The byte array in which to put the signature,
      * assumed to be the correct length for this node's signing key.
      * @return The latest version actually signed
      */
-    virtual persistent::version_t sign(persistent::version_t version,
-                                       uint8_t* signature_buffer);
+    virtual persistent::version_t sign(uint8_t* signature_buffer);
 
     /**
      * Persists the object's data up to at least the specified version; due to
      * batching, a later version may actually be persisted if it is available.
      * Returns the latest version actually persisted.
      *
-     * @param version The version to persist up to.
      * @return The version actually persisted
      */
     virtual persistent::version_t persist(persistent::version_t version);
