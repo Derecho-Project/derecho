@@ -30,12 +30,7 @@ class ViewManager;
  */
 class PersistenceManager {
 public:
-    enum class RequestType {
-        PERSIST,
-        VERIFY
-    };
     struct ThreadRequest {
-        RequestType operation;
         subgroup_id_t subgroup_id;
         persistent::version_t version;
     };
@@ -43,11 +38,13 @@ public:
 private:
     /** Pointer to the persistence-module logger */
     std::shared_ptr<spdlog::logger> persistence_logger;
-    /** Thread handle */
+    /** Thread handle for the persistence thread */
     std::thread persist_thread;
+    /** Thread handle for the verification thread */
+    std::thread verify_thread;
     /**
-     * A flag to signal the persistent thread to shutdown; set to true when the
-     * group is destroyed.
+     * A flag to signal the PersistenceManager's threads to shutdown; set to
+     * true when the group is destroyed.
      */
     std::atomic<bool> thread_shutdown;
     /**
@@ -56,12 +53,24 @@ private:
      */
     sem_t persistence_request_sem;
     /**
+     * A semaphore that counts the number of verification requests available for
+     * the verification thread to handle
+     */
+    sem_t verification_request_sem;
+    /**
      * Queue of requests for the persistence thread, which is shared with other
      * threads (e.g. the predicates thread) so they can make requests
      */
     std::queue<ThreadRequest> persistence_request_queue;
+    /**
+     * Queue of requests for the verification thread, which is shared with the
+     * predicates thread so it can make requests.
+     */
+    std::queue<ThreadRequest> verify_request_queue;
     /** A test-and-set lock guarding the persistence request queue */
     std::atomic_flag prq_lock = ATOMIC_FLAG_INIT;
+    /** A test-and-set lock guarding the verification request queue */
+    std::atomic_flag vrq_lock = ATOMIC_FLAG_INIT;
     /**
      * The latest version that has been persisted successfully in each subgroup
      * (indexed by subgroup number). Updated each time a persistence request completes.
@@ -118,7 +127,7 @@ public:
     /** @return the size of a signature on an update in this group. */
     std::size_t get_signature_size() const;
 
-    /** Start the persistent thread. */
+    /** Start the persistence and verification threads. */
     void start();
 
     /** post a persistence request */
@@ -139,8 +148,9 @@ public:
     void make_version(const subgroup_id_t& subgroup_id,
                       const persistent::version_t& version, const HLC& mhlc);
 
-    /** shutdown the thread
-     * @param   wait    Wait till the thread finished or not.
+    /**
+     * Shutdown the threads
+     * @param   wait    Whether to wait until both threads have finished
      */
     void shutdown(bool wait);
 };

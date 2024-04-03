@@ -22,9 +22,12 @@ PersistenceManager::PersistenceManager(
           signature_size(0),
           persistence_callbacks{user_persistence_callback},
           objects_by_subgroup_id(objects_map) {
-    // initialize semaphore
+    // initialize semaphores
     if(sem_init(&persistence_request_sem, 1, 0) != 0) {
         throw derecho_exception("Cannot initialize persistent_request_sem:errno=" + std::to_string(errno));
+    }
+    if(sem_init(&verification_request_sem, 1, 0) != 0) {
+        throw derecho_exception("Cannot initialize verification_request_sem: errno=" + std::to_string(errno));
     }
     if(any_signed_objects) {
         openssl::EnvelopeKey signing_key = openssl::EnvelopeKey::from_pem_private(getConfString(Conf::PERS_PRIVATE_KEY_FILE));
@@ -36,7 +39,11 @@ PersistenceManager::~PersistenceManager() {
     if(this->persist_thread.joinable()) {
         this->persist_thread.join();
     }
+    if(verify_thread.joinable()) {
+        verify_thread.join();
+    }
     sem_destroy(&persistence_request_sem);
+    sem_destroy(&verification_request_sem);
 }
 
 void PersistenceManager::set_view_manager(ViewManager& view_manager) {
@@ -54,11 +61,11 @@ void PersistenceManager::add_persistence_callback(const persistence_callback_t& 
 void PersistenceManager::start() {
     //Initialize this vector now that ViewManager is set up and we know the number of subgroups
     last_persisted_version.resize(view_manager->get_current_view().get().subgroup_shard_views.size(), -1);
-    //Start the thread
+    //Start the persistence thread
     this->persist_thread = std::thread{[this]() {
         pthread_setname_np(pthread_self(), "persist");
         dbg_debug(persistence_logger, "PersistenceManager thread started");
-        do {
+        while(true) {
             // wait for semaphore
             sem_wait(&persistence_request_sem);
             while(prq_lock.test_and_set(std::memory_order_acquire))  // acquire lock
@@ -70,16 +77,11 @@ void PersistenceManager::start() {
                 }
                 continue;
             }
-
             ThreadRequest request = persistence_request_queue.front();
             persistence_request_queue.pop();
             prq_lock.clear(std::memory_order_release);  // release lock
 
-            if(request.operation == RequestType::PERSIST) {
-                handle_persist_request(request.subgroup_id, request.version);
-            } else if(request.operation == RequestType::VERIFY) {
-                handle_verify_request(request.subgroup_id, request.version);
-            }
+            handle_persist_request(request.subgroup_id, request.version);
             if(this->thread_shutdown) {
                 while(prq_lock.test_and_set(std::memory_order_acquire))  // acquire lock
                     ;                                                    // spin
@@ -89,7 +91,35 @@ void PersistenceManager::start() {
                 }
                 prq_lock.clear(std::memory_order_release);  // release lock
             }
-        } while(true);
+        }
+    }};
+    // Start the verification thread
+    this->verify_thread = std::thread{[this]() {
+        pthread_setname_np(pthread_self(), "verify");
+        while(true) {
+            // wait for semaphore
+            sem_wait(&verification_request_sem);
+            while(vrq_lock.test_and_set(std::memory_order_acquire));
+            if(verify_request_queue.empty()) {
+                vrq_lock.clear(std::memory_order_release);
+                if(thread_shutdown) {
+                    break;
+                }
+                continue;
+            }
+            ThreadRequest request = verify_request_queue.front();
+            verify_request_queue.pop();
+            vrq_lock.clear(std::memory_order_release);
+            handle_verify_request(request.subgroup_id, request.version);
+            if(thread_shutdown) {
+                while(vrq_lock.test_and_set(std::memory_order_acquire));
+                if(verify_request_queue.empty()) {
+                    vrq_lock.clear(std::memory_order_release);
+                    break;
+                }
+                vrq_lock.clear(std::memory_order_release);
+            }
+        }
     }};
 }
 
@@ -234,7 +264,7 @@ void PersistenceManager::post_persist_request(const subgroup_id_t& subgroup_id, 
     // request enqueue
     while(prq_lock.test_and_set(std::memory_order_acquire))  // acquire lock
         ;                                                    // spin
-    persistence_request_queue.push({RequestType::PERSIST, subgroup_id, version});
+    persistence_request_queue.push({subgroup_id, version});
     prq_lock.clear(std::memory_order_release);  // release lock
     // post semaphore
     sem_post(&persistence_request_sem);
@@ -245,11 +275,11 @@ void PersistenceManager::post_verify_request(const subgroup_id_t& subgroup_id, c
     if(signature_size == 0) {
         return;
     }
-    while(prq_lock.test_and_set(std::memory_order_acquire))  // acquire lock
+    while(vrq_lock.test_and_set(std::memory_order_acquire))  // acquire lock
         ;                                                    // spin
-    persistence_request_queue.push({RequestType::VERIFY, subgroup_id, version});
-    prq_lock.clear(std::memory_order_release);  // release lock
-    sem_post(&persistence_request_sem);
+    verify_request_queue.push({subgroup_id, version});
+    vrq_lock.clear(std::memory_order_release);  // release lock
+    sem_post(&verification_request_sem);
 }
 
 /** make a version */
@@ -261,18 +291,21 @@ void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
     }
 }
 
-/** shutdown the thread
- */
 void PersistenceManager::shutdown(bool wait) {
     // if(replicated_objects == nullptr) return;  //skip for raw subgroups - NO DON'T
 
     dbg_debug(persistence_logger, "PersistenceManager thread shutting down");
     thread_shutdown = true;
-    sem_post(&persistence_request_sem);  // kick the persistence thread in case it is sleeping
+    // Wake up the threads in case they are waiting on semaphores
+    sem_post(&persistence_request_sem);
+    sem_post(&verification_request_sem);
 
     if(wait) {
         if(this->persist_thread.joinable()) {
             this->persist_thread.join();
+        }
+        if(verify_thread.joinable()) {
+            verify_thread.join();
         }
     }
 }
