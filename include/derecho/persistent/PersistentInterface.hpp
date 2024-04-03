@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 
 namespace persistent {
 
@@ -71,12 +72,16 @@ public:
      */
     virtual void updateVerifier(version_t version, openssl::Verifier& verifier) = 0;
     /**
-     * Persists versions to persistent storage, up to the provided version.
-     * @param version The highest version number to persist
+     * Persists versions to persistent storage. If the optional argument is specified,
+     * only persists up to the provided version. If the argument is std::nullopt,
+     * persists up to the latest version in the log.
      *
-     * @return the real persisted version which might be higher than the requested one.
+     * @param latest_version Either the highest version number to persist, or
+     * std::nullopt to indicate that the latest in-memory version should be persisted.
+     * @return The version actually persisted; either the requested version, or
+     * the latest version if the argument was std::nullopt.
      */
-    virtual version_t persist(version_t version) = 0;
+    virtual version_t persist(std::optional<version_t> latest_version = std::nullopt) = 0;
     /**
      * Trims the beginning (oldest part) of the log, discarding versions older
      * than the specified version

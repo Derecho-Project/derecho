@@ -176,12 +176,18 @@ public:
     virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func) = 0;
 
     /**
-     * Persist the log till specified version
-     * @return - the version till which has been persisted.
-     * Note that the return value could be higher than the the version asked
-     * is lower than the log that has been actually persisted.
+     * Persist the log, either until the specified version or until the latest version
+     * @param latest_version - Optional version number. If provided, persist()
+     * will only persist the log up through this version. If std::nullopt,
+     * persist() will persist the log up through the current version
+     * @param preLocked - True if the calling function has already acquired both
+     * the mutex lock and the read lock on the persistent log. Default is false,
+     * which means this function will acquire the locks before accessing the log.
+     * @return - the version till which has been persisted. Note that this will
+     * be equal to either the requested version or the current version at the time
+     * persist() was called.
      */
-    virtual version_t persist(version_t version,
+    virtual version_t persist(std::optional<version_t> latest_version,
                               bool preLocked = false) = 0;
 
     /**

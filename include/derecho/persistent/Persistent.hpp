@@ -125,10 +125,11 @@ public:
     version_t getMinimumVersionAfter(version_t version) const;
 
     /**
-     * Adds signatures to the log up to the specified version, and returns the
-     * signature for the latest version signed. The version specified should be
-     * the caller's best guess at the "current version" of the object.
-     * @param latest_version The version to add signatures up through
+     * Adds signatures to the log up to the current version, and returns the
+     * signature for the latest version signed. The latest version signed might
+     * be earlier than the current version, if the current version only exists
+     * in non-signed fields, but after calling this method all signed fields will
+     * have signatures up through their latest versions.
      * @param signer The Signer object to use for generating signatures,
      * initialized with the appropriate private key
      * @param signature_buffer A byte buffer in which the latest signature will
@@ -136,7 +137,7 @@ public:
      * @return The largest version actually signed, which may be earlier than the
      * current (latest) version if the current version only exists in non-signed fields
      */
-    version_t sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer);
+    version_t sign(openssl::Signer& signer, uint8_t* signature_buffer);
 
     /**
      * Retrieves a signature from the log for a specific version of the object,
@@ -162,14 +163,15 @@ public:
     bool verify(version_t version, openssl::Verifier& verifier, const uint8_t* signature);
 
     /**
-     * Persist versions up to a specified version, which should be the result of
-     * calling getMinimumLatestVersion().
+     * Persist versions either up to a specified version, if provided, or up
+     * to the current version.
      *
-     * @param latest_version The version to persist up to.
+     * @param latest_version The version to persist up to, or std::nullopt_t if
+     * the fields should be persisted up to their current in-memory version.
      *
-     * @return a version equal to getMinimumLatestPersistedVersion()
+     * @return The latest version persisted.
      */
-    version_t persist(version_t latest_version);
+    version_t persist(std::optional<version_t> latest_version);
 
     /** Trims the log of all versions earlier than the argument. */
     void trim(version_t earliest_version);
@@ -1018,12 +1020,16 @@ public:
     /**
      * persist(version_t)
      *
-     * Persist log entries up to the specified version. To avoid inefficiency, this
-     * should be the latest version.
+     * Persist log entries up to either the specified version, if present, or
+     * the latest version, if the argument is std::nullopt. It is more
+     * efficient to persist up to the current version, so the argument defaults
+     * to std::nullopt.
      *
-     * @param latest_version The version to persist up to
+     * @param latest_version Either the version to persist up to, or
+     * std::nullopt_t if the latest (current) version should be persisted.
+     * @return The latest version actually persisted.
      */
-    virtual version_t persist(version_t latest_version);
+    virtual version_t persist(std::optional<version_t> latest_version = std::nullopt);
 
     /**
      * Update the provided Signer with the state of T at the specified version.

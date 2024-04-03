@@ -220,10 +220,10 @@ static void eval_write(std::size_t osize, int nops, bool batch) {
     clock_gettime(CLOCK_REALTIME, &ts);
     while(cnt-- > 0) {
         pvar.set(writeMe, ver++);
-        if(!batch) pvar.persist(ver-1);
+        if(!batch) pvar.persist();
     }
     if(batch) {
-        pvar.persist(ver);
+        pvar.persist();
     }
 
 #if defined(_PERFORMANCE_DEBUG)
@@ -366,8 +366,10 @@ int main(int argc, char** argv) {
                 std::cout << "signature=" << std::endl;
                 dump_binary_buffer(sig_buf,sig_size);
                 npx.addSignature(ver,sig_buf,prev_ver);
+                npx.persist(ver);
+            } else {
+                npx.persist();
             }
-            npx.persist(ver);
         } else if(strcmp(argv[1], "verify") == 0) {
             if (!use_signature) {
                 std::cout << "unable to verify without signature...exit." << std::endl;
@@ -396,7 +398,7 @@ int main(int argc, char** argv) {
             memcpy((*npx_logtail).buf, v, strlen(v) + 1);
             (*npx_logtail).data_len = strlen(v) + 1;
             npx_logtail.version(ver);
-            npx_logtail.persist(ver);
+            npx_logtail.persist();
         }
 #define LOGTAIL_FILE "logtail.ser"
         else if(strcmp(argv[1], "logtail-serialize") == 0) {
@@ -461,17 +463,17 @@ int main(int argc, char** argv) {
             X x;
             x.x = 1;
             px2.set(x, ver++);
-            px2.persist(ver-1);
+            px2.persist();
             cout << "after set 1" << endl;
             listvar<X, ST_MEM>(px2);
             x.x = 10;
             px2.set(x, ver++);
-            px2.persist(ver-1);
+            px2.persist();
             cout << "after set 10" << endl;
             listvar<X, ST_MEM>(px2);
             x.x = 100;
             px2.set(x, ver++);
-            px2.persist(ver-1);
+            px2.persist();
             cout << "after set 100" << endl;
             listvar<X, ST_MEM>(px2);
         } else if(strcmp(argv[1], "hlc") == 0) {
@@ -516,8 +518,10 @@ int main(int argc, char** argv) {
                 std::cout << "signature=" << std::endl;
                 dump_binary_buffer(sig_buf,sig_size);
                 dx.addSignature(ver,sig_buf,prev_ver);
+                dx.persist(ver);
+            } else {
+                dx.persist();
             }
-            dx.persist(ver);
         } else if(strcmp(argv[1], "delta-sub") == 0) {
             int op = std::stoi(argv[2]);
             int64_t ver = (int64_t)atoi(argv[3]);
@@ -537,8 +541,10 @@ int main(int argc, char** argv) {
                 std::cout << "signature=" << std::endl;
                 dump_binary_buffer(sig_buf,sig_size);
                 dx.addSignature(ver,sig_buf,prev_ver);
+                dx.persist(ver);
+            } else {
+                dx.persist();
             }
-            dx.persist(ver);
         } else if(strcmp(argv[1], "delta-list") == 0) {
             cout << "Persistent<IntegerWithDelta>:" << endl;
             listvar<IntegerWithDelta>(dx);

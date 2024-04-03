@@ -17,8 +17,10 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <type_traits>
+#include <vector>
 
 namespace derecho {
 
@@ -524,13 +526,21 @@ public:
     virtual persistent::version_t sign(uint8_t* signature_buffer);
 
     /**
-     * Persists the object's data up to at least the specified version; due to
-     * batching, a later version may actually be persisted if it is available.
-     * Returns the latest version actually persisted.
+     * Persists the object's data. If the optional latest_version parameter is
+     * specified, the log will be persisted only up to that version (and no
+     * further). If the parameter is std::nullopt_t, the log will be persisted
+     * up to the current version in memory. Returns the latest version persisted,
+     * which will either be equal to the parameter (if provided) or the latest
+     * in-memory version at the time this method was called.
      *
-     * @return The version actually persisted
+     * @param latest_version If provided, the latest logged version to write to
+     * persistent storage. If not provided, all new in-memory versions (since
+     * the last call to persist) will be persisted. The default is std::nullopt
+     * since it is more efficient to persist the log in as large a batch as
+     * possible (up to the current version).
+     * @return The latest version actually persisted.
      */
-    virtual persistent::version_t persist(persistent::version_t version);
+    virtual persistent::version_t persist(std::optional<persistent::version_t> latest_version = std::nullopt);
 
     /**
      * trim the logs to a version, inclusively.

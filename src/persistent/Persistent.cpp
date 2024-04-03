@@ -92,40 +92,41 @@ void PersistentRegistry::initializeLastSignature(version_t version,
     }
 }
 
-version_t PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer) {
-    version_t cur_nonempty_version = getNextSignedVersion(m_lastSignedVersion);
-    dbg_debug(m_logger, "PersistentRegistry: sign() called with lastSignedVersion = {}, latest_version = {}. First version to sign = {}", m_lastSignedVersion, latest_version, cur_nonempty_version);
+version_t PersistentRegistry::sign(openssl::Signer& signer, uint8_t* signature_buffer) {
+    version_t current_version = getCurrentVersion();
+    version_t cur_signable_version = getNextSignedVersion(m_lastSignedVersion);
+    dbg_debug(m_logger, "PersistentRegistry: sign() called with lastSignedVersion = {}, current_version = {}. First version to sign = {}", m_lastSignedVersion, current_version, cur_signable_version);
     // If there is nothing to do because the latest non-empty version has already been signed,
     // ensure the latest signature still gets returned in the output buffer
-    if(cur_nonempty_version == INVALID_VERSION || cur_nonempty_version > latest_version) {
+    if(cur_signable_version == INVALID_VERSION || cur_signable_version > current_version) {
         memcpy(signature_buffer, m_lastSignature.data(), m_lastSignature.size());
     }
-    while(cur_nonempty_version != INVALID_VERSION && cur_nonempty_version <= latest_version) {
-        dbg_trace(m_logger, "PersistentRegistry: Attempting to sign version {} out of {}", cur_nonempty_version, latest_version);
+    while(cur_signable_version != INVALID_VERSION && cur_signable_version <= current_version) {
+        dbg_trace(m_logger, "PersistentRegistry: Attempting to sign version {} out of {}", cur_signable_version, current_version);
         signer.init();
         std::size_t bytes_signed = 0;
         for(auto& field : m_registry) {
             dbg_trace(m_logger, "PersistentRegistry: Signing persistent field at {}", fmt::ptr(field.second));
-            bytes_signed += field.second->updateSignature(cur_nonempty_version, signer);
+            bytes_signed += field.second->updateSignature(cur_signable_version, signer);
         }
         if(bytes_signed == 0) {
             // That version did not exist in any field, so there was nothing to sign. This should not happen with getNextSignedVersion().
-            dbg_warn(m_logger, "Logic error in PersistentRegistry: Version {} was returned by getNextSignedVersion(), but no field signed any data for it", cur_nonempty_version);
-            cur_nonempty_version = getNextSignedVersion(cur_nonempty_version);
+            dbg_warn(m_logger, "Logic error in PersistentRegistry: Version {} was returned by getNextSignedVersion(), but no field signed any data for it", cur_signable_version);
+            cur_signable_version = getNextSignedVersion(cur_signable_version);
             continue;
         }
         signer.add_bytes(m_lastSignature.data(), m_lastSignature.size());
         signer.finalize(signature_buffer);
         // After computing a signature over all fields of the object, go back and
         // tell each field to add that signature to its log.
-        dbg_debug(m_logger, "PersistentRegistry: Adding signature to log in version {}, setting its previous signed version to {}", cur_nonempty_version, m_lastSignedVersion);
+        dbg_debug(m_logger, "PersistentRegistry: Adding signature to log in version {}, setting its previous signed version to {}", cur_signable_version, m_lastSignedVersion);
         for(auto& field : m_registry) {
-            field.second->addSignature(cur_nonempty_version, signature_buffer, m_lastSignedVersion);
+            field.second->addSignature(cur_signable_version, signature_buffer, m_lastSignedVersion);
         }
         memcpy(m_lastSignature.data(), signature_buffer, m_lastSignature.size());
-        m_lastSignedVersion = cur_nonempty_version;
+        m_lastSignedVersion = cur_signable_version;
         // Advance the current version to the next non-empty version, or INVALID_VERSION if it is already at the latest version
-        cur_nonempty_version = getNextSignedVersion(cur_nonempty_version);
+        cur_signable_version = getNextSignedVersion(cur_signable_version);
     }
     return m_lastSignedVersion;
 }
@@ -179,7 +180,7 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     return verifier.finalize(signature, signature_size);
 }
 
-version_t PersistentRegistry::persist(version_t latest_version) {
+version_t PersistentRegistry::persist(std::optional<version_t> latest_version) {
     version_t min = INVALID_VERSION;
     for(auto& entry : m_registry) {
         version_t ver = entry.second->persist(latest_version);

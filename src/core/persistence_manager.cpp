@@ -103,34 +103,33 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
     persistent::version_t signed_version = version;
     // persist
     try {
-        //To reduce the time this thread holds the View lock, put the signature in a local array
-        //and copy it into the SST once signing is done. (We could use the SST signatures field
-        //directly as the signature array, but that would require holding the lock for longer.)
+        // To reduce the time this thread holds the View lock, put the signature in a local array
+        // and copy it into the SST once signing is done
         uint8_t signature[signature_size];
         memset(signature, 0, signature_size);
 
         bool object_has_signature = false;
         auto search = objects_by_subgroup_id.find(subgroup_id);
         if(search != objects_by_subgroup_id.end()) {
-            object_has_signature = search->second->is_signed();
-            persistent::version_t version_to_sign;
-            do {
-                // Initially, version_to_sign = persisted_version = version (the argument)
-                version_to_sign = persisted_version;
+            // Don't bother doing anything if the object has no persistent fields;
+            // persisted_version and signed_version will remain version (the argument)
+            if(search->second->is_persistent()) {
+                object_has_signature = search->second->is_signed();
                 if(object_has_signature) {
                     signed_version = search->second->sign(signature);
+                    dbg_trace(persistence_logger, "PersistenceManager: Asked Replicated to sign latest version, version actually signed = {}", signed_version);
+                    // Request to persist the same version that was signed, not the "latest available" version,
+                    // to avoid persisting a version that still needs to be signed. However, if the argument to
+                    // this persistence request is later than the signed version, that means the argument version
+                    // definitely does not need a signature (or we would have just signed it) so it's safe to persist.
+                    persisted_version = search->second->persist(std::max(signed_version, version));
+                    dbg_trace(persistence_logger, "PersistenceManager: Asked Replicated to persist version {}, version actually persisted = {}", std::max(signed_version, version), persisted_version);
                 } else {
-                    signed_version = version;
+                    persisted_version = search->second->persist();
+                    dbg_trace(persistence_logger, "PersistenceManager: Asked Replicated to persist latest version, version actually persisted = {}", persisted_version);
                 }
-                dbg_trace(persistence_logger, "PersistenceManager: Asked Replicated to sign version {}, version actually signed = {}", version_to_sign, signed_version);
-                // Request to persist the same version that was signed
-                persisted_version = search->second->persist(signed_version);
-                dbg_trace(persistence_logger, "PersistenceManager: Asked Replicated to persist version {}, version actually persisted = {}", signed_version, persisted_version);
-                // If persist() advanced persisted_version beyond the requested version,
-                // repeat the call to sign() and then persist again to make sure all
-                // persisted versions are signed.
-                // ISSUE: This assumes signed_version <= version_to_sign, but sometimes signed_version > version_to_sign. In that case we will do an extra loop iteration unnecessarily.
-            } while(version_to_sign < persisted_version);
+                assert(persisted_version >= version);
+            }
         }
         // Call the local persistence callbacks before updating the SST
         // (as soon as the SST is updated, the global persistence callback may fire)

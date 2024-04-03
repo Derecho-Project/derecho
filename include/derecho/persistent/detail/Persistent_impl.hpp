@@ -646,7 +646,7 @@ void Persistent<ObjectType, storageType>::updateVerifier(version_t ver, openssl:
 
 template <typename ObjectType,
           StorageType storageType>
-version_t Persistent<ObjectType, storageType>::persist(version_t ver) {
+version_t Persistent<ObjectType, storageType>::persist(std::optional<version_t> ver) {
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -657,7 +657,7 @@ version_t Persistent<ObjectType, storageType>::persist(version_t ver) {
     return ret;
 #else
     version_t persisted_ver = this->m_pLog->persist(ver);
-    dbg_debug(m_logger, "{} persist({}), actually persisted version {}", this->m_pLog->m_sName, ver, persisted_ver);
+    dbg_debug(m_logger, "{} persist({}), actually persisted version {}", this->m_pLog->m_sName, ver ? *ver : 0, persisted_ver);
     return persisted_ver;
 #endif  //_PERFORMANCE_DEBUG
 }

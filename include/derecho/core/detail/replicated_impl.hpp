@@ -227,18 +227,13 @@ persistent::version_t Replicated<T>::sign(uint8_t* signature_buffer) {
     if constexpr(!has_signed_fields_v<T>) {
         return persistent::INVALID_VERSION;
     }
-    // Get the current version according to PersistentRegistry, and try to sign up through that version
-    persistent::version_t version_to_sign = persistent_registry->getCurrentVersion();
-    // Return the version actually signed, which might be earlier or later than the argument
-    return persistent_registry->sign(version_to_sign, *signer, signature_buffer);
+    return persistent_registry->sign(*signer, signature_buffer);
 }
 
 template <typename T>
-persistent::version_t Replicated<T>::persist(persistent::version_t version) {
+persistent::version_t Replicated<T>::persist(std::optional<persistent::version_t> version) {
     if constexpr(!has_persistent_fields_v<T>) {
-        // for replicated<T> without Persistent fields,
-        // tell the persistent thread that we are done.
-        return version;
+        return persistent::INVALID_VERSION;
     }
 
     return persistent_registry->persist(version);
