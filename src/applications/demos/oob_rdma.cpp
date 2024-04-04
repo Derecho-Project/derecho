@@ -414,9 +414,9 @@ const char* help_string =
 "--server,-s        Run as server, otherwise, run as client by default.\n"
 #ifdef CUDA_FOUND
 "--gpu,-g           Using GPU memory, otherwise, use CPU memory by default.\n"
-#endif
 "--device,-d <device number>\n"
 "                   CUDA device number, used along with --gpu,-g. Defaulted to 0\n"
+#endif
 "--buffer,-b <registered buffer size in megabytes>.\n"
 "                   Buffer size registered for OOB. Defaulted to 1.\n"
 "--size,-S <data size in bytes>\n"
