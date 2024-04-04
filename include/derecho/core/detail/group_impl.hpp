@@ -634,6 +634,11 @@ void Group<ReplicatedTypes...>::register_oob_memory(void* addr, size_t size) {
 }
 
 template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::register_oob_memory_ex(void* addr, size_t size, const memory_attribute_t& attr) {
+    sst::P2PConnection::register_oob_memory_ex(addr, size, attr);
+}
+
+template <typename... ReplicatedTypes>
 uint64_t Group<ReplicatedTypes...>::get_oob_memory_key(void* addr) {
     return sst::P2PConnection::get_oob_memory_key(addr);
 }
