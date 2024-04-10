@@ -514,12 +514,11 @@ void _resources::register_oob_memory_ex(void* addr, size_t size, const memory_at
     _attr.auth_key      = nullptr;
     switch (attr.type) {
     case memory_attribute_t::SYSTEM:
-    case memory_attribute_t::CUDA:
         _attr.iface = FI_HMEM_SYSTEM;
         break;
-    // case memory_attribute_t::CUDA:
-    //    _attr.iface = FI_HMEM_CUDA;
-    //    break;
+    case memory_attribute_t::CUDA:
+        _attr.iface = FI_HMEM_CUDA;
+        break;
     case memory_attribute_t::ROCM:
         _attr.iface = FI_HMEM_ROCR;
         break;
