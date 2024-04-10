@@ -657,7 +657,7 @@ int main(int argc, char** argv) {
 #ifdef CUDA_FOUND
     }
 
-    // TODO: release gpu context.
+    // release gpu context
     if (use_gpu_mem) {
         ASSERTDRV(cuDevicePrimaryCtxRelease(cuda_ctxt.device));
     }
