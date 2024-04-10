@@ -650,7 +650,9 @@ int main(int argc, char** argv) {
     }
 
     // TODO: release gpu context.
-    ASSERTDRV(cuDevicePrimaryCtxRelease(cuda_ctxt.device));
+    if (use_gpu_mem) {
+        ASSERTDRV(cuDevicePrimaryCtxRelease(cuda_ctxt.device));
+    }
 #endif
     return 0;
 }
