@@ -572,7 +572,15 @@ int main(int argc, char** argv) {
                                       std::vector<derecho::view_upcall_t>{}, oobrdma_factory);
     
         std::cout << "Finished constructing/joining Group." << std::endl;
-        memset(oob_mr_ptr,'A',oob_mr_size);
+#ifdef CUDA_FOUND
+        if (use_gpu_mem) {
+            ASSERTDRV(cuMemsetD8(reinterpret_cast<CUdeviceptr>(oob_mr_ptr),'A',oob_mr_size));
+        } else {
+#endif
+            memset(oob_mr_ptr,'A',oob_mr_size);
+#ifdef CUDA_FOUND
+        }
+#endif
         group.register_oob_memory_ex(oob_mr_ptr, oob_mr_size, attr);
         std::cout << oob_mr_size << " bytes of OOB Memory registered" << std::endl;
 
