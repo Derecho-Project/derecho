@@ -123,7 +123,7 @@ static void default_context() {
     memset((void*)&g_ctxt, 0, sizeof(lf_ctxt));
     g_ctxt.hints = crash_if_nullptr("Fail to allocate fi hints", fi_allocinfo);
     //defaults the hints:
-    g_ctxt.hints->caps = FI_MSG | FI_RMA | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE;
+    g_ctxt.hints->caps = FI_MSG | FI_RMA | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE | FI_HMEM;
     g_ctxt.hints->ep_attr->type = FI_EP_MSG;  // use connection based endpoint by default.
     g_ctxt.hints->mode = ~0;                  // all modes
 
