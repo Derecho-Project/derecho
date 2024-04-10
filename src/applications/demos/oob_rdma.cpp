@@ -337,8 +337,10 @@ void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buf
     // 1 - test one-sided OOB
 #ifdef CUDA_FOUND
     if (use_gpu_mem) {
-        char putbuf[oob_data_size] = {'A'};
-        char getbuf[oob_data_size] = {'a'};
+        char putbuf[oob_data_size];
+        char getbuf[oob_data_size];
+        memset(putbuf,'A',oob_data_size);
+        memset(getbuf,'a',oob_data_size);
         ASSERTDRV(cuMemcpyHtoD(
                     reinterpret_cast<CUdeviceptr>(put_buffer_laddr),
                     reinterpret_cast<const void*>(putbuf),
