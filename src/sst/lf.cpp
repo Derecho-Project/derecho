@@ -320,7 +320,9 @@ void _resources::connect_endpoint(bool is_lf_server) {
                 dbg_error(sst_logger, "\terror.prov_errno={}",errbuf.prov_errno);
                 dbg_error(sst_logger, "\terror.err_data={:p}",errbuf.err_data);
                 dbg_error(sst_logger, "\terror.err_data_size={}",errbuf.err_data_size);
+#ifndef NOLOG
                 char buf[4096];
+#endif
                 dbg_error(sst_logger, "\tstrerror={}",fi_eq_strerror(this->eq,errbuf.prov_errno,errbuf.err_data,buf,4096));
             } else {
                 dbg_error(sst_logger, "Cannot read error info.");
@@ -1018,9 +1020,11 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             lf_completion_entry_ctxt* ce_ctxt = (lf_completion_entry_ctxt*)eentry.op_context;
 #endif
             dbg_error(g_ctxt.sst_logger, "\top_context:ce_idx={},remote_id={}", ce_ctxt->ce_idx(), ce_ctxt->remote_id());
+#ifndef NOLOG
             if (!ce_ctxt->is_managed()) {
                 delete ce_ctxt;
             }
+#endif
         }
 #ifdef DEBUG_FOR_RELEASE
         printf("\tflags=%x\n", eentry.flags);
