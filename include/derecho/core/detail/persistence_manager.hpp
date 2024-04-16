@@ -74,8 +74,17 @@ private:
     /**
      * The latest version that has been persisted successfully in each subgroup
      * (indexed by subgroup number). Updated each time a persistence request completes.
+     * This is equal to this node's row of the SST field persisted_num, but cached
+     * in non-SST memory to more easily check if a persistence request is obsolete.
      */
     std::vector<persistent::version_t> last_persisted_version;
+    /**
+     * The latest version that has been signed and verified in each subgroup,
+     * indexed by subgroup number. This is equal to this node's row of the SST field
+     * verified_num but cached in non-SST memory, analogous to last_persisted_version.
+     * Remains at -1 for all subgroups if signatures are not enabled in this group.
+     */
+    std::vector<persistent::version_t> last_verified_version;
     /** The size of a signature (which is a constant), or 0 if signatures are disabled. */
     std::size_t signature_size;
     /**

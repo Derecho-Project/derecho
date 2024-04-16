@@ -61,6 +61,7 @@ void PersistenceManager::add_persistence_callback(const persistence_callback_t& 
 void PersistenceManager::start() {
     //Initialize this vector now that ViewManager is set up and we know the number of subgroups
     last_persisted_version.resize(view_manager->get_current_view().get().subgroup_shard_views.size(), -1);
+    last_verified_version.resize(last_persisted_version.size(), -1);
     //Start the persistence thread
     this->persist_thread = std::thread{[this]() {
         pthread_setname_np(pthread_self(), "persist");
@@ -200,7 +201,11 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
 
 void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persistent::version_t version) {
     dbg_debug(persistence_logger, "PersistenceManager: handling verify request for subgroup {} version {}", subgroup_id, version);
-    // Note: The version parameter is not actually used anywhere. This function just examines the SST and verifies the signatures
+    // If this request is already obsolete due to batching, don't do anything
+    if(last_verified_version[subgroup_id] > version) {
+        return;
+    }
+    // Note: The version parameter has no effect on this function. It just examines the SST and verifies the signatures
     // on whatever versions are posted to the signed_num column by the other members of the shard.
     auto search = objects_by_subgroup_id.find(subgroup_id);
     if(search != objects_by_subgroup_id.end()) {
@@ -255,6 +260,7 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
             gmssst::set(Vc.gmsSST->verified_num[Vc.gmsSST->get_local_index()][subgroup_id], minimum_verified_version);
             Vc.gmsSST->put(shard_member_ranks, Vc.gmsSST->verified_num, subgroup_id);
             dbg_debug(persistence_logger, "PersistenceManager: Updated verified_num to {}", minimum_verified_version);
+            last_verified_version[subgroup_id] = minimum_verified_version;
         }
     }
 }
