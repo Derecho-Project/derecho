@@ -740,12 +740,7 @@ void FilePersistLog::trimByIndex(int64_t idx) {
     }
     m_currMetaHeader.fields.head = idx + 1;
     try {
-        //What version number should be supplied to persist in this case?
-        // CAUTION:
-        // The persist API is changed for Edward's convenience by adding a version parameter
-        // This has a widespreading on the design and needs extensive test before replying on
-        // it.
-        persist(LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver, true);
+        persist(std::nullopt, true);
     } catch(std::exception& e) {
         FPL_UNLOCK;
         FPL_PERS_UNLOCK;
