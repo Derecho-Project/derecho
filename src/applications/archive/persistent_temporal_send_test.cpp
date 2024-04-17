@@ -29,11 +29,11 @@ typedef struct _payload {
  * @brief byte-representable's Bytes
  * This class is modified from Mae's implementation
  */
-struct Bytes : public mutils::ByteRepresentable {
+struct MyBytes : public mutils::ByteRepresentable {
     uint8_t* bytes;
     std::size_t size;
 
-    Bytes(const uint8_t* b, decltype(size) s)
+    MyBytes(const uint8_t* b, decltype(size) s)
             : size(s) {
         bytes = nullptr;
         if(s > 0) {
@@ -41,20 +41,20 @@ struct Bytes : public mutils::ByteRepresentable {
             memcpy(bytes, b, s);
         }
     }
-    Bytes(const Bytes& rhs)
-            : Bytes(rhs.bytes, rhs.size) {
+    MyBytes(const MyBytes& rhs)
+            : MyBytes(rhs.bytes, rhs.size) {
     }
-    Bytes() {
+    MyBytes() {
         bytes = nullptr;
         size = 0;
     }
-    virtual ~Bytes() {
+    virtual ~MyBytes() {
         if(bytes != nullptr) {
             delete bytes;
         }
     }
 
-    Bytes& operator=(Bytes&& other) {
+    MyBytes& operator=(MyBytes&& other) {
         uint8_t* swp_bytes = other.bytes;
         std::size_t swp_size = other.size;
         other.bytes = bytes;
@@ -64,7 +64,7 @@ struct Bytes : public mutils::ByteRepresentable {
         return *this;
     }
 
-    Bytes& operator=(const Bytes& other) {
+    MyBytes& operator=(const MyBytes& other) {
         if(bytes != nullptr) {
             delete bytes;
         }
@@ -97,16 +97,16 @@ struct Bytes : public mutils::ByteRepresentable {
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
-    static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager*, const uint8_t* const v) {
-        return std::make_unique<Bytes>(v + sizeof(std::size_t), ((std::size_t*)(v))[0]);
+    static std::unique_ptr<MyBytes> from_bytes(mutils::DeserializationManager*, const uint8_t* const v) {
+        return std::make_unique<MyBytes>(v + sizeof(std::size_t), ((std::size_t*)(v))[0]);
     }
 
-    static context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager*, const uint8_t* const v) {
-        return context_ptr<Bytes>{new Bytes(v + sizeof(std::size_t), ((std::size_t*)(v))[0])};
+    static context_ptr<MyBytes> from_bytes_noalloc(mutils::DeserializationManager*, const uint8_t* const v) {
+        return context_ptr<MyBytes>{new MyBytes(v + sizeof(std::size_t), ((std::size_t*)(v))[0])};
     }
 
-    static context_ptr<const Bytes> from_bytes_noalloc_const(mutils::DeserializationManager*, const uint8_t* const v) {
-        return context_ptr<const Bytes>{new Bytes(v + sizeof(std::size_t), ((std::size_t*)(v))[0])};
+    static context_ptr<const MyBytes> from_bytes_noalloc_const(mutils::DeserializationManager*, const uint8_t* const v) {
+        return context_ptr<const MyBytes>{new MyBytes(v + sizeof(std::size_t), ((std::size_t*)(v))[0])};
     }
 };
 
@@ -115,14 +115,14 @@ struct Bytes : public mutils::ByteRepresentable {
  */
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
-    Persistent<Bytes> pers_bytes;
-    //Persistent<Bytes,ST_MEM> vola_bytes;
+    Persistent<MyBytes> pers_bytes;
+    //Persistent<MyBytes,ST_MEM> vola_bytes;
 
-    //void change_pers_bytes(const Bytes& bytes) {
+    //void change_pers_bytes(const MyBytes& bytes) {
     //  *pers_bytes = bytes;
     //}
 
-    void change_pers_bytes(const Bytes& bytes) {
+    void change_pers_bytes(const MyBytes& bytes) {
         *pers_bytes = bytes;
     }
 
@@ -130,20 +130,20 @@ public:
         return 100;
     }
 
-    Bytes query_const_bytes(uint64_t query_us) const {
-        uint8_t bytes[1000000];
-        Bytes b(bytes, 1000000);
+    MyBytes query_const_bytes(uint64_t query_us) const {
+        uint8_t bytes[1000000] = {0};
+        MyBytes b(bytes, 1000000);
         return b;
     }
 
-    Bytes query_pers_bytes(uint64_t query_us) const {
+    MyBytes query_pers_bytes(uint64_t query_us) const {
         HLC hlc{query_us, 0};
         try {
             return *pers_bytes.get(hlc);
         } catch(std::exception& e) {
             std::cout << "query_pers_bytes failed:" << e.what() << std::endl;
         }
-        return Bytes();
+        return MyBytes();
     }
 
     REGISTER_RPC_FUNCTIONS(ByteArrayObject, ORDERED_TARGETS(change_pers_bytes),
@@ -151,14 +151,14 @@ public:
     //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
     // constructor
-    //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
-    ByteArrayObject(Persistent<Bytes>& _p_bytes) :  //  ByteArrayObject(Persistent<Bytes> & _p_bytes):
+    //  ByteArrayObject(Persistent<MyBytes> & _p_bytes,Persistent<MyBytes,ST_MEM> & _v_bytes):
+    ByteArrayObject(Persistent<MyBytes>& _p_bytes) :  //  ByteArrayObject(Persistent<MyBytes> & _p_bytes):
                                                     //    pers_bytes(std::move(_p_bytes)) {
                                                    pers_bytes(std::move(_p_bytes)) {
     }
     // the default constructor
     ByteArrayObject(PersistentRegistry* pr) :  //    pers_bytes(nullptr,pr) {
-                                              pers_bytes([]() { return std::make_unique<Bytes>(); }, nullptr, pr) {
+                                              pers_bytes([]() { return std::make_unique<MyBytes>(); }, nullptr, pr) {
     }
 };
 
@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
         dbg_default_debug("begin to send message for {} seconds. Message size={}", min_dur_sec, msg_size);
         uint8_t* bbuf = new uint8_t[msg_size];
         bzero(bbuf, msg_size);
-        Bytes bs(bbuf, msg_size);
+        MyBytes bs(bbuf, msg_size);
 
         try {
             // start - start to send timestamp

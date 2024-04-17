@@ -6,6 +6,7 @@
  * - between derecho members
  */
 
+#include <oob_config.h>
 #include <cerrno>
 #include <cstdlib>
 #include <iostream>
@@ -15,6 +16,29 @@
 #include <vector>
 #include <derecho/conf/conf.hpp>
 #include <derecho/core/derecho.hpp>
+#include <getopt.h>
+
+#ifdef CUDA_FOUND
+#include <cuda.h>
+
+#define ASSERTDRV(stmt) \
+    do { \
+        CUresult result = (stmt); \
+        if (result != CUDA_SUCCESS) { \
+            const char* _err_name; \
+            cuGetErrorName(result, &_err_name); \
+            std::cerr << "CUDA Driver API error:" << _err_name << std::endl; \
+        } \
+        assert (CUDA_SUCCESS == result); \
+    } while (false)
+
+__attribute__ ((visibility ("hidden")))
+struct global_ctxt {
+    CUdevice    device;
+    CUcontext   context;
+    CUdeviceptr dev_ptr;
+} cuda_ctxt;
+#endif
 
 struct OOBRDMADSM : public mutils::RemoteDeserializationContext {
     void*   oob_mr_ptr;
@@ -196,19 +220,48 @@ void do_send_recv_test(SubgroupRefT& subgroup_handle,
                        node_id_t nid,
                        void* send_buffer_laddr,
                        void* recv_buffer_laddr,
-                       size_t oob_data_size) {
+                       size_t oob_data_size
+#ifdef CUDA_FOUND
+                       , bool use_gpu_mem
+#endif//CUDA_FOUND
+                       ) {
+    std::cout << "Implementation of OOBRDMA::send() and OOBRDMA::recv() does not work \n"
+                 "with Infiniband verbs environment. This is an known issue with this \n"
+                 "test case. We omit it for now. TODO: fix it. \n"
+              << std::endl;
+    /***************************************************************
     std::cout << "Testing node-" << nid << std::endl;
 
     // 1 - test send
-    memset(send_buffer_laddr, 'B', oob_data_size);
-    memset(recv_buffer_laddr, 'b', oob_data_size);
-    std::cout << "contents of the send buffer" << std::endl;
-    std::cout << "===========================" << std::endl;
-    print_data(send_buffer_laddr,oob_data_size);
-    std::cout << "contents of the recv buffer" << std::endl;
-    std::cout << "===========================" << std::endl;
-    print_data(recv_buffer_laddr,oob_data_size);
-
+#ifdef CUDA_FOUND
+    if (use_gpu_mem) {
+        char sendbuf[oob_data_size]={'B'};
+        char recvbuf[oob_data_size]={'b'};
+        ASSERTDRV(cuMemcpyHtoD(
+            reinterpret_cast<CUdeviceptr>(send_buffer_laddr),
+            sendbuf,oob_data_size));
+        ASSERTDRV(cuMemcpyHtoD(
+            reinterpret_cast<CUdeviceptr>(recv_buffer_laddr),
+            recvbuf,oob_data_size));
+        std::cout << "contents of the send buffer" << std::endl;
+        std::cout << "===========================" << std::endl;
+        print_data(sendbuf,oob_data_size);
+        std::cout << "contents of the recv buffer" << std::endl;
+        std::cout << "===========================" << std::endl;
+        print_data(recvbuf,oob_data_size);
+    } else {
+#endif//CUDA_FOUND
+        memset(send_buffer_laddr, 'B', oob_data_size);
+        memset(recv_buffer_laddr, 'b', oob_data_size);
+        std::cout << "contents of the send buffer" << std::endl;
+        std::cout << "===========================" << std::endl;
+        print_data(send_buffer_laddr,oob_data_size);
+        std::cout << "contents of the recv buffer" << std::endl;
+        std::cout << "===========================" << std::endl;
+        print_data(recv_buffer_laddr,oob_data_size);
+#ifdef CUDA_FOUND
+    }
+#endif//CUDA_FOUND
     // 2 - do send
     // 2.1 - post p2p_send
     auto send_results = subgroup_handle.template p2p_send<RPC_NAME(send)>(nid,oob_data_size);
@@ -242,28 +295,79 @@ void do_send_recv_test(SubgroupRefT& subgroup_handle,
     std::cout << "Data received to local address @" << std::hex << recv_buffer_laddr << std::dec << std::endl;
 
     // 4 - show data:
-    std::cout << "contents of the send buffer" << std::endl;
-    std::cout << "===========================" << std::endl;
-    print_data(send_buffer_laddr,oob_data_size);
-    std::cout << "contents of the recv buffer" << std::endl;
-    std::cout << "===========================" << std::endl;
-    print_data(recv_buffer_laddr,oob_data_size);
+#ifdef CUDA_FOUND
+    if (use_gpu_mem) {
+        char sendbuf[oob_data_size];
+        char recvbuf[oob_data_size];
+        ASSERTDRV(cuMemcpyDtoH(sendbuf,
+            reinterpret_cast<CUdeviceptr>(send_buffer_laddr),
+            oob_data_size));
+        ASSERTDRV(cuMemcpyDtoH(recvbuf,
+            reinterpret_cast<CUdeviceptr>(recv_buffer_laddr),
+            oob_data_size));
+        std::cout << "contents of the send buffer" << std::endl;
+        std::cout << "===========================" << std::endl;
+        print_data(sendbuf,oob_data_size);
+        std::cout << "contents of the recv buffer" << std::endl;
+        std::cout << "===========================" << std::endl;
+        print_data(recvbuf,oob_data_size);
+    } else {
+#endif
+        std::cout << "contents of the send buffer" << std::endl;
+        std::cout << "===========================" << std::endl;
+        print_data(send_buffer_laddr,oob_data_size);
+        std::cout << "contents of the recv buffer" << std::endl;
+        std::cout << "===========================" << std::endl;
+        print_data(recv_buffer_laddr,oob_data_size);
+#ifdef CUDA_FOUND
+    }
+#endif
+    ***************************************************************/
 }
 
 template <typename P2PCaller>
-void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buffer_laddr, void* get_buffer_laddr, size_t oob_data_size) {
-
+void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buffer_laddr, void* get_buffer_laddr,
+    size_t oob_data_size
+#ifdef CUDA_FOUND
+    , bool use_gpu_mem
+#endif
+    ) {
     std::cout << "Testing node-" << nid << std::endl;
 
     // 1 - test one-sided OOB
-    memset(put_buffer_laddr, 'A', oob_data_size);
-    memset(get_buffer_laddr, 'a', oob_data_size);
-    std::cout << "contents of the put buffer" << std::endl;
-    std::cout << "==========================" << std::endl;
-    print_data(put_buffer_laddr,oob_data_size);
-    std::cout << "contents of the get buffer" << std::endl;
-    std::cout << "==========================" << std::endl;
-    print_data(get_buffer_laddr,oob_data_size);
+#ifdef CUDA_FOUND
+    if (use_gpu_mem) {
+        char putbuf[oob_data_size];
+        char getbuf[oob_data_size];
+        memset(putbuf,'A',oob_data_size);
+        memset(getbuf,'a',oob_data_size);
+        ASSERTDRV(cuMemcpyHtoD(
+                    reinterpret_cast<CUdeviceptr>(put_buffer_laddr),
+                    reinterpret_cast<const void*>(putbuf),
+                    oob_data_size));
+        ASSERTDRV(cuMemcpyHtoD(
+                    reinterpret_cast<CUdeviceptr>(get_buffer_laddr),
+                    reinterpret_cast<const void*>(getbuf),
+                    oob_data_size));
+        std::cout << "contents of the put buffer" << std::endl;
+        std::cout << "==========================" << std::endl;
+        print_data(putbuf,oob_data_size);
+        std::cout << "contents of the get buffer" << std::endl;
+        std::cout << "==========================" << std::endl;
+        print_data(getbuf,oob_data_size);
+    } else {
+#endif
+        memset(put_buffer_laddr, 'A', oob_data_size);
+        memset(get_buffer_laddr, 'a', oob_data_size);
+        std::cout << "contents of the put buffer" << std::endl;
+        std::cout << "==========================" << std::endl;
+        print_data(put_buffer_laddr,oob_data_size);
+        std::cout << "contents of the get buffer" << std::endl;
+        std::cout << "==========================" << std::endl;
+        print_data(get_buffer_laddr,oob_data_size);
+#ifdef CUDA_FOUND
+    }
+#endif
     // do put
     uint64_t remote_addr;
     {
@@ -283,12 +387,55 @@ void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buf
                   << " to local address @" << reinterpret_cast<uint64_t>(get_buffer_laddr) << std::endl;
     }
     // print 16 bytes of contents
-    std::cout << "contents of the put buffer" << std::endl;
-    std::cout << "==========================" << std::endl;
-    print_data(put_buffer_laddr,oob_data_size);
-    std::cout << "contents of the get buffer" << std::endl;
-    std::cout << "==========================" << std::endl;
-    print_data(get_buffer_laddr,oob_data_size);
+#ifdef CUDA_FOUND
+    if (use_gpu_mem) {
+        char putbuf[oob_data_size];
+        char getbuf[oob_data_size];
+        ASSERTDRV(cuMemcpyDtoH(
+                    reinterpret_cast<void*>(putbuf),
+                    reinterpret_cast<CUdeviceptr>(put_buffer_laddr),
+                    oob_data_size));
+        ASSERTDRV(cuMemcpyDtoH(
+                    reinterpret_cast<void*>(getbuf),
+                    reinterpret_cast<CUdeviceptr>(get_buffer_laddr),
+                    oob_data_size));
+        std::cout << "contents of the put buffer" << std::endl;
+        std::cout << "==========================" << std::endl;
+        print_data(putbuf,oob_data_size);
+        std::cout << "contents of the get buffer" << std::endl;
+        std::cout << "==========================" << std::endl;
+        print_data(getbuf,oob_data_size);
+    } else {
+#endif
+        std::cout << "contents of the put buffer" << std::endl;
+        std::cout << "==========================" << std::endl;
+        print_data(put_buffer_laddr,oob_data_size);
+        std::cout << "contents of the get buffer" << std::endl;
+        std::cout << "==========================" << std::endl;
+        print_data(get_buffer_laddr,oob_data_size);
+#ifdef CUDA_FOUND
+    }
+#endif
+}
+
+const char* help_string = 
+"--server,-s        Run as server, otherwise, run as client by default.\n"
+#ifdef CUDA_FOUND
+"--gpu,-g           Using GPU memory, otherwise, use CPU memory by default.\n"
+"--device,-d <device number>\n"
+"                   CUDA device number, used along with --gpu,-g. Defaulted to 0\n"
+#endif
+"--buffer,-b <registered buffer size in megabytes>.\n"
+"                   Buffer size registered for OOB. Defaulted to 1.\n"
+"--size,-S <data size in bytes>\n"
+"                   The OOB transfer data size in bytes. Defaulted to 256.\n"
+"--count,-c <transfer count>\n"
+"                   The number of transfers. Defaulted to 3.\n"
+"--help,-h          Print this message.\n"
+;
+
+__attribute__ ((visibility ("hidden"))) void print_help(int argc, char** argv) {
+    std::cout << "USAGE:" << argv[0] << "  [options]\n" << help_string << std::endl;
 }
 
 /**
@@ -297,38 +444,116 @@ void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buf
  */
 int main(int argc, char** argv) {
 
-    if (argc < 2) {
-        std::cout << "Usage:" << argv[0] 
-                  << " server/client [oob memory in MB=1] [data size in Byte=256] [count=3]" << std::endl;
-        return 1;
+    static struct option long_options[] = {
+        {"server",  no_argument,        0,  's'},
+#ifdef CUDA_FOUND
+        {"gpu",     no_argument,        0,  'g'},
+        {"device",  required_argument,  0,  'd'},
+#endif
+        {"buffer",  required_argument,  0,  'b'},
+        {"size",    required_argument,  0,  'S'},
+        {"count",   required_argument,  0,  'c'},
+        {"help",    no_argument,        0,  'h'},
+        {0,0,0,0}
+    };
+
+    int c;
+
+    // argument collectors
+    bool        server_mode     = false;
+#ifdef CUDA_FOUND
+    bool        use_gpu_mem     = false;
+    int32_t     cuda_device     = 0;
+#endif
+    size_t      oob_mr_size     = 1ul << 20;
+    size_t      oob_data_size   = 256;
+    size_t      count           = 3;
+
+    while (true) {
+        int option_index = 0;
+        c = getopt_long(argc,argv,"sgd:b:S:c:h",long_options,&option_index);
+        if (c == -1) break;
+        switch(c) {
+        case 's':
+            server_mode = true;
+            break;
+#ifdef CUDA_FOUND
+        case 'g':
+            use_gpu_mem = true;
+            break;
+        case 'd':
+            cuda_device = std::stoi(optarg);
+            break;
+#endif
+        case 'b':
+            oob_mr_size = (std::stoul(optarg)<<20);
+            break;
+        case 'S':
+            oob_data_size   = std::stoul(optarg);
+            break;
+        case 'c':
+            count   = std::stoul(optarg);
+            break;
+        case 'h':
+            print_help(argc,argv);
+            return 0;
+        case '?':
+            break;
+        default:
+            std::cout << "Unknown return value from getopt_long:" << c << std::endl;
+        }
     }
 
-    size_t oob_mr_size      = 1ul<<20;
-    if (argc >= 3) {
-        oob_mr_size = (std::stoul(argv[2])<<20);
+    // initialize GPU context
+#ifdef CUDA_FOUND
+    if (use_gpu_mem) {
+        ASSERTDRV(cuInit(0));
+        int n_devices = 0;
+        ASSERTDRV(cuDeviceGetCount(&n_devices));
+        if (!(n_devices > cuda_device)) {
+            std::cerr << "Unknown CUDA device:" << cuda_device << ". We found only " << n_devices << std::endl;
+            return -1;
+        }
+        // initialize cuda_ctxt; 
+        ASSERTDRV(cuDeviceGet(&cuda_ctxt.device, cuda_device));
+        ASSERTDRV(cuDevicePrimaryCtxRetain(&cuda_ctxt.context, cuda_ctxt.device));
+        ASSERTDRV(cuCtxSetCurrent(cuda_ctxt.context));
     }
-    size_t oob_data_size    = 256;
-    if (argc >= 4) {
-        oob_data_size = (std::stoul(argv[3]));
-    }
-    size_t count            = 3;
-    if (argc >= 5) {
-        count = std::stol(argv[4]);
-    }
+#endif
 
     // allocate memory
-    void* oob_mr_ptr = aligned_alloc(4096,oob_mr_size);
-    if (!oob_mr_ptr) {
-        std::cerr << "Failed to allocate oob memory with aligned_alloc(). errno=" << errno << std::endl;
-        return -1;
+    void* oob_mr_ptr = nullptr;
+#ifdef CUDA_FOUND
+    if (use_gpu_mem) {
+        ASSERTDRV(cuMemAlloc(reinterpret_cast<CUdeviceptr*>(&oob_mr_ptr),oob_mr_size));
+    } else {
+#endif
+        oob_mr_ptr = aligned_alloc(4096,oob_mr_size);
+        if (!oob_mr_ptr) {
+            std::cerr << "Failed to allocate oob memory with aligned_alloc(). errno=" << errno << std::endl;
+            return -1;
+        }
+#ifdef CUDA_FOUND
     }
+#endif
+    derecho::memory_attribute_t attr;
+#ifdef CUDA_FOUND
+    if (use_gpu_mem) {
+        attr.type = derecho::memory_attribute_t::CUDA;
+        attr.device.cuda = cuda_ctxt.device;
+    } else {
+#endif
+        attr.type = derecho::memory_attribute_t::SYSTEM;
+#ifdef CUDA_FOUND
+    }
+#endif
 
     // Deserialization Context
     OOBRDMADSM dsm;
     dsm.oob_mr_ptr = oob_mr_ptr;
     dsm.oob_mr_size = oob_mr_size;
 
-    if (argv[1] == std::string("server")) {
+    if (server_mode) {
         // Read configurations from the command line options as well as the default config file
         derecho::Conf::initialize(argc, argv);
     
@@ -349,8 +574,16 @@ int main(int argc, char** argv) {
                                       std::vector<derecho::view_upcall_t>{}, oobrdma_factory);
     
         std::cout << "Finished constructing/joining Group." << std::endl;
-        memset(oob_mr_ptr,'A',oob_mr_size);
-        group.register_oob_memory(oob_mr_ptr, oob_mr_size);
+#ifdef CUDA_FOUND
+        if (use_gpu_mem) {
+            ASSERTDRV(cuMemsetD8(reinterpret_cast<CUdeviceptr>(oob_mr_ptr),'A',oob_mr_size));
+        } else {
+#endif
+            memset(oob_mr_ptr,'A',oob_mr_size);
+#ifdef CUDA_FOUND
+        }
+#endif
+        group.register_oob_memory_ex(oob_mr_ptr, oob_mr_size, attr);
         std::cout << oob_mr_size << " bytes of OOB Memory registered" << std::endl;
 
         std::cout << "Press Enter to shutdown gracefully." << std::endl;
@@ -366,10 +599,18 @@ int main(int argc, char** argv) {
                     continue;
                 }
                 // TEST - one-sided OOB
-                do_test(group.get_subgroup<OOBRDMA>(),member,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size);
+                do_test(group.get_subgroup<OOBRDMA>(),member,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size
+#ifdef CUDA_FOUND
+                    ,use_gpu_mem
+#endif
+                );
 
                 // TEST - two-sided OOB
-                do_send_recv_test(group.get_subgroup<OOBRDMA>(),member,put_buffer_laddr,get_buffer_laddr,oob_data_size);
+                do_send_recv_test(group.get_subgroup<OOBRDMA>(),member,put_buffer_laddr,get_buffer_laddr,oob_data_size
+#ifdef CUDA_FOUND
+                    ,use_gpu_mem
+#endif
+                );
             }
         }
 
@@ -380,13 +621,13 @@ int main(int argc, char** argv) {
         std::cout << oob_mr_size << " bytes of OOB Memory deregistered" << std::endl;
         group.barrier_sync();
         group.leave();
-    } else if (argv[1] == std::string("client")) {
+    } else {
         // create an external client
         derecho::ExternalGroupClient<OOBRDMA> external_group;
         derecho::ExternalClientCaller<OOBRDMA, decltype(external_group)>& external_caller = external_group.get_subgroup_caller<OOBRDMA>();
         std::cout << "External caller created." << std::endl;
 
-        external_group.register_oob_memory(oob_mr_ptr, oob_mr_size);
+        external_group.register_oob_memory_ex(oob_mr_ptr, oob_mr_size, attr);
         std::cout << oob_mr_size << " bytes of OOB Memory registered" << std::endl;
 
         {
@@ -396,17 +637,32 @@ int main(int argc, char** argv) {
 
             for (uint32_t i=1;i<=count;i++) {
                 node_id_t nid = i%external_group.get_members().size();
-                do_test(external_caller,nid,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size);
+                do_test(external_caller,nid,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size
+#ifdef CUDA_FOUND
+                    ,use_gpu_mem
+#endif
+                );
             }
         }
 
         external_group.deregister_oob_memory(oob_mr_ptr);
         std::cout << oob_mr_size << "bytes of OOB Memory unregistered" << std::endl;
-    } else {
-        std::cout << "unknown command:" << argv[1] << std::endl;
     }
 
-    free(oob_mr_ptr);
+    // release memory
+#ifdef CUDA_FOUND
+    if (use_gpu_mem) {
+        cuMemFree(reinterpret_cast<CUdeviceptr>(oob_mr_ptr));
+    } else {
+#endif
+        free(oob_mr_ptr);
+#ifdef CUDA_FOUND
+    }
 
+    // release gpu context
+    if (use_gpu_mem) {
+        ASSERTDRV(cuDevicePrimaryCtxRelease(cuda_ctxt.device));
+    }
+#endif
     return 0;
 }

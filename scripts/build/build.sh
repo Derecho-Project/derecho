@@ -66,7 +66,13 @@ if [[ $1 == "Clear" ]]; then
 fi
 
 build_type=$1
-install_prefix="/usr/local/"
+
+if [ -z $DERECHO_INSTALL_PREFIX ]; then
+    install_prefix="/usr/local"
+else
+    install_prefix=$DERECHO_INSTALL_PREFIX
+fi
+
 cmake_defs="-DCMAKE_BUILD_TYPE=${build_type} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_INSTALL_PREFIX=${install_prefix}"
 build_path="build-${build_type}"
 

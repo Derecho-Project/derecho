@@ -24,12 +24,15 @@ struct fid_mr;
 struct fid_ep;
 struct fid_cq;
 
+
 /**
  * Contains functions and classes for low-level RDMA operations, such as setting
  * up memory regions and queue pairs. This provides a more C++-friendly interfaace
  * to the libfabric library.
  */
 namespace rdma {
+using ip_addr_t = derecho::ip_addr_t;
+
 class exception {};
 class invalid_args : public exception {};
 class configuration_failure : public exception {};
