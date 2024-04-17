@@ -129,8 +129,8 @@ uint64_t P2PConnection::get_oob_memory_key(void *addr) {
     return _resources::get_oob_mr_key(addr);
 }
 
-void P2PConnection::register_oob_memory(void* addr, size_t size) {
-    _resources::register_oob_memory(addr,size);
+void P2PConnection::register_oob_memory_ex(void* addr, size_t size, const memory_attribute_t& attr) {
+    _resources::register_oob_memory_ex(addr,size,attr);
 }
 
 void P2PConnection::deregister_oob_memory(void* addr) {

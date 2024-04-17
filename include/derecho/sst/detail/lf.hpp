@@ -28,6 +28,9 @@
 
 namespace sst {
 
+using memory_attribute_t    =   derecho::memory_attribute_t;
+using ip_addr_t             =   derecho::ip_addr_t;
+
 class lf_completion_entry_ctxt {
 private:
     uint32_t    _ce_idx;     // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
@@ -174,10 +177,11 @@ public:
      * Register oob memory
      * @param addr  the address of the OOB memory
      * @param size  the size of the OOB memory
+     * @param attr  the memory attribute
      *
      * @throws derecho_exception on failure.
      */
-    static void register_oob_memory(void* addr, size_t size);
+    static void register_oob_memory_ex(void* addr, size_t size, const memory_attribute_t& attr);
 
     /**
      * Deregister oob memory

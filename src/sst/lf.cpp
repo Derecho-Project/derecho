@@ -123,7 +123,7 @@ static void default_context() {
     memset((void*)&g_ctxt, 0, sizeof(lf_ctxt));
     g_ctxt.hints = crash_if_nullptr("Fail to allocate fi hints", fi_allocinfo);
     //defaults the hints:
-    g_ctxt.hints->caps = FI_MSG | FI_RMA | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE;
+    g_ctxt.hints->caps = FI_MSG | FI_RMA | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE | FI_HMEM;
     g_ctxt.hints->ep_attr->type = FI_EP_MSG;  // use connection based endpoint by default.
     g_ctxt.hints->mode = ~0;                  // all modes
 
@@ -155,7 +155,7 @@ static void load_configuration() {
     if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) || (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)) {
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
-        g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+        g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR | FI_MR_HMEM;
     }
 
     // scatter/gather batch size
@@ -320,7 +320,9 @@ void _resources::connect_endpoint(bool is_lf_server) {
                 dbg_error(sst_logger, "\terror.prov_errno={}",errbuf.prov_errno);
                 dbg_error(sst_logger, "\terror.err_data={:p}",errbuf.err_data);
                 dbg_error(sst_logger, "\terror.err_data_size={}",errbuf.err_data_size);
+#ifndef NOLOG
                 char buf[4096];
+#endif
                 dbg_error(sst_logger, "\tstrerror={}",fi_eq_strerror(this->eq,errbuf.prov_errno,errbuf.err_data,buf,4096));
             } else {
                 dbg_error(sst_logger, "Cannot read error info.");
@@ -498,14 +500,49 @@ int _resources::post_remote_send(
     return ret;
 }
 
-void _resources::register_oob_memory(void* addr, size_t size) {
+void _resources::register_oob_memory_ex(void* addr, size_t size, const memory_attribute_t& attr) {
+
+    struct fi_mr_attr   _attr; // libfabric attr
+    struct iovec        mr_iov;
+    mr_iov.iov_base     = addr;
+    mr_iov.iov_len      = size;
+    _attr.mr_iov        = &mr_iov;
+    _attr.iov_count     = 1;
+    _attr.access        = FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE;
+    _attr.offset        = 0;
+    _attr.requested_key = 0;
+    _attr.context       = nullptr;
+    _attr.auth_key_size = 0;
+    _attr.auth_key      = nullptr;
+    switch (attr.type) {
+    case memory_attribute_t::SYSTEM:
+        _attr.iface = FI_HMEM_SYSTEM;
+        break;
+    case memory_attribute_t::CUDA:
+        _attr.iface = FI_HMEM_CUDA;
+        break;
+    case memory_attribute_t::ROCM:
+        _attr.iface = FI_HMEM_ROCR;
+        break;
+    case memory_attribute_t::L0:
+        _attr.iface = FI_HMEM_ZE;
+        break;
+    default:
+        throw derecho::derecho_exception(
+            std::string("Unknown memory type :" + std::to_string(attr.type)));
+    }
+
     // register it with the domain
     struct fid_mr* oob_mr;
     int ret =
+    /*
     fail_if_nonzero_retry_on_eagain("register memory buffer for write", REPORT_ON_FAILURE,
                                     fi_mr_reg, g_ctxt.domain, addr, size,
                                     FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
                                     0, 0, 0, &oob_mr, nullptr);
+    */
+    fail_if_nonzero_retry_on_eagain("register memory buffer for write", REPORT_ON_FAILURE,
+                                    fi_mr_regattr, g_ctxt.domain, &_attr, 0, &oob_mr);
     if (ret != 0) {
         throw derecho::derecho_exception(std::string("fi_mr_reg() on oob memory failed with return value:") + std::to_string(ret));
     }
@@ -983,9 +1020,11 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             lf_completion_entry_ctxt* ce_ctxt = (lf_completion_entry_ctxt*)eentry.op_context;
 #endif
             dbg_error(g_ctxt.sst_logger, "\top_context:ce_idx={},remote_id={}", ce_ctxt->ce_idx(), ce_ctxt->remote_id());
+#ifndef NOLOG
             if (!ce_ctxt->is_managed()) {
                 delete ce_ctxt;
             }
+#endif
         }
 #ifdef DEBUG_FOR_RELEASE
         printf("\tflags=%x\n", eentry.flags);

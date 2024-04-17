@@ -8,7 +8,12 @@
 #include <map>
 #include <mutex>
 
+using node_id_t = derecho::node_id_t;
+
 namespace tcp {
+
+using ip_addr_t = derecho::ip_addr_t;
+
 class tcp_connections {
     std::mutex sockets_mutex;
 
