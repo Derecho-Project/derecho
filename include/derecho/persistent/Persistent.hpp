@@ -6,12 +6,12 @@
 #include "PersistException.hpp"
 #include "PersistNoLog.hpp"
 #include "PersistentInterface.hpp"
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <derecho/utils/logger.hpp>
-#include <derecho/utils/time.h>
 #include "detail/FilePersistLog.hpp"
 #include "detail/PersistLog.hpp"
 #include "detail/logger.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/utils/logger.hpp"
+#include "derecho/utils/time.h"
 
 #include <functional>
 #include <inttypes.h>
@@ -106,11 +106,14 @@ public:
     void makeVersion(version_t ver, const HLC& mhlc);
 
     /**
-     * Returns the minumum of the latest version across all Persistent fields.
-     * This is effectively the "current version" of the object, since all the
-     * Persistent fields should advance their version numbers at the same rate.
+     * Returns the minumum value of getCurrentVersion() across all Persistent
+     * fields, which is their current in-memory version regardless of whether
+     * it has any associated log data. This represents the current version of
+     * the whole object, since all the Persistent fields should advance their
+     * "current" version numbers at the same rate even if they don't all create
+     * log entries for every version.
      */
-    version_t getMinimumLatestVersion();
+    version_t getCurrentVersion() const;
 
     /**
      * Returns the minimum value of getNextVersionOf(version) across all
@@ -119,19 +122,22 @@ public:
      * versions. Returns INVALID_VERSION if there is no valid version later
      * than the argument.
      */
-    version_t getMinimumVersionAfter(version_t version);
+    version_t getMinimumVersionAfter(version_t version) const;
 
     /**
-     * Adds signatures to the log up to the specified version, and returns the
-     * signature for the latest version. The version specified should be the
-     * result of calling getMinimumLatestVersion().
-     * @param latest_version The version to add signatures up through
+     * Adds signatures to the log up to the current version, and returns the
+     * signature for the latest version signed. The latest version signed might
+     * be earlier than the current version, if the current version only exists
+     * in non-signed fields, but after calling this method all signed fields will
+     * have signatures up through their latest versions.
      * @param signer The Signer object to use for generating signatures,
      * initialized with the appropriate private key
      * @param signature_buffer A byte buffer in which the latest signature will
      * be placed after running this function
+     * @return The largest version actually signed, which may be earlier than the
+     * current (latest) version if the current version only exists in non-signed fields
      */
-    void sign(version_t latest_version, openssl::Signer& signer, uint8_t* signature_buffer);
+    version_t sign(openssl::Signer& signer, uint8_t* signature_buffer);
 
     /**
      * Retrieves a signature from the log for a specific version of the object,
@@ -157,14 +163,15 @@ public:
     bool verify(version_t version, openssl::Verifier& verifier, const uint8_t* signature);
 
     /**
-     * Persist versions up to a specified version, which should be the result of
-     * calling getMinimumLatestVersion().
+     * Persist versions either up to a specified version, if provided, or up
+     * to the current version.
      *
-     * @param latest_version The version to persist up to.
+     * @param latest_version The version to persist up to, or std::nullopt_t if
+     * the fields should be persisted up to their current in-memory version.
      *
-     * @return a version equal to getMinimumLatestPersistedVersion()
+     * @return The latest version persisted.
      */
-    version_t persist(version_t latest_version);
+    version_t persist(std::optional<version_t> latest_version);
 
     /** Trims the log of all versions earlier than the argument. */
     void trim(version_t earliest_version);
@@ -225,7 +232,7 @@ public:
             return m_temporalQueryFrontierProvider->getFrontier();
 #endif  //NDEBUG
         } else {
-            return HLC(get_walltime()/INT64_1E3, (uint64_t)0);
+            return HLC(get_walltime() / INT64_1E3, (uint64_t)0);
         }
     }
 
@@ -262,7 +269,7 @@ public:
     static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num);
 
     /** match prefix
-     * @param str               a string begin with a prefix like 
+     * @param str               a string begin with a prefix like
      *                          [hex64 of subgroup_type]-[subgroup_index]-[shard_num]-
      * @param subgroup_type     the type information of a subgroup
      * @param subgroup_index    the index of a subgroup
@@ -308,6 +315,14 @@ protected:
      * Set the earliest version to serialize for recovery.
      */
     static thread_local int64_t earliest_version_to_serialize;
+
+    /**
+     * Determines the next version in any signed field after the provided version,
+     * skipping both nonexistant versions and versions that only exist in non-
+     * signed fields. Similar to getMinimumVersionAfter but only considers signed
+     * fields. Only used internally by this class's sign() method.
+     */
+    version_t getNextSignedVersion(version_t version) const;
 };
 
 /* ---------------------------- DeltaSupport Interface ---------------------------- */
@@ -874,9 +889,10 @@ public:
     virtual int64_t getEarliestIndex() const;
 
     /**
-     * getEarlisestVersion()
+     * getEarliestVersion()
      *
-     * Get the earliest  version excluding trimmed ones.
+     * Get the earliest version excluding trimmed ones. This is the version
+     * corresponding to getEarliestIndex().
      *
      * @return the earliest version.
      */
@@ -894,11 +910,25 @@ public:
     /**
      * getLatestVersion()
      *
-     * Get the lastest version excluding truncated ones.
+     * Get the latest logged version excluding truncated ones. This is the version
+     * corresponding to getLatestIndex().
      *
-     * @return the latest version.
+     * @return the latest version with log data
      */
     virtual version_t getLatestVersion() const;
+
+    /**
+     * getCurrentVersion()
+     *
+     * Get the current in-memory version of the object, regardless of whether
+     * it has any log data associated with it. This may or may not match the
+     * version returned by getLatestVersion(), depending on whether ObjectType
+     * implements the IDeltaSupport interface (IDeltaSupport objects can create
+     * versions with no log data).
+     *
+     * @return the current version
+     */
+    virtual version_t getCurrentVersion() const;
 
     /**
      * getLastPersistedVersion()
@@ -990,12 +1020,16 @@ public:
     /**
      * persist(version_t)
      *
-     * Persist log entries up to the specified version. To avoid inefficiency, this
-     * should be the latest version.
+     * Persist log entries up to either the specified version, if present, or
+     * the latest version, if the argument is std::nullopt. It is more
+     * efficient to persist up to the current version, so the argument defaults
+     * to std::nullopt.
      *
-     * @param latest_version The version to persist up to
+     * @param latest_version Either the version to persist up to, or
+     * std::nullopt_t if the latest (current) version should be persisted.
+     * @return The latest version actually persisted.
      */
-    virtual version_t persist(version_t latest_version);
+    virtual version_t persist(std::optional<version_t> latest_version = std::nullopt);
 
     /**
      * Update the provided Signer with the state of T at the specified version.

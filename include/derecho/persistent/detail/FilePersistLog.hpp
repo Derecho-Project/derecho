@@ -21,8 +21,8 @@ namespace persistent {
 // meta header format
 union MetaHeader {
     struct {
-        int64_t head;  // the head index
-        int64_t tail;  // the tail index
+        int64_t head;  // the head index: The smallest valid log index.
+        int64_t tail;  // the tail index: One greater than the last valid log index.
         int64_t ver;   // the latest version number.
     } fields;
     uint8_t bytes[META_HEADER_SIZE];
@@ -65,20 +65,20 @@ union LogEntry {
 
 // helpers:
 ///// READ or WRITE LOCK on LOG REQUIRED to use the following MACROs!!!!
-#define LOG_ENTRY_ARRAY ((LogEntry*)(this->m_pLog))
+#define LOG_ENTRY_ARRAY (reinterpret_cast<LogEntry*>(this->m_pLog))
 
 #define NUM_USED_SLOTS (m_currMetaHeader.fields.tail - m_currMetaHeader.fields.head)
 // #define NUM_USED_SLOTS_PERS   (m_persMetaHeader.tail - m_persMetaHeader.head)
 #define NUM_FREE_SLOTS (MAX_LOG_ENTRY - 1 - NUM_USED_SLOTS)
 // #define NUM_FREE_SLOTS_PERS   (MAX_LOG_ENTRY - 1 - NUM_USERD_SLOTS_PERS)
 
-#define LOG_ENTRY_AT(idx) (LOG_ENTRY_ARRAY + (int)((idx) % MAX_LOG_ENTRY))
+#define LOG_ENTRY_AT(idx) (LOG_ENTRY_ARRAY + static_cast<int>((idx) % MAX_LOG_ENTRY))
 #define NEXT_LOG_ENTRY LOG_ENTRY_AT(m_currMetaHeader.fields.tail)
 #define NEXT_LOG_ENTRY_PERS LOG_ENTRY_AT( \
         MAX(m_persMetaHeader.fields.tail, m_currMetaHeader.fields.head))
 #define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? INVALID_INDEX : m_currMetaHeader.fields.tail - 1)
-#define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + ((e)->fields.ofst + this->signature_size) % MAX_DATA_SIZE))
-#define LOG_ENTRY_SIGNATURE(e) ((void*)((uint8_t*)this->m_pData + ((e)->fields.ofst) % MAX_DATA_SIZE))
+#define LOG_ENTRY_DATA(e) ((void*)(reinterpret_cast<uint8_t*>(this->m_pData) + ((e)->fields.ofst + this->signature_size) % MAX_DATA_SIZE))
+#define LOG_ENTRY_SIGNATURE(e) ((void*)(reinterpret_cast<uint8_t*>(this->m_pData) + ((e)->fields.ofst) % MAX_DATA_SIZE))
 
 #define NEXT_DATA_OFST ((CURR_LOG_IDX == INVALID_INDEX) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen))
 #define NEXT_DATA ((void*)(reinterpret_cast<uint64_t>(this->m_pData) + NEXT_DATA_OFST % MAX_DATA_SIZE))
@@ -198,11 +198,12 @@ public:
     virtual version_t getNextVersionOf(const version_t ver) override;
     virtual version_t getEarliestVersion() override;
     virtual version_t getLatestVersion() override;
+    virtual version_t getCurrentVersion() override;
     virtual version_t getLastPersistedVersion() override;
     virtual const void* getEntryByIndex(int64_t eno) override;
     virtual const void* getEntry(version_t ver, bool exact = false) override;
     virtual const void* getEntry(const HLC& hlc) override;
-    virtual version_t persist(version_t ver,
+    virtual version_t persist(std::optional<version_t> latest_version,
                               bool preLocked = false) override;
     virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func) override;
     virtual void addSignature(version_t ver, const uint8_t* signature, version_t previous_signed_version) override;
@@ -239,13 +240,7 @@ public:
             m_currMetaHeader.fields.head = (idx + 1);
             FPL_PERS_LOCK;
             try {
-                // What version number should be supplied to persist in this case?
-                // CAUTION:
-                // The persist API is changed for Edward's convenience by adding a version parameter
-                // This has a widespreading on the design and needs extensive test before replying on
-                // it.
-                version_t ver = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-                persist(ver, true);
+                persist(std::nullopt, true);
             } catch(std::exception& e) {
                 FPL_UNLOCK;
                 FPL_PERS_UNLOCK;

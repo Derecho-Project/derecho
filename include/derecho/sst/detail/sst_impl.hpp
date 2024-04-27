@@ -9,6 +9,7 @@
 #include "../sst.hpp"
 
 #include "../predicates.hpp"
+#include "derecho/utils/time.h"
 #include "poll_utils.hpp"
 #include <chrono>
 #include <condition_variable>
@@ -19,7 +20,6 @@
 #include <thread>
 #include <time.h>
 #include <vector>
-#include <derecho/utils/time.h>
 
 namespace sst {
 

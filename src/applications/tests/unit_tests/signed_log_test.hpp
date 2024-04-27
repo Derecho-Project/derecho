@@ -28,11 +28,35 @@ struct TestState : public derecho::DeserializationContext {
     // Boolean to set to true when signaling the condition variable
     bool subgroup_finished;
     // Called from replicated object update_state methods to notify the main thread that an update was delivered
-    void notify_update_delivered(uint64_t update_counter, persistent::version_t version);
+    void notify_update_delivered(uint64_t update_counter, persistent::version_t version, bool is_signed);
     // Called by Derecho's global persistence callback
     void notify_global_persistence(derecho::subgroup_id_t subgroup_id, persistent::version_t version);
     // Called by Derecho's global verified callback
     void notify_global_verified(derecho::subgroup_id_t subgroup_id, persistent::version_t version);
+};
+
+/**
+ * A simple Delta-supporting object that stores a string and has a method that
+ * appends to the string. All data appended since the last call to finalizeCurrentDelta
+ * is stored in the delta, and applyDelta appends the delta to the current string.
+ * (There's no way to delete or truncate the string since this is just for test
+ * purposes). Note that if append() has not been called since the last call to
+ * finalizeCurrentDelta, the delta entry will be empty.
+ */
+class StringWithDelta : public mutils::ByteRepresentable,
+                        public persistent::IDeltaSupport<StringWithDelta> {
+    std::string current_state;
+    std::string delta;
+
+public:
+    StringWithDelta() = default;
+    StringWithDelta(const std::string& init_string);
+    void append(const std::string& str_val);
+    std::string get_current_state() const;
+    virtual void finalizeCurrentDelta(const persistent::DeltaFinalizer& finalizer);
+    virtual void applyDelta(uint8_t const* const data);
+    static std::unique_ptr<StringWithDelta> create(mutils::DeserializationManager* dm);
+    DEFAULT_SERIALIZATION_SUPPORT(StringWithDelta, current_state);
 };
 
 /**
@@ -104,6 +128,53 @@ public:
     DEFAULT_SERIALIZE(foo, bar, updates_delivered);
     DEFAULT_DESERIALIZE_NOALLOC(TwoFieldObject);
     static std::unique_ptr<TwoFieldObject> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
+};
+
+/**
+ * Test object that has both a non-signed persistent field and a signed field
+ * with delta support (and also an RPC function that updates a field with no
+ * persistent log at all). The delta-supporting field creates empty deltas if
+ * it has not been updated, so it's possible for this object to create a log
+ * entry that has nothing to sign.
+ */
+class MixedFieldObject : public mutils::ByteRepresentable,
+                         public derecho::GroupReference,
+                         public derecho::SignedPersistentFields {
+    persistent::Persistent<std::string> unsigned_field;
+    persistent::Persistent<StringWithDelta> signed_delta_field;
+    std::string non_persistent_field;
+    uint64_t updates_delivered;
+    TestState* test_state;
+
+public:
+    /** Factory constructor */
+    MixedFieldObject(persistent::PersistentRegistry* registry, TestState* test_state);
+    /** Deserialization constructor */
+    MixedFieldObject(persistent::Persistent<std::string>& other_unsigned_field,
+                     persistent::Persistent<StringWithDelta>& other_delta_field,
+                     std::string& other_non_persistent_field,
+                     uint64_t other_updates_delivered,
+                     TestState* test_state);
+
+    std::string get_signed_value() const {
+        return signed_delta_field->get_current_state();
+    }
+    std::string get_unsigned_value() const {
+        return *unsigned_field;
+    }
+
+    void unsigned_update(const std::string& new_value);
+    void signed_delta_update(const std::string& append_value);
+    void non_persistent_update(const std::string& new_value);
+    void update_all(const std::string& new_unsigned,
+                    const std::string& delta_append_value,
+                    const std::string& new_non_persistent);
+
+    REGISTER_RPC_FUNCTIONS(MixedFieldObject, P2P_TARGETS(get_signed_value, get_unsigned_value),
+                           ORDERED_TARGETS(unsigned_update, signed_delta_update, non_persistent_update, update_all));
+    DEFAULT_SERIALIZE(unsigned_field, signed_delta_field, non_persistent_field, updates_delivered);
+    DEFAULT_DESERIALIZE_NOALLOC(MixedFieldObject);
+    static std::unique_ptr<MixedFieldObject> from_bytes(mutils::DeserializationManager* dsm, uint8_t const* buffer);
 };
 
 /**

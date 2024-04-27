@@ -294,7 +294,7 @@ void FilePersistLog::advanceVersion(version_t ver) {
     FPL_UNLOCK;
 }
 
-version_t FilePersistLog::persist(version_t ver, bool preLocked) {
+version_t FilePersistLog::persist(std::optional<version_t> latest_version, bool preLocked) {
     int64_t ver_ret = INVALID_VERSION;
     if(!preLocked) {
         FPL_PERS_LOCK;
@@ -302,10 +302,11 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
     }
 
     if(m_currMetaHeader == m_persMetaHeader) {
-        // if(CURR_LOG_IDX != INVALID_INDEX) {
-            //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-        // }
-        ver_ret = m_persMetaHeader.fields.ver;
+        if(latest_version) {
+            ver_ret = *latest_version;
+        } else {
+            ver_ret = m_persMetaHeader.fields.ver;
+        }
         if(!preLocked) {
             FPL_UNLOCK;
             FPL_PERS_UNLOCK;
@@ -317,33 +318,62 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
     //flush data
     dbg_trace(m_logger, "{0} flush data,log,and meta.", this->m_sName);
     try {
+        void *flush_data_start = nullptr, *flush_log_start = nullptr;
+        size_t flush_data_len = 0, flush_log_len = 0;
         // shadow the current state
-        void *flush_dstart = nullptr, *flush_lstart = nullptr;
-        size_t flush_dlen = 0, flush_llen = 0;
         MetaHeader shadow_header = m_currMetaHeader;
-        if((NUM_USED_SLOTS > 0) && (NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS)) {
-            flush_dlen = (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen - NEXT_LOG_ENTRY_PERS->fields.ofst);
-            // flush data
-            flush_dstart = ALIGN_TO_PAGE(NEXT_DATA_PERS);
-            flush_dlen += ((int64_t)NEXT_DATA_PERS) % getpagesize();
-            // flush log
-            flush_lstart = ALIGN_TO_PAGE(NEXT_LOG_ENTRY_PERS);
-            flush_llen = ((size_t)NEXT_LOG_ENTRY - (size_t)NEXT_LOG_ENTRY_PERS) + ((int64_t)NEXT_LOG_ENTRY_PERS) % getpagesize();
+        if(latest_version) {
+            // Find the nearest index corresponding to the requested latest version
+            int64_t requested_index = getVersionIndex(*latest_version, false);
+            // If the requested index is earlier than the last persisted index,
+            // we can't do anything because it was already persisted
+            if(requested_index < m_persMetaHeader.fields.tail - 1) {
+                // Make the shadow header equal the persisted header, so the rest of the function is a no-op
+                shadow_header.fields.tail = m_persMetaHeader.fields.tail;
+                shadow_header.fields.ver = m_persMetaHeader.fields.ver;
+            } else {
+                // Make the shadow header's "current" log entry equal to the requested version's log entry
+                shadow_header.fields.tail = requested_index + 1;
+                // If the requested version is not exactly equal to the log entry's version, use the later one
+                shadow_header.fields.ver = std::max(LOG_ENTRY_AT(requested_index)->fields.ver, *latest_version);
+            }
+            dbg_trace(m_logger, "{}: Adjusted shadow header tail to {}, version to {}", this->m_sName, shadow_header.fields.tail, shadow_header.fields.ver);
         }
-        // if(NUM_USED_SLOTS > 0) {
-            //get the latest flushed version
-            //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-        // }
+        // Ensure the shadow header's log is non-empty
+        if(shadow_header.fields.tail - shadow_header.fields.head > 0) {
+            // Determine if there are any un-persisted log entries
+            LogEntry* current_log_tail_entry = LOG_ENTRY_AT(shadow_header.fields.tail);
+            LogEntry* persisted_log_tail_entry = LOG_ENTRY_AT(std::max(m_persMetaHeader.fields.tail, shadow_header.fields.head));
+            if(current_log_tail_entry > persisted_log_tail_entry) {
+                dbg_trace(m_logger, "{}: Distance from persisted log tail to current log tail is {} bytes, {} indexes", this->m_sName,
+                          reinterpret_cast<uintptr_t>(current_log_tail_entry) - reinterpret_cast<uintptr_t>(persisted_log_tail_entry),
+                          shadow_header.fields.tail - std::max(m_persMetaHeader.fields.tail, shadow_header.fields.head));
+                LogEntry* curr_log_entry = LOG_ENTRY_AT(shadow_header.fields.tail - 1);
+                dbg_trace(m_logger, "{}: Flushing log entries up through version {}", this->m_sName, curr_log_entry->fields.ver);
+                // Compute start and length for the data buffer
+                void* persisted_data_tail = LOG_ENTRY_DATA(persisted_log_tail_entry);
+                flush_data_start = ALIGN_TO_PAGE(persisted_data_tail);
+                flush_data_len = (curr_log_entry->fields.ofst + curr_log_entry->fields.sdlen
+                                  - persisted_log_tail_entry->fields.ofst)
+                                 + reinterpret_cast<int64_t>(persisted_data_tail) % getpagesize();
+                // Compute start and length for the log buffer
+                flush_log_start = ALIGN_TO_PAGE(persisted_log_tail_entry);
+                flush_log_len = (reinterpret_cast<size_t>(current_log_tail_entry)
+                                 - reinterpret_cast<size_t>(persisted_log_tail_entry))
+                                + reinterpret_cast<int64_t>(persisted_log_tail_entry) % getpagesize();
+                dbg_trace(m_logger, "{}: flush data length = {}, flush log length = {}", this->m_sName, flush_data_len, flush_log_len);
+            }
+        }
         if(!preLocked) {
             FPL_UNLOCK;
         }
-        if(flush_dlen > 0) {
-            if(msync(flush_dstart, flush_dlen, MS_SYNC) != 0) {
+        if(flush_data_len > 0) {
+            if(msync(flush_data_start, flush_data_len, MS_SYNC) != 0) {
                 throw persistent_file_error("msync failed.", errno);
             }
         }
-        if(flush_llen > 0) {
-            if(msync(flush_lstart, flush_llen, MS_SYNC) != 0) {
+        if(flush_log_len > 0) {
+            if(msync(flush_log_start, flush_log_len, MS_SYNC) != 0) {
                 throw persistent_file_error("msync failed.", errno);
             }
         }
@@ -477,6 +507,13 @@ version_t FilePersistLog::getLatestVersion() {
     FPL_RDLOCK;
     int64_t idx = CURR_LOG_IDX;
     version_t ver = (idx == INVALID_INDEX) ? INVALID_VERSION : (LOG_ENTRY_AT(idx)->fields.ver);
+    FPL_UNLOCK;
+    return ver;
+}
+
+version_t FilePersistLog::getCurrentVersion() {
+    FPL_RDLOCK;
+    version_t ver = m_currMetaHeader.fields.ver;
     FPL_UNLOCK;
     return ver;
 }
@@ -633,7 +670,7 @@ version_t FilePersistLog::getNextVersionOf(version_t ver) {
         }
         FPL_UNLOCK;
     }
-
+    dbg_trace(m_logger, "{} getNextVersionOf({}): returning {}", this->m_sName, ver, next_ver);
     return next_ver;
 }
 
@@ -675,7 +712,10 @@ void FilePersistLog::processEntryAtVersion(version_t ver,
     FPL_UNLOCK;
 
     if(ple != nullptr && ple->fields.ver == ver) {
+        dbg_trace(m_logger, "{} - calling process function on log entry {} of size {}", m_sName, ple->fields.ver, static_cast<size_t>(ple->fields.sdlen - this->signature_size));
         func(LOG_ENTRY_DATA(ple), static_cast<size_t>(ple->fields.sdlen - this->signature_size));
+    } else {
+        dbg_trace(m_logger, "{} - no log entry to process at version {}", m_sName, ver);
     }
 }
 
@@ -700,12 +740,7 @@ void FilePersistLog::trimByIndex(int64_t idx) {
     }
     m_currMetaHeader.fields.head = idx + 1;
     try {
-        //What version number should be supplied to persist in this case?
-        // CAUTION:
-        // The persist API is changed for Edward's convenience by adding a version parameter
-        // This has a widespreading on the design and needs extensive test before replying on
-        // it.
-        persist(LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver, true);
+        persist(std::nullopt, true);
     } catch(std::exception& e) {
         FPL_UNLOCK;
         FPL_PERS_UNLOCK;

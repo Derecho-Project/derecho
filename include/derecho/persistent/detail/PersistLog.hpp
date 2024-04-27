@@ -87,7 +87,7 @@ public:
      * @param enable_signatures True if this log should sign every entry, false
      * if there are no signatures.
      */
-    PersistLog(const std::string& name, bool enable_signatures) noexcept(true);
+    PersistLog(const std::string& name, bool enable_signatures);
     virtual ~PersistLog() noexcept(true);
     /** Persistent Append
      * @param pdata - serialized data to be append
@@ -105,10 +105,9 @@ public:
             = 0;
 
     /**
-     * Advance the version number without appendding a log. This is useful
+     * Advance the version number without appending a log. This is useful
      * to create gap between versions.
      */
-    // virtual void advanceVersion(const __int128 & ver) = 0;
     virtual void advanceVersion(version_t ver) = 0;
 
     // Get the length of the log
@@ -140,8 +139,16 @@ public:
     // Get the Earlist version
     virtual version_t getEarliestVersion() = 0;
 
-    // Get the Latest version
+    /**
+     * Get the latest version with a log entry
+     */
     virtual version_t getLatestVersion() = 0;
+
+    /**
+     * Get the current in-memory version, even if it has no corresponding log
+     * entry due to a call to advanceVersion().
+     */
+    virtual version_t getCurrentVersion() = 0;
 
     // return the last persisted version
     virtual version_t getLastPersistedVersion() = 0;
@@ -169,12 +176,18 @@ public:
     virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func) = 0;
 
     /**
-     * Persist the log till specified version
-     * @return - the version till which has been persisted.
-     * Note that the return value could be higher than the the version asked
-     * is lower than the log that has been actually persisted.
+     * Persist the log, either until the specified version or until the latest version
+     * @param latest_version - Optional version number. If provided, persist()
+     * will only persist the log up through this version. If std::nullopt,
+     * persist() will persist the log up through the current version
+     * @param preLocked - True if the calling function has already acquired both
+     * the mutex lock and the read lock on the persistent log. Default is false,
+     * which means this function will acquire the locks before accessing the log.
+     * @return - the version till which has been persisted. Note that this will
+     * be equal to either the requested version or the current version at the time
+     * persist() was called.
      */
-    virtual version_t persist(version_t version,
+    virtual version_t persist(std::optional<version_t> latest_version,
                               bool preLocked = false) = 0;
 
     /**

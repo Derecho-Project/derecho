@@ -42,17 +42,16 @@ int main(int argc, char** argv) {
         version_t new_ver = versions[i];
         uint64_t timestamp = std::chrono::system_clock::now().time_since_epoch().count();
         registry.makeVersion(new_ver, HLC{timestamp,0});
-        //Simulate Replicated<T>::persist
+        //Simulate a persistence request
         std::vector<unsigned char> signature(signer.get_max_signature_size());
-        version_t next_persisted_ver = registry.getMinimumLatestVersion();
-        registry.sign(next_persisted_ver, signer, signature.data());
-        registry.persist(next_persisted_ver);
-        assert(next_persisted_ver == new_ver);
-        dbg_default_info("Signature on version {}: {}", next_persisted_ver, spdlog::to_hex(signature));
+        version_t signed_version = registry.sign(signer, signature.data());
+        registry.persist(signed_version);
+        assert(signed_version == new_ver);
+        dbg_default_info("Signature on version {}: {}", signed_version, spdlog::to_hex(signature));
     }
 
     for(version_t cur_version : versions) {
-        //Simulate a verification request
+        //Verify each signature to make sure they are all valid
         std::vector<unsigned char> signature(signer.get_max_signature_size());
         bool got_signature = registry.getSignature(cur_version, signature.data());
         if(!got_signature) {

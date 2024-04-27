@@ -32,7 +32,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
                                                                      T::register_functions())),
           group(group),
           current_version(persistent::INVALID_VERSION),
-          current_hlc(0,0) {
+          current_hlc(0, 0) {
     if constexpr(std::is_base_of_v<GroupReference, T>) {
         (**user_object_ptr).set_group_pointers(group, subgroup_index);
     }
@@ -217,32 +217,26 @@ void Replicated<T>::new_view_callback(const View& new_view) {
     }
 }
 
-
 template <typename T>
 void Replicated<T>::make_version(persistent::version_t ver, const HLC& hlc) {
     persistent_registry->makeVersion(ver, hlc);
 }
 
 template <typename T>
-persistent::version_t Replicated<T>::persist(persistent::version_t version, uint8_t* signature) {
-    if constexpr(!has_persistent_fields_v<T>) {
-        // for replicated<T> without Persistent fields,
-        // tell the persistent thread that we are done.
-        return version;
+persistent::version_t Replicated<T>::sign(uint8_t* signature_buffer) {
+    if constexpr(!has_signed_fields_v<T>) {
+        return persistent::INVALID_VERSION;
     }
-    persistent::version_t persisted_ver = persistent_registry->getMinimumLatestVersion();
-    persistent::version_t signed_ver;
-    // Ask PersistentRegistry to sign then persist all the Persistent fields;
-    // if persist() actually persists a later version than requested, repeat
-    // until the latest version has been both signed and persisted.
-    do {
-        signed_ver = persisted_ver;
-        if constexpr(has_signed_fields_v<T>) {
-            persistent_registry->sign(signed_ver, *signer, signature);
-        }
-        persisted_ver = persistent_registry->persist(signed_ver);
-    } while(persisted_ver < version || signed_ver < persisted_ver);
-    return persisted_ver;
+    return persistent_registry->sign(*signer, signature_buffer);
+}
+
+template <typename T>
+persistent::version_t Replicated<T>::persist(std::optional<persistent::version_t> version) {
+    if constexpr(!has_persistent_fields_v<T>) {
+        return persistent::INVALID_VERSION;
+    }
+
+    return persistent_registry->persist(version);
 };
 
 template <typename T>
@@ -284,10 +278,10 @@ persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() {
 template <typename T>
 void Replicated<T>::post_next_version(persistent::version_t version, uint64_t ts_us) {
     current_version = version;
-    if (current_hlc > HLC{ts_us,0}) {
-        current_hlc.m_logic ++;
+    if(current_hlc > HLC{ts_us, 0}) {
+        current_hlc.m_logic++;
     } else {
-        current_hlc = {ts_us,0};
+        current_hlc = {ts_us, 0};
     }
 }
 
@@ -297,39 +291,33 @@ std::tuple<persistent::version_t, HLC> Replicated<T>::get_current_version() {
 }
 
 template <typename T>
-void Replicated<T>::register_persistent_member(const char* object_name,
-                                persistent::PersistentObject* member_pointer) {
-    this->persistent_registry->registerPersistent(object_name, member_pointer);
-}
-
-template <typename T>
 const T& Replicated<T>::get_ref() const {
     return **user_object_ptr;
 }
 
 template <typename T>
 void Replicated<T>::oob_remote_write(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_dest_addr, uint64_t rkey, size_t size) {
-    group_rpc_manager.oob_remote_write(remote_node,iov,iovcnt,remote_dest_addr,rkey,size);
+    group_rpc_manager.oob_remote_write(remote_node, iov, iovcnt, remote_dest_addr, rkey, size);
 }
 
 template <typename T>
 void Replicated<T>::oob_remote_read(const node_id_t& remote_node, const struct iovec* iov, int iovcnt, uint64_t remote_src_addr, uint64_t rkey, size_t size) {
-    group_rpc_manager.oob_remote_read(remote_node,iov,iovcnt,remote_src_addr,rkey,size);
+    group_rpc_manager.oob_remote_read(remote_node, iov, iovcnt, remote_src_addr, rkey, size);
 }
 
 template <typename T>
 void Replicated<T>::oob_send(const node_id_t& remote_node, const struct iovec* iov, int iovcnt) {
-    group_rpc_manager.oob_send(remote_node,iov,iovcnt);
+    group_rpc_manager.oob_send(remote_node, iov, iovcnt);
 }
 
 template <typename T>
 void Replicated<T>::oob_recv(const node_id_t& remote_node, const struct iovec* iov, int iovcnt) {
-    group_rpc_manager.oob_recv(remote_node,iov,iovcnt);
+    group_rpc_manager.oob_recv(remote_node, iov, iovcnt);
 }
 
 template <typename T>
 void Replicated<T>::wait_for_oob_op(const node_id_t& remote_node, uint32_t op, uint64_t timeout_us) {
-    group_rpc_manager.wait_for_oob_op(remote_node,op,timeout_us);
+    group_rpc_manager.wait_for_oob_op(remote_node, op, timeout_us);
 }
 
 template <typename T>

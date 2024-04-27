@@ -1,6 +1,8 @@
 #ifndef PERSISTENT_IMPL_HPP
 #define PERSISTENT_IMPL_HPP
 
+#include "derecho/persistent/Persistent.hpp"
+
 #include "derecho/openssl/hash.hpp"
 
 #include <utility>
@@ -498,6 +500,12 @@ version_t Persistent<ObjectType, storageType>::getLatestVersion() const {
 
 template <typename ObjectType,
           StorageType storageType>
+version_t Persistent<ObjectType, storageType>::getCurrentVersion() const {
+    return this->m_pLog->getCurrentVersion();
+}
+
+template <typename ObjectType,
+          StorageType storageType>
 version_t Persistent<ObjectType, storageType>::getLastPersistedVersion() const {
     return this->m_pLog->getLastPersistedVersion();
 }
@@ -585,7 +593,9 @@ void Persistent<ObjectType, storageType>::version(const version_t ver) {
 template <typename ObjectType,
           StorageType storageType>
 std::size_t Persistent<ObjectType, storageType>::updateSignature(version_t ver, openssl::Signer& signer) {
+    dbg_trace(m_logger, "In Persistent<T>: update signature (ver={})", ver);
     if(this->m_pLog->signature_size == 0) {
+        dbg_trace(m_logger, "Returning 0 because signatures are disabled for this object");
         return 0;
     }
     std::size_t bytes_added = 0;
@@ -625,6 +635,7 @@ std::size_t Persistent<ObjectType, storageType>::getSignatureSize() const {
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::updateVerifier(version_t ver, openssl::Verifier& verifier) {
+    dbg_trace(m_logger, "In Persistent<T>: update verifier (ver={})", ver);
     if(this->m_pLog->signature_size == 0) {
         return;
     }
@@ -637,7 +648,7 @@ void Persistent<ObjectType, storageType>::updateVerifier(version_t ver, openssl:
 
 template <typename ObjectType,
           StorageType storageType>
-version_t Persistent<ObjectType, storageType>::persist(version_t ver) {
+version_t Persistent<ObjectType, storageType>::persist(std::optional<version_t> ver) {
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -648,7 +659,7 @@ version_t Persistent<ObjectType, storageType>::persist(version_t ver) {
     return ret;
 #else
     version_t persisted_ver = this->m_pLog->persist(ver);
-    dbg_debug(m_logger, "{} persist({}), actually persisted version {}", this->m_pLog->m_sName, ver, persisted_ver);
+    dbg_debug(m_logger, "{} persist({}), actually persisted version {}", this->m_pLog->m_sName, ver ? *ver : 0, persisted_ver);
     return persisted_ver;
 #endif  //_PERFORMANCE_DEBUG
 }
