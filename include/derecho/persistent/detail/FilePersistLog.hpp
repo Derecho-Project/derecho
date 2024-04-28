@@ -187,6 +187,9 @@ public:
     virtual void append(const void* pdata,
                         uint64_t size, version_t ver,
                         const HLC& mhlc) override;
+    virtual void append(const std::function<void(void*,uint64_t)>& blob_generator,
+                        uint64_t size, version_t ver,
+                        const HLC& mhlc) override;
     virtual void advanceVersion(int64_t ver) override;
     virtual int64_t getLength() override;
     virtual int64_t getEarliestIndex() override;

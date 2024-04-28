@@ -550,12 +550,11 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, cons
         });
     } else {
         // ObjectType does not support Delta, logging the whole current state.
-        auto size = mutils::bytes_size(v);
-        uint8_t* buf = new uint8_t[size];
-        memset(buf, 0, size);
-        mutils::to_bytes(v, buf);
-        this->m_pLog->append((void*)buf, size, ver, mhlc);
-        delete[] buf;
+        this->m_pLog->append([&v](void* buf,uint64_t buf_size){
+                if (mutils::bytes_size(v) <= buf_size) { 
+                    mutils::to_bytes(v,static_cast<uint8_t*>(buf));
+                }
+            },mutils::bytes_size(v),ver,mhlc);
     }
 }
 

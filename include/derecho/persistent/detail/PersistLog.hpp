@@ -89,21 +89,38 @@ public:
      */
     PersistLog(const std::string& name, bool enable_signatures);
     virtual ~PersistLog() noexcept(true);
-    /** Persistent Append
-     * @param pdata - serialized data to be append
-     * @param size - length of the data
-     * @param ver - version of the data, the implementation is responsible for
-     *              making sure it grows monotonically.
-     * @param mhlc - the hlc clock of the data, the implementation is
-     *               responsible for making sure it grows monotonically.
+    /**
+     * @fn void append(const void*, uint64_t, version_t, const HLC&)
+     * @brief   append to persistent log.
      * Note that the entry appended can only become persistent till the persist()
      * is called on that entry.
+     *
+     * @param[in]   pdata   Serialized data to be append
+     * @param[in]   size    Length of the data
+     * @param[in]   ver     Version of the data, the implementation is responsible for
+     *                      making sure it grows monotonically.
+     * @param[in]   mhlc    The hlc clock of the data, the implementation is
+     *                      responsible for making sure it grows monotonically.
      */
     virtual void append(const void* pdata,
                         uint64_t size, version_t ver,
-                        const HLC& mhlc)
-            = 0;
-
+                        const HLC& mhlc) = 0;
+    /**
+     * @fn  void append(const std::function<void(void*)>&,uint64_t,version_t,const HLC&)
+     * @brief   append to persistent log in a zero-copy fashion.
+     * Note that the entry appended can only become persistent till the persist() is
+     * called on that entry.
+     *
+     * @param[in]   blob_generator  The lambda that generator the data.
+     * @param[in]   size            The size of the data being generated.
+     * @param[in]   ver             Version of the data, the implementation is responsible
+     *                              for making sure it grows monotonically.
+     * @param[in]   mhlc            The hlc clock of the data, the implementation is
+     *                              responsible for making sure it grows monotonically.
+     */
+    virtual void append(const std::function<void(void*,uint64_t)>& blob_generator,
+                        uint64_t size, version_t ver,
+                        const HLC& mhlc) = 0;
     /**
      * Advance the version number without appending a log. This is useful
      * to create gap between versions.
