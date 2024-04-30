@@ -59,7 +59,7 @@ void TimestampLogger::instance_dump(std::ostream& output_stream) {
 
 void TimestampLogger::initialize() {
     uint32_t expected_uninitialized = logger_uninitialized;
-    if(!singleton_initialized_flag.compare_exchange_strong(expected_uninitialized, logger_initializing,
+    if(singleton_initialized_flag.compare_exchange_strong(expected_uninitialized, logger_initializing,
                                                            std::memory_order_acq_rel)) {
         if(!instance) {
             // make_unique doesn't work with private constructors
