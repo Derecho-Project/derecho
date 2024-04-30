@@ -72,10 +72,10 @@ void TimestampLogger::initialize() {
 }
 
 void TimestampLogger::log(uint64_t event_tag, uint64_t message_id, int64_t version) {
-    instance->log(event_tag, message_id, version);
+    instance->instance_log(event_tag, message_id, version);
 }
 
 void TimestampLogger::dump(std::ostream& output_stream) {
-    instance->dump(output_stream);
+    instance->instance_dump(output_stream);
 }
 }  //namespace derecho
