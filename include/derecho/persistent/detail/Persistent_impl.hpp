@@ -4,6 +4,7 @@
 #include "derecho/persistent/Persistent.hpp"
 
 #include "derecho/openssl/hash.hpp"
+#include "derecho/utils/timestamp_logger.hpp"
 
 #include <utility>
 
@@ -562,8 +563,10 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, cons
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::version(version_t ver, const HLC& mhlc) {
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_MAKE_VERSION_BEGIN, 0, ver);
     dbg_trace(m_logger, "In Persistent<T>: make version (ver={}, hlc={}us.{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     this->set(*this->m_pWrappedObject, ver, mhlc);
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_MAKE_VERSION_END, 0, ver);
 }
 
 template <typename ObjectType,
@@ -586,13 +589,16 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver) {
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::version(const version_t ver) {
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_MAKE_VERSION_BEGIN, 0, ver);
     dbg_trace(m_logger, "In Persistent<T>: make version {}.", ver);
     this->set(*this->m_pWrappedObject, ver);
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_MAKE_VERSION_END, 0, ver);
 }
 
 template <typename ObjectType,
           StorageType storageType>
 std::size_t Persistent<ObjectType, storageType>::updateSignature(version_t ver, openssl::Signer& signer) {
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_UPDATE_SIGNATURE_BEGIN, 0, ver);
     dbg_trace(m_logger, "In Persistent<T>: update signature (ver={})", ver);
     if(this->m_pLog->signature_size == 0) {
         dbg_trace(m_logger, "Returning 0 because signatures are disabled for this object");
@@ -605,6 +611,7 @@ std::size_t Persistent<ObjectType, storageType>::updateSignature(version_t ver, 
         }
         bytes_added = size;
     });
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_UPDATE_SIGNATURE_END, 0, ver);
     return bytes_added;
 }
 

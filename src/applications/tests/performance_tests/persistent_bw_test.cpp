@@ -4,9 +4,11 @@
 #include "partial_senders_allocator.hpp"
 
 #include <derecho/core/derecho.hpp>
+#include <derecho/utils/timestamp_logger.hpp>
 
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -209,6 +211,13 @@ int main(int argc, char* argv[]) {
     while(!shared_test_state.experiment_done) {
     }
     delete[] bbuf;
+
+#ifdef TIMESTAMPS
+    // Dump timestamps
+    std::ofstream timestamps_file("persistent_bw_timestamps.log");
+    derecho::TimestampLogger::dump(timestamps_file);
+    timestamps_file.close();
+#endif
 
     int64_t send_nanosec = duration_cast<nanoseconds>(shared_test_state.send_complete_time - begin_time).count();
     double send_millisec = static_cast<double>(send_nanosec) / 1000000;

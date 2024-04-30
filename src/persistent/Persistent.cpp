@@ -3,6 +3,7 @@
 #include "derecho/persistent/detail/logger.hpp"
 #include "derecho/openssl/hash.hpp"
 #include "derecho/openssl/signature.hpp"
+#include "derecho/utils/timestamp_logger.hpp"
 
 #include <functional>
 #include <string>
@@ -27,6 +28,7 @@ PersistentRegistry::~PersistentRegistry() {
 };
 
 void PersistentRegistry::makeVersion(version_t ver, const HLC& mhlc) {
+
     for(auto& entry : m_registry) {
         entry.second->version(ver, mhlc);
     }
@@ -102,6 +104,7 @@ version_t PersistentRegistry::sign(openssl::Signer& signer, uint8_t* signature_b
         memcpy(signature_buffer, m_lastSignature.data(), m_lastSignature.size());
     }
     while(cur_signable_version != INVALID_VERSION && cur_signable_version <= current_version) {
+        TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_SIGN_BEGIN, 0, cur_signable_version);
         dbg_trace(m_logger, "PersistentRegistry: Attempting to sign version {} out of {}", cur_signable_version, current_version);
         signer.init();
         std::size_t bytes_signed = 0;
@@ -124,6 +127,7 @@ version_t PersistentRegistry::sign(openssl::Signer& signer, uint8_t* signature_b
             field.second->addSignature(cur_signable_version, signature_buffer, m_lastSignedVersion);
         }
         memcpy(m_lastSignature.data(), signature_buffer, m_lastSignature.size());
+        TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_SIGN_END, 0, cur_signable_version);
         m_lastSignedVersion = cur_signable_version;
         // Advance the current version to the next non-empty version, or INVALID_VERSION if it is already at the latest version
         cur_signable_version = getNextSignedVersion(cur_signable_version);
@@ -181,6 +185,7 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
 }
 
 version_t PersistentRegistry::persist(std::optional<version_t> latest_version) {
+    TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_PERSIST_BEGIN, 0, latest_version ? *latest_version : 0);
     version_t min = INVALID_VERSION;
     for(auto& entry : m_registry) {
         version_t ver = entry.second->persist(latest_version);
@@ -189,6 +194,7 @@ version_t PersistentRegistry::persist(std::optional<version_t> latest_version) {
             min = ver;
         }
     }
+    TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_PERSIST_END, 0, latest_version ? *latest_version : 0);
     return min;
 };
 

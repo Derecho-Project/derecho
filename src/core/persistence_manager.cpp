@@ -6,6 +6,7 @@
 #include "derecho/core/detail/view_manager.hpp"
 #include "derecho/openssl/signature.hpp"
 #include "derecho/persistent/detail/logger.hpp"
+#include "derecho/utils/timestamp_logger.hpp"
 
 #include <map>
 #include <string>
@@ -126,8 +127,10 @@ void PersistenceManager::start() {
 
 void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persistent::version_t version) {
     dbg_debug(persistence_logger, "PersistenceManager: handling persist request for subgroup {} version {}", subgroup_id, version);
+    TIMESTAMP_LOG(TimestampLogger::HANDLE_PERSIST_REQUEST_BEGIN, 0, version);
     //If a previous request already persisted a later version (due to batching), don't do anything
     if(last_persisted_version[subgroup_id] >= version) {
+        TIMESTAMP_LOG(TimestampLogger::HANDLE_PERSIST_REQUEST_END, 0, version);
         return;
     }
     persistent::version_t persisted_version = version;
@@ -197,12 +200,15 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
         dbg_debug(persistence_logger, "exception on persist():subgroup={},ver={},what={}.", subgroup_id, version, exp.what());
         std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception message:" << exp.what() << std::endl;
     }
+    TIMESTAMP_LOG(TimestampLogger::HANDLE_PERSIST_REQUEST_END, 0, version);
 }
 
 void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persistent::version_t version) {
     dbg_debug(persistence_logger, "PersistenceManager: handling verify request for subgroup {} version {}", subgroup_id, version);
+    TIMESTAMP_LOG(TimestampLogger::HANDLE_VERIFY_REQUEST_BEGIN, 0, version);
     // If this request is already obsolete due to batching, don't do anything
     if(last_verified_version[subgroup_id] > version) {
+        TIMESTAMP_LOG(TimestampLogger::HANDLE_VERIFY_REQUEST_END, 0, version);
         return;
     }
     // Note: The version parameter has no effect on this function. It just examines the SST and verifies the signatures
@@ -263,6 +269,7 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
             last_verified_version[subgroup_id] = minimum_verified_version;
         }
     }
+    TIMESTAMP_LOG(TimestampLogger::HANDLE_VERIFY_REQUEST_END, 0, version);
 }
 
 /** post a persistence request */
@@ -274,6 +281,7 @@ void PersistenceManager::post_persist_request(const subgroup_id_t& subgroup_id, 
     prq_lock.clear(std::memory_order_release);  // release lock
     // post semaphore
     sem_post(&persistence_request_sem);
+    TIMESTAMP_LOG(TimestampLogger::PERSISTENCE_REQUEST_POSTED, 0, version);
 }
 
 void PersistenceManager::post_verify_request(const subgroup_id_t& subgroup_id, const persistent::version_t& version) {
@@ -291,10 +299,12 @@ void PersistenceManager::post_verify_request(const subgroup_id_t& subgroup_id, c
 /** make a version */
 void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
                                       const persistent::version_t& version, const HLC& mhlc) {
+    TIMESTAMP_LOG(TimestampLogger::PERSISTENCE_MAKE_VERSION_BEGIN, 0, version);
     auto search = objects_by_subgroup_id.find(subgroup_id);
     if(search != objects_by_subgroup_id.end()) {
         search->second->make_version(version, mhlc);
     }
+    TIMESTAMP_LOG(TimestampLogger::PERSISTENCE_MAKE_VERSION_END, 0, version);
 }
 
 void PersistenceManager::shutdown(bool wait) {

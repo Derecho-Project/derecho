@@ -1,4 +1,4 @@
-add_library(utils OBJECT logger.cpp)
+add_library(utils OBJECT logger.cpp timestamp_logger.cpp)
 target_include_directories(utils PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
 )
