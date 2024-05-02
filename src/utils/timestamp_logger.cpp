@@ -49,9 +49,9 @@ void TimestampLogger::instance_dump(std::ostream& output_stream) {
     }
     for(std::size_t i = 0; i < cur_index; ++i) {
         output_stream << event_log[i].event_tag << " "
-                      << duration_cast<nanoseconds>(event_log[i].time.time_since_epoch()).count() << " "
                       << my_node_id << " "
                       << event_log[i].message_id << " "
+                      << duration_cast<nanoseconds>(event_log[i].time.time_since_epoch()).count() << " "
                       << event_log[i].version << std::endl;
     }
     pthread_spin_unlock(&log_mutex);

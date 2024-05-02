@@ -63,7 +63,7 @@ public:
     /**
      * Dumps a string representation of the timestamp log to an output stream.
      * Each log entry will become one line of output with the following format:
-     * <tag> <timestamp> <node ID> <message ID> <version>
+     * <tag> <node ID> <message ID> <timestamp> <version>
      *
      * This should only be called after all timestamps are done being recorded,
      * since it holds a lock on the log for the duration of printing the output
