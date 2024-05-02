@@ -4,8 +4,8 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 project(derecho CXX)
 
 # Version
-set(derecho_VERSION 2.3)
-set(derecho_build_VERSION 2.3.0)
+set(derecho_VERSION 2.4)
+set(derecho_build_VERSION 2.4.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if (${USE_VERBS_API})
