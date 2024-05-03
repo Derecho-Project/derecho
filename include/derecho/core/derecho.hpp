@@ -5,6 +5,7 @@
  * @brief   This file includes the essential core headers.
  */
 
+#include <derecho/config.h>
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
 #include "derecho_type_definitions.hpp"

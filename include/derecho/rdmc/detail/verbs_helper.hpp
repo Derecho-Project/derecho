@@ -1,6 +1,8 @@
+#pragma once
 #ifndef VERBS_HELPER_HPP
 #define VERBS_HELPER_HPP
 
+#include <derecho/config.h>
 #include <cstdint>
 #include <optional>
 #include <functional>

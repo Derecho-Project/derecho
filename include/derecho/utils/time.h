@@ -1,7 +1,9 @@
+#pragma once
 
 #ifndef TIME_TIME_H
 #define TIME_TIME_H
 
+#include <derecho/config.h>
 #include <cstdint>
 #include <sys/resource.h>
 #include <time.h>

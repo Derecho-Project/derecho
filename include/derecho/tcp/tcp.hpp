@@ -1,5 +1,6 @@
 #pragma once
 
+#include <derecho/config.h>
 #include <functional>
 #include <memory>
 #include <optional>

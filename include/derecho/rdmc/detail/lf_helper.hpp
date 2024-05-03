@@ -1,6 +1,8 @@
+#pragma once
 #ifndef LF_HELPER_HPP
 #define LF_HELPER_HPP
 
+#include <derecho/config.h>
 #include <cstdint>
 #include <functional>
 #include <iostream>

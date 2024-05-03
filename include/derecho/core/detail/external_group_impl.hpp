@@ -1,3 +1,4 @@
+#include <derecho/config.h>
 #include "../external_group.hpp"
 #include "version_code.hpp"
 

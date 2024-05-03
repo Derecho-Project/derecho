@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <derecho/config.h>
 #include "derecho_internal.hpp"
 #include <mutils-containers/KindMap.hpp>
 

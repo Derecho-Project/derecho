@@ -1,6 +1,8 @@
+#pragma once
 #ifndef GROUP_SEND_HPP
 #define GROUP_SEND_HPP
 
+#include <derecho/config.h>
 #include <derecho/rdmc/rdmc.hpp>
 #include "detail/schedule.hpp"
 

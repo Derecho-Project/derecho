@@ -1,9 +1,10 @@
 #pragma once
 
+#include <derecho/config.h>
 #include "../subgroup_info.hpp"
 #include "../view.hpp"
 #include "derecho_internal.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 
 #include <spdlog/spdlog.h>
 
