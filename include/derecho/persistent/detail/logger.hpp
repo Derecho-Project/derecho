@@ -1,9 +1,10 @@
 #pragma once
 
+#include "derecho/config.h"
 #include "derecho/utils/logger.hpp"
 
-#include <memory>
 #include <atomic>
+#include <memory>
 
 namespace persistent {
 

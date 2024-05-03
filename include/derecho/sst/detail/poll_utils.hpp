@@ -1,5 +1,7 @@
 #pragma once
 
+#include "derecho/config.h"
+
 #include <condition_variable>
 #include <optional>
 #include <list>

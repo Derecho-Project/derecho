@@ -1,6 +1,7 @@
 #pragma once
 
 #include "derecho/conf/conf.hpp"
+#include "derecho/config.h"
 #include "derecho/utils/logger.hpp"
 #include "predicates.hpp"
 

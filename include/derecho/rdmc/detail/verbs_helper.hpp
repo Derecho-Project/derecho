@@ -1,3 +1,4 @@
+#pragma once
 #ifndef VERBS_HELPER_HPP
 #define VERBS_HELPER_HPP
 
@@ -9,7 +10,8 @@
 #include <string>
 #include <vector>
 
-#include <derecho/core/derecho_type_definitions.hpp>
+#include "derecho/config.h"
+#include "derecho/core/derecho_type_definitions.hpp"
 
 struct ibv_mr;
 struct ibv_qp;

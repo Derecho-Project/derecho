@@ -6,6 +6,7 @@
  */
 
 #include "derecho/conf/conf.hpp"
+#include "derecho/config.h"
 #include "detail/connection_manager.hpp"
 #include "detail/p2p_connection_manager.hpp"
 #include "group.hpp"

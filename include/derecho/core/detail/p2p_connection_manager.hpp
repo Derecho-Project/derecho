@@ -1,5 +1,6 @@
 #pragma once
 
+#include "derecho/config.h"
 #include "p2p_connection.hpp"
 #ifdef USE_VERBS_API
 #include "derecho/sst/detail/verbs.hpp"

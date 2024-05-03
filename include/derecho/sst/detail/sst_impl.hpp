@@ -9,6 +9,7 @@
 #include "../sst.hpp"
 
 #include "../predicates.hpp"
+#include "derecho/config.h"
 #include "derecho/utils/time.h"
 #include "poll_utils.hpp"
 #include <chrono>

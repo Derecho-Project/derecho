@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../replicated.hpp"
+#include "derecho/config.h"
 #include "view_manager.hpp"
 
 #include "derecho/mutils-serialization/SerializationSupport.hpp"

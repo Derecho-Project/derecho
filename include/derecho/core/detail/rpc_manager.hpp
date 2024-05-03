@@ -8,6 +8,7 @@
 
 #include "../derecho_type_definitions.hpp"
 #include "../view.hpp"
+#include "derecho/config.h"
 #include "derecho/mutils-serialization/SerializationSupport.hpp"
 #include "derecho/persistent/Persistent.hpp"
 #include "derecho/utils/logger.hpp"
@@ -281,11 +282,11 @@ public:
      * are set up in the new-view callback, but external clients can join at any time.
      */
     void add_external_connection(node_id_t node_id);
-    
+
     /**
-     * Remove a P2P connection to an external client. The connection is cleaned up in 
-     * case a failure is detected (i.e. the external client stopped sending heartbeats. 
-     * However, we avoid the failure procedure in case the external client performs a 
+     * Remove a P2P connection to an external client. The connection is cleaned up in
+     * case a failure is detected (i.e. the external client stopped sending heartbeats.
+     * However, we avoid the failure procedure in case the external client performs a
      * graceful exit, informing that it is exiting.
      */
     void remove_external_connection(node_id_t node_id);

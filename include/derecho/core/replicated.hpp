@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "derecho/config.h"
 #include "derecho/persistent/Persistent.hpp"
 #include "derecho/tcp/tcp.hpp"
 #include "derecho_exception.hpp"

@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "derecho/config.h"
 #include "derecho_exception.hpp"
 
 #include <cstdint>

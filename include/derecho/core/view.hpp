@@ -5,13 +5,14 @@
 
 #pragma once
 
+#include "derecho/config.h"
+#include "derecho/mutils-serialization/SerializationMacros.hpp"
+#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho/sst/sst.hpp"
 #include "derecho_modes.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/derecho_sst.hpp"
 #include "detail/multicast_group.hpp"
-#include "derecho/mutils-serialization/SerializationMacros.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
-#include "derecho/sst/sst.hpp"
 
 #include <cstdint>
 #include <iostream>

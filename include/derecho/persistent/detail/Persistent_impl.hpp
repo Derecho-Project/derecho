@@ -1,9 +1,10 @@
+#pragma once
 #ifndef PERSISTENT_IMPL_HPP
 #define PERSISTENT_IMPL_HPP
 
-#include "derecho/persistent/Persistent.hpp"
-
+#include "derecho/config.h"
 #include "derecho/openssl/hash.hpp"
+#include "derecho/persistent/Persistent.hpp"
 
 #include <utility>
 

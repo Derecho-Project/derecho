@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../derecho_type_definitions.hpp"
+#include "derecho/config.h"
 #include "derecho/sst/sst.hpp"
 #include "derecho_internal.hpp"
 

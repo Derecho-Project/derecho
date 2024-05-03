@@ -4,6 +4,7 @@
  */
 
 #include "../group.hpp"
+#include "derecho/config.h"
 #include "derecho/mutils-serialization/SerializationSupport.hpp"
 #include "derecho/utils/container_template_functions.hpp"
 #include "derecho/utils/logger.hpp"
@@ -28,7 +29,7 @@ template <typename SubgroupType>
 uint32_t _Group::get_subgroup_max_payload_size(uint32_t subgroup_num) {
     if (auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
         return gptr->get_subgroup_max_payload_size(subgroup_num);
-    } else 
+    } else
         throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
 }
 

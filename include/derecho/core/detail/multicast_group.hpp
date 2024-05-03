@@ -4,6 +4,7 @@
 #include "../subgroup_info.hpp"
 #include "connection_manager.hpp"
 #include "derecho/conf/conf.hpp"
+#include "derecho/config.h"
 #include "derecho/mutils-serialization/SerializationMacros.hpp"
 #include "derecho/mutils-serialization/SerializationSupport.hpp"
 #include "derecho/rdmc/rdmc.hpp"

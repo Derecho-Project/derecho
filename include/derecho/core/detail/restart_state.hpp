@@ -2,8 +2,9 @@
 
 #include "../subgroup_info.hpp"
 #include "../view.hpp"
-#include "derecho_internal.hpp"
+#include "derecho/config.h"
 #include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include "derecho_internal.hpp"
 
 #include <spdlog/spdlog.h>
 

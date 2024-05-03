@@ -8,6 +8,7 @@
 
 #include "../derecho_exception.hpp"
 #include "../derecho_type_definitions.hpp"
+#include "derecho/config.h"
 #include "derecho/mutils-serialization/SerializationSupport.hpp"
 #include "derecho/utils/logger.hpp"
 #include "derecho_internal.hpp"

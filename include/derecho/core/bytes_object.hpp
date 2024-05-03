@@ -1,5 +1,6 @@
 #pragma once
 
+#include "derecho/config.h"
 #include "derecho/mutils-serialization/SerializationSupport.hpp"
 
 #include <cstring>

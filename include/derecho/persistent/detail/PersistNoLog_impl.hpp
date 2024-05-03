@@ -1,7 +1,9 @@
+#pragma once
 #ifndef PERSIST_NO_LOG_IMPL_HPP
 #define PERSIST_NO_LOG_IMPL_HPP
 
 #include "../PersistNoLog.hpp"
+#include "derecho/config.h"
 
 #define _NOLOG_OBJECT_DIR_ ((storageType == ST_MEM) ? getPersRamdiskPath().c_str() : getPersFilePath().c_str())
 #define _NOLOG_OBJECT_NAME_ ((object_name == nullptr) ? typeid(ObjectType).name() : object_name)

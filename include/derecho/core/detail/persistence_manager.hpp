@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include "derecho/config.h"
 #include "derecho/openssl/signature.hpp"
 #include "derecho/persistent/PersistentInterface.hpp"
 #include "derecho/utils/logger.hpp"

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef LF_HELPER_HPP
 #define LF_HELPER_HPP
 
@@ -13,8 +14,9 @@
 #include <string>
 #include <vector>
 
-#include <derecho/core/derecho_type_definitions.hpp>
-#include <derecho/utils/logger.hpp>
+#include "derecho/config.h"
+#include "derecho/core/derecho_type_definitions.hpp"
+#include "derecho/utils/logger.hpp"
 
 #ifndef LF_VERSION
 #define LF_VERSION FI_VERSION(1, 5)

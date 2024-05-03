@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "derecho/config.h"
 #include "derecho/core/git_version.hpp"
 
 #include <exception>

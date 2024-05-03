@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "derecho/config.h"
 #include "derecho/utils/logger.hpp"
 #include "derecho_exception.hpp"
 #include "derecho_modes.hpp"

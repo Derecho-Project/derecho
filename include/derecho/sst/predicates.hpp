@@ -1,5 +1,7 @@
 #pragma once
 
+#include "derecho/config.h"
+
 #include <algorithm>
 #include <functional>
 #include <list>

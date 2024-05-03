@@ -7,6 +7,7 @@
  * including the Resources class and global setup functions.
  */
 
+#include "derecho/config.h"
 #include "derecho/core/derecho_type_definitions.hpp"
 
 #include <atomic>
@@ -71,7 +72,7 @@ private:
 
 protected:
     std::atomic<bool> remote_failed;
-    /** Post a remote RDMA operation. 
+    /** Post a remote RDMA operation.
      * @param   sctxt       sender context pointer
      * @param   offset      offset
      * @param   size        size to send

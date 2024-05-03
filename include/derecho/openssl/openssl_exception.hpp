@@ -6,6 +6,8 @@
  */
 #pragma once
 
+#include "derecho/config.h"
+
 #include <exception>
 #include <iostream>
 #include <sstream>

@@ -1,4 +1,6 @@
 #pragma once
+
+#include "derecho/config.h"
 #include "derecho/utils/map_macro.hpp"
 #include "detail/rpc_utils.hpp"
 

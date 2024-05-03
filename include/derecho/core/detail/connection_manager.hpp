@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../derecho_type_definitions.hpp"
+#include "derecho/config.h"
 #include "derecho/tcp/tcp.hpp"
 #include "locked_reference.hpp"
 

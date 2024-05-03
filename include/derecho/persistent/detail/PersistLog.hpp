@@ -1,3 +1,4 @@
+#pragma once
 #ifndef PERSIST_LOG_HPP
 #define PERSIST_LOG_HPP
 
@@ -8,6 +9,7 @@
 #include "../HLC.hpp"
 #include "../PersistException.hpp"
 #include "../PersistentInterface.hpp"
+#include "derecho/config.h"
 #include <functional>
 #include <inttypes.h>
 #include <map>

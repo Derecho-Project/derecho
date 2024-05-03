@@ -4,6 +4,7 @@
 #pragma once
 
 #include "../derecho_exception.hpp"
+#include "derecho/config.h"
 #include "derecho/openssl/signature.hpp"
 #include "derecho_internal.hpp"
 

@@ -1,7 +1,10 @@
+#pragma once
 #ifndef CONF_HPP
 #define CONF_HPP
 
+#include "derecho/config.h"
 #include "getpot/GetPot"
+
 #include <atomic>
 #include <getopt.h>
 #include <inttypes.h>

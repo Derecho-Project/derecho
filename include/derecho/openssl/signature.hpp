@@ -6,6 +6,8 @@
  */
 
 #pragma once
+
+#include "derecho/config.h"
 #include "hash.hpp"
 #include "openssl_exception.hpp"
 #include "pointers.hpp"

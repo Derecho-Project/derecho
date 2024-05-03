@@ -123,7 +123,11 @@ static void default_context() {
     memset((void*)&g_ctxt, 0, sizeof(lf_ctxt));
     g_ctxt.hints = crash_if_nullptr("Fail to allocate fi hints", fi_allocinfo);
     //defaults the hints:
+#ifdef ENABLE_HMEM
     g_ctxt.hints->caps = FI_MSG | FI_RMA | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE | FI_HMEM;
+#else
+    g_ctxt.hints->caps = FI_MSG | FI_RMA | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE;
+#endif //ENABLE_HMEM
     g_ctxt.hints->ep_attr->type = FI_EP_MSG;  // use connection based endpoint by default.
     g_ctxt.hints->mode = ~0;                  // all modes
 
@@ -155,7 +159,11 @@ static void load_configuration() {
     if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) || (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)) {
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
+#ifdef ENABLE_HMEM
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR | FI_MR_HMEM;
+#else
+        g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+#endif //ENABLE_HMEM
     }
 
     // scatter/gather batch size

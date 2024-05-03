@@ -1,5 +1,6 @@
 #pragma once
 
+#include "derecho/config.h"
 #ifdef USE_VERBS_API
 #include "derecho/sst/detail/verbs.hpp"
 #else

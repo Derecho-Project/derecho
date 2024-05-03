@@ -1,4 +1,5 @@
 #include "../external_group.hpp"
+#include "derecho/config.h"
 #include "version_code.hpp"
 
 namespace derecho {

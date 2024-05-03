@@ -6,6 +6,7 @@
  */
 
 #include "derecho/conf/conf.hpp"
+#include "derecho/config.h"
 #include "derecho/tcp/tcp.hpp"
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
@@ -546,7 +547,7 @@ public:
      * @brief Register Out-of-band memory region with extended arguments
      * Please check fi_mr_regattr documentation for more explanation:
      * https://ofiwg.github.io/libfabric/v1.12.1/man/fi_mr.3.html
-     * 
+     *
      * @param addr      The address of the memory region
      * @param size      The size in bytes of the memory region
      * @param attr      The memory attribute

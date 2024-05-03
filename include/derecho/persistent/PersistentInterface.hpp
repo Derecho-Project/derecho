@@ -1,7 +1,8 @@
 #pragma once
 
-#include "../openssl/signature.hpp"
 #include "HLC.hpp"
+#include "derecho/config.h"
+#include "derecho/openssl/signature.hpp"
 
 #include <cstdint>
 #include <functional>

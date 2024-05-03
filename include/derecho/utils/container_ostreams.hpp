@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include "derecho/config.h"
+
 #include <map>
 #include <ostream>
 #include <set>

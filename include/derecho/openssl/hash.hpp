@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include "derecho/config.h"
 #include "openssl_exception.hpp"
 #include "pointers.hpp"
 

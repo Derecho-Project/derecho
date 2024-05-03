@@ -1,5 +1,8 @@
+#pragma once
 #ifndef MESSAGE_HPP
 #define MESSAGE_HPP
+
+#include "derecho/config.h"
 
 #include <cstdint>
 #include <utility>
