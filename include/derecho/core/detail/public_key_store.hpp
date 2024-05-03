@@ -3,8 +3,9 @@
  */
 #pragma once
 
+#include <derecho/config.h>
 #include "../derecho_exception.hpp"
-#include "derecho/openssl/signature.hpp"
+#include <derecho/openssl/signature.hpp>
 #include "derecho_internal.hpp"
 
 #include <map>

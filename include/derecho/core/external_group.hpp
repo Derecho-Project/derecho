@@ -5,7 +5,8 @@
  * @brief   This file contains the APIs for external clients.
  */
 
-#include "derecho/conf/conf.hpp"
+#include <derecho/config.h>
+#include <derecho/conf/conf.hpp>
 #include "detail/connection_manager.hpp"
 #include "detail/p2p_connection_manager.hpp"
 #include "group.hpp"

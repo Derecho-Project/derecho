@@ -1,6 +1,8 @@
+#pragma once
 #ifndef PERSISTENT_EXCEPTION_HPP
 #define PERSISTENT_EXCEPTION_HPP
 
+#include <derecho/config.h>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>

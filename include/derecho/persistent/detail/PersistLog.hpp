@@ -1,3 +1,4 @@
+#pragma once
 #ifndef PERSIST_LOG_HPP
 #define PERSIST_LOG_HPP
 
@@ -5,6 +6,7 @@
 #error PersistLog.hpp only works with clang and gnu compilers
 #endif
 
+#include <derecho/config.h>
 #include "../HLC.hpp"
 #include "../PersistException.hpp"
 #include "../PersistentInterface.hpp"

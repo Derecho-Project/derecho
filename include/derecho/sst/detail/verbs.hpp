@@ -6,8 +6,8 @@
  * Contains declarations needed for working with RDMA using InfiniBand Verbs,
  * including the Resources class and global setup functions.
  */
-
-#include "derecho/core/derecho_type_definitions.hpp"
+#include <derecho/config.h>
+#include <derecho/core/derecho_type_definitions.hpp>
 
 #include <atomic>
 #include <infiniband/verbs.h>

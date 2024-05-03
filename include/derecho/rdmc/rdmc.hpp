@@ -1,7 +1,8 @@
-
+#pragma once
 #ifndef RDMC_HPP
 #define RDMC_HPP
 
+#include <derecho/config.h>
 #ifdef USE_VERBS_API
     #include "detail/verbs_helper.hpp"
 #else

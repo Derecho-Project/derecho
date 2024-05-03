@@ -5,8 +5,9 @@
  * @brief   Declaration of the `Group<>` class template.
  */
 
-#include "derecho/conf/conf.hpp"
-#include "derecho/tcp/tcp.hpp"
+#include <derecho/config.h>
+#include <derecho/conf/conf.hpp>
+#include <derecho/tcp/tcp.hpp>
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/persistence_manager.hpp"

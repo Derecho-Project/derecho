@@ -1,9 +1,10 @@
 #pragma once
 
+#include <derecho/config.h>
 #include "../replicated.hpp"
 #include "view_manager.hpp"
 
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 
 #include <functional>
 #include <mutex>

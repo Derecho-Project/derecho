@@ -1,4 +1,5 @@
 #pragma once
+#include <derecho/config.h>
 #include "SerializationMacros.hpp"
 #include "context_ptr.hpp"
 #include <cstring>
