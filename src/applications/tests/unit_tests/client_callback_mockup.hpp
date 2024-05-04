@@ -82,7 +82,7 @@ std::ostream& operator<<(std::ostream& os, const ClientCallbackType& cb_type);
  */
 struct CallbackRequest {
     ClientCallbackType callback_type;
-    node_id_t client;
+    derecho::node_id_t client;
     persistent::version_t version;
 };
 
@@ -110,7 +110,7 @@ public:
      * P2P-callable function that creates a new log entry with the provided data.
      * @return The version assigned to the new log entry, and the timestamp assigned to the new log entry
     */
-    std::pair<persistent::version_t, uint64_t> update(node_id_t sender_id,
+    std::pair<persistent::version_t, uint64_t> update(derecho::node_id_t sender_id,
                                                       uint32_t update_counter,
                                                       const Blob& new_data) const;
 
@@ -126,7 +126,7 @@ public:
      * update (identified by its version) has reached a particular state (locally/globally
      * persisted, signed)
      */
-    void register_callback(node_id_t client_node_id, const ClientCallbackType& callback_type, persistent::version_t version) const;
+    void register_callback(derecho::node_id_t client_node_id, const ClientCallbackType& callback_type, persistent::version_t version) const;
     /**
      * Function that implements the callback-checking thread. This thread waits for
      * updates to finish persisting and then sends callbacks to clients who requested

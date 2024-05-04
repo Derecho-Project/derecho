@@ -1,7 +1,7 @@
 /**
  * @file oob_rdma.cpp
  *
- * This test creates one subgroup demonstrating OOB mechanism 
+ * This test creates one subgroup demonstrating OOB mechanism
  * - between external clients and a group member, and
  * - between derecho members
  */
@@ -76,7 +76,7 @@ public:
      * @param size          the size of the data
      *
      * @return true for success, otherwise false.
-     */ 
+     */
     bool get(const uint64_t& callee_addr, const uint64_t& caller_addr, const uint64_t rkey, const uint64_t size) const;
 
     /**
@@ -104,7 +104,7 @@ public:
     bool recv(const uint64_t& callee_addr, const uint64_t size) const;
 
     // constructors
-    OOBRDMA(void* _oob_mr_ptr, size_t _oob_mr_size) : 
+    OOBRDMA(void* _oob_mr_ptr, size_t _oob_mr_size) :
         oob_mr_ptr(_oob_mr_ptr),
         oob_mr_size(_oob_mr_size) {}
 
@@ -149,7 +149,7 @@ uint64_t OOBRDMA::put(const uint64_t& caller_addr, const uint64_t rkey, const ui
 
 bool OOBRDMA::get(const uint64_t& callee_addr, const uint64_t& caller_addr, const uint64_t rkey, const uint64_t size) const {
     // STEP 1 - validate the memory size
-    if ((callee_addr < reinterpret_cast<uint64_t>(oob_mr_ptr)) || 
+    if ((callee_addr < reinterpret_cast<uint64_t>(oob_mr_ptr)) ||
         ((callee_addr+size) > reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_mr_size)) {
         std::cerr << "callee address:0x" << std::hex << callee_addr << " or size " << size << " is invalid." << std::dec << std::endl;
         return false;
@@ -192,7 +192,7 @@ bool OOBRDMA::recv(const uint64_t& callee_addr, const uint64_t size) const {
     // STEP 2 - do RDMA send
     auto& subgroup_handle = group->template get_subgroup<OOBRDMA>(this->subgroup_index);
     struct iovec iov;
-    iov.iov_base    = reinterpret_cast<void*>(callee_addr); 
+    iov.iov_base    = reinterpret_cast<void*>(callee_addr);
     iov.iov_len     = static_cast<size_t>(size);
     subgroup_handle.oob_send(group->get_rpc_caller_id(),&iov,1);
     subgroup_handle.wait_for_oob_op(group->get_rpc_caller_id(),OOB_OP_SEND,1000);
@@ -217,7 +217,7 @@ static void print_data (void* addr,size_t size) {
 
 template <typename SubgroupRefT>
 void do_send_recv_test(SubgroupRefT& subgroup_handle,
-                       node_id_t nid,
+                       derecho::node_id_t nid,
                        void* send_buffer_laddr,
                        void* recv_buffer_laddr,
                        size_t oob_data_size
@@ -282,7 +282,7 @@ void do_send_recv_test(SubgroupRefT& subgroup_handle,
     iov.iov_len = oob_data_size;
     // 3.1 - post oob buffer for receive
     subgroup_handle.oob_recv(nid,&iov,1);
-    // 3.2 - post p2p_send 
+    // 3.2 - post p2p_send
     auto recv_results = subgroup_handle.template p2p_send<RPC_NAME(recv)>(nid,remote_addr,oob_data_size);
     // 3.3 - wait until oob received.
     subgroup_handle.wait_for_oob_op(nid,OOB_OP_RECV,1000);
@@ -326,7 +326,7 @@ void do_send_recv_test(SubgroupRefT& subgroup_handle,
 }
 
 template <typename P2PCaller>
-void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buffer_laddr, void* get_buffer_laddr,
+void do_test (P2PCaller& p2p_caller, derecho::node_id_t nid, uint64_t rkey, void* put_buffer_laddr, void* get_buffer_laddr,
     size_t oob_data_size
 #ifdef CUDA_FOUND
     , bool use_gpu_mem
@@ -383,7 +383,7 @@ void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buf
         auto results = p2p_caller.template p2p_send<RPC_NAME(get)>(nid,remote_addr,reinterpret_cast<uint64_t>(get_buffer_laddr),rkey,oob_data_size);
         std::cout << "Wait for return" << std::endl;
         results.get().get(nid);
-        std::cout << "Data get from remote address @" << std::hex << remote_addr 
+        std::cout << "Data get from remote address @" << std::hex << remote_addr
                   << " to local address @" << reinterpret_cast<uint64_t>(get_buffer_laddr) << std::endl;
     }
     // print 16 bytes of contents
@@ -418,7 +418,7 @@ void do_test (P2PCaller& p2p_caller, node_id_t nid, uint64_t rkey, void* put_buf
 #endif
 }
 
-const char* help_string = 
+const char* help_string =
 "--server,-s        Run as server, otherwise, run as client by default.\n"
 #ifdef CUDA_FOUND
 "--gpu,-g           Using GPU memory, otherwise, use CPU memory by default.\n"
@@ -514,7 +514,7 @@ int main(int argc, char** argv) {
             std::cerr << "Unknown CUDA device:" << cuda_device << ". We found only " << n_devices << std::endl;
             return -1;
         }
-        // initialize cuda_ctxt; 
+        // initialize cuda_ctxt;
         ASSERTDRV(cuDeviceGet(&cuda_ctxt.device, cuda_device));
         ASSERTDRV(cuDevicePrimaryCtxRetain(&cuda_ctxt.context, cuda_ctxt.device));
         ASSERTDRV(cuCtxSetCurrent(cuda_ctxt.context));
@@ -556,23 +556,23 @@ int main(int argc, char** argv) {
     if (server_mode) {
         // Read configurations from the command line options as well as the default config file
         derecho::Conf::initialize(argc, argv);
-    
+
         // Define subgroup member ship using the default subgroup allocator function.
         // When constructed using make_subgroup_allocator with no arguments, this will check the config file
         // for either the json_layout or json_layout_file options, and use whichever one is present to define
         // the mapping from types to subgroup allocation parameters.
         derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<OOBRDMA>()};
-    
+
         // oobrdma_factory
         auto oobrdma_factory = [&oob_mr_ptr,&oob_mr_size](persistent::PersistentRegistry*, derecho::subgroup_id_t) {
             return std::make_unique<OOBRDMA>(oob_mr_ptr,oob_mr_size);
         };
-    
+
         // group
-        derecho::Group<OOBRDMA> group(derecho::UserMessageCallbacks{}, subgroup_function, 
+        derecho::Group<OOBRDMA> group(derecho::UserMessageCallbacks{}, subgroup_function,
                                       {&dsm},
                                       std::vector<derecho::view_upcall_t>{}, oobrdma_factory);
-    
+
         std::cout << "Finished constructing/joining Group." << std::endl;
 #ifdef CUDA_FOUND
         if (use_gpu_mem) {
@@ -636,7 +636,7 @@ int main(int argc, char** argv) {
             void* get_buffer_laddr  = reinterpret_cast<void*>(((reinterpret_cast<uint64_t>(oob_mr_ptr) + oob_data_size + 4095)>>12)<<12);
 
             for (uint32_t i=1;i<=count;i++) {
-                node_id_t nid = i%external_group.get_members().size();
+                derecho::node_id_t nid = i%external_group.get_members().size();
                 do_test(external_caller,nid,rkey,put_buffer_laddr,get_buffer_laddr,oob_data_size
 #ifdef CUDA_FOUND
                     ,use_gpu_mem

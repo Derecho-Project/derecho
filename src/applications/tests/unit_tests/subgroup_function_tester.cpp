@@ -25,6 +25,7 @@ void test_fixed_allocation_functions() {
     using derecho::CrossProductPolicy;
     using derecho::DefaultSubgroupAllocator;
     using derecho::SubgroupAllocationPolicy;
+    using derecho::node_id_t;
     //Reduce the verbosity of specifying "ordered" for three custom subgroups
     std::vector<derecho::Mode> three_ordered(3, derecho::Mode::ORDERED);
     std::vector<std::string> three_default_profiles(3, "default");
@@ -106,6 +107,7 @@ void test_fixed_allocation_functions() {
 void test_flexible_allocation_functions() {
     using derecho::DefaultSubgroupAllocator;
     using derecho::SubgroupAllocationPolicy;
+    using derecho::node_id_t;
 
     //Reduce the verbosity of specifying "ordered" for three custom subgroups
     std::vector<derecho::Mode> three_ordered(3, derecho::Mode::ORDERED);
@@ -164,6 +166,8 @@ void test_flexible_allocation_functions() {
 }
 
 void test_json_layout() {
+    using derecho::node_id_t;
+
     const char* json_layout_string =
             R"|([
     {
