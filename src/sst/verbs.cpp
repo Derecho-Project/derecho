@@ -2,14 +2,14 @@
  * @file verbs.cpp
  * Contains the implementation of the IB Verbs adapter layer of %SST.
  */
-#include "derecho/sst/detail/verbs.hpp"
+#include <derecho/sst/detail/verbs.hpp>
 
-#include "derecho/conf/conf.hpp"
-#include "derecho/core/detail/connection_manager.hpp"
-#include "derecho/sst/detail/poll_utils.hpp"
-#include "derecho/sst/detail/sst_impl.hpp"
-#include "derecho/tcp/tcp.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
+#include <derecho/sst/detail/poll_utils.hpp>
+#include <derecho/sst/detail/sst_impl.hpp>
+#include <derecho/tcp/tcp.hpp>
+#include <derecho/utils/logger.hpp>
 
 #include <arpa/inet.h>
 #include <byteswap.h>

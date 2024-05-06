@@ -1,4 +1,4 @@
-#include "derecho/conf/conf.hpp"
+#include <derecho/conf/conf.hpp>
 
 #include <nlohmann/json.hpp>
 
