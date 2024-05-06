@@ -1,9 +1,9 @@
-#include "derecho/core/detail/p2p_connection_manager.hpp"
+#include <derecho/core/detail/p2p_connection_manager.hpp>
 
-#include "derecho/core/derecho_exception.hpp"
-#include "derecho/conf/conf.hpp"
-#include "derecho/sst/detail/poll_utils.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/core/derecho_exception.hpp>
+#include <derecho/conf/conf.hpp>
+#include <derecho/sst/detail/poll_utils.hpp>
+#include <derecho/utils/logger.hpp>
 
 #include <cassert>
 #include <cstring>

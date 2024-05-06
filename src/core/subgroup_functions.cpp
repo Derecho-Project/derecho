@@ -2,13 +2,13 @@
  * @file subgroup_functions.cpp
  */
 
-#include "derecho/core/subgroup_functions.hpp"
+#include <derecho/core/subgroup_functions.hpp>
 
-#include "derecho/core/derecho_modes.hpp"
-#include "derecho/core/detail/derecho_internal.hpp"
-#include "derecho/core/view.hpp"
-#include "derecho/utils/container_template_functions.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/core/derecho_modes.hpp>
+#include <derecho/core/detail/derecho_internal.hpp>
+#include <derecho/core/view.hpp>
+#include <derecho/utils/container_template_functions.hpp>
+#include <derecho/utils/logger.hpp>
 
 #include <algorithm>
 #include <iterator>

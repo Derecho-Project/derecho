@@ -1,8 +1,7 @@
-#include "derecho/core/detail/p2p_connection.hpp"
-
-#include "derecho/conf/conf.hpp"
-#include "derecho/core/detail/rpc_utils.hpp"
-#include "derecho/sst/detail/poll_utils.hpp"
+#include <derecho/core/detail/p2p_connection.hpp>
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/detail/rpc_utils.hpp>
+#include <derecho/sst/detail/poll_utils.hpp>
 
 #include <cstring>
 #include <map>

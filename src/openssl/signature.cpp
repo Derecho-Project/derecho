@@ -1,4 +1,4 @@
-#include "derecho/openssl/signature.hpp"
+#include <derecho/openssl/signature.hpp>
 
 #include <cstdio>
 #include <cstring>

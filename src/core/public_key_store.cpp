@@ -1,8 +1,8 @@
 /**
  * @file public_key_store.cpp
  */
-#include "derecho/core/detail/public_key_store.hpp"
-#include "derecho/persistent/detail/util.hpp"
+#include <derecho/core/detail/public_key_store.hpp>
+#include <derecho/persistent/detail/util.hpp>
 
 #include <dirent.h>
 #include <regex>

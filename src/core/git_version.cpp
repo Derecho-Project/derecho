@@ -6,7 +6,7 @@
  * local repository's .git/hooks/ directory.
  */
 
-#include "derecho/core/git_version.hpp"
+#include <derecho/core/git_version.hpp>
 
 namespace derecho {
 

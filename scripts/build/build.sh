@@ -81,9 +81,9 @@ if [[ $2 == "USE_VERBS_API" ]]; then
 fi
 
 # clear existing installed
-rm -rf ${install_prefix}/lib/libderecho*
-rm -rf ${install_prefix}/lib/cmake/derecho
-rm -rf ${install_prefix}/include/derecho
+# rm -rf ${install_prefix}/lib/libderecho*
+# rm -rf ${install_prefix}/lib/cmake/derecho
+# rm -rf ${install_prefix}/include/derecho
 
 # begin building...
 rm -rf ${build_path} 2>/dev/null

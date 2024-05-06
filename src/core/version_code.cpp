@@ -1,6 +1,6 @@
-#include "derecho/core/detail/version_code.hpp"
+#include <derecho/core/detail/version_code.hpp>
 
-#include "derecho/core/git_version.hpp"
+#include <derecho/core/git_version.hpp>
 
 #include <cstddef>
 #include <cstdint>
