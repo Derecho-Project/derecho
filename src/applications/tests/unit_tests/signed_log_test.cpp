@@ -76,18 +76,26 @@ std::string StringWithDelta::get_current_state() const {
     return current_state;
 }
 
-void StringWithDelta::finalizeCurrentDelta(const persistent::DeltaFinalizer& finalizer) {
-    if(delta.size() == 0) {
-        dbg_default_trace("StringWithDelta: Calling finalizer with null buffer");
-        finalizer(nullptr, 0);
+size_t StringWithDelta::currentDeltaSize() {
+    if (delta.size()==0) {
+        return 0;
     } else {
-        // Serialize the string to a byte buffer and give that buffer to the DeltaFinalizer
-        // (this will create an unnecessary extra copy of the string, but efficiency isn't important here)
-        std::vector<uint8_t> delta_buffer(mutils::bytes_size(delta));
-        dbg_default_trace("StringWithDelta: Serializing delta string to a buffer of size {}", delta_buffer.size());
-        mutils::to_bytes(delta, delta_buffer.data());
-        finalizer(delta_buffer.data(), delta_buffer.size());
+        return mutils::bytes_size(delta);
+    }
+}
+
+size_t StringWithDelta::currentDeltaToBytes(uint8_t * const buf, size_t buf_size) {
+    if (delta.size() == 0) {
+        dbg_default_trace("StringWithDelta: Calling currentDeltaToBytes with null buffer\n");
+        return 0;
+    } else if (buf_size < mutils::bytes_size(delta)) {
+        dbg_default_error("{} failed because the buffer({}) given is smaller than needed({}).\n",
+                __func__,buf_size,delta.size());
+        return 0;
+    } else {
+        size_t nbytes = mutils::to_bytes(delta,buf);
         delta.clear();
+        return nbytes;
     }
 }
 

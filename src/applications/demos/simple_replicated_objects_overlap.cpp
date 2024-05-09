@@ -46,14 +46,18 @@ int main(int argc, char** argv) {
     std::vector<node_id_t> bar_members = group.get_subgroup_members<Bar>(0)[0];
     auto find_in_foo_results = std::find(foo_members.begin(), foo_members.end(), my_id);
     if(find_in_foo_results != foo_members.end()) {
+#ifndef NOLOG
         uint32_t rank_in_foo = std::distance(foo_members.begin(), find_in_foo_results);
+#endif//NOLOG
         // Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         dbg_default_crit("Here is FOO {}!", rank_in_foo);
         dbg_default_crit("I see members of my shard: {}", foo_members);
     }
     auto find_in_bar_results = std::find(bar_members.begin(), bar_members.end(), my_id);
     if(find_in_bar_results != bar_members.end()) {
+#ifndef NOLOG
         uint32_t rank_in_bar = derecho::index_of(bar_members, my_id);
+#endif//NOLOG
         // Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         dbg_default_crit("Here is BAR {}!", rank_in_bar);
         dbg_default_crit("I see members of my shard: {}", bar_members);

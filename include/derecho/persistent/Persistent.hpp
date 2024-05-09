@@ -339,21 +339,12 @@ protected:
 // the log entries are applied in order. TODO: use checkpointing to accelerate it!
 //
 // There are three methods included in this interface:
-// - 'finalizeCurrentDelta'     This method is called when Persistent<T> wants to
-//   make a version. Its argument is a DeltaFinalizer function; T should invoke this
-//   function to give Persistent<T> the Delta data.
+// - 'currentDeltaToBytes'     This method is called when Persistent<T> wants to
+//   make a version. It serialize the current Delta to the given buffer. 
 // - 'applyDelta' This method is called on object construction from the disk. Its argument
 //   is a single Delta data buffer that should be applied.
 // - 'create' This static method is used to create an empty object from a deserialization
 //   manager.
-
-/**
- * Type of a function that receives a Delta data buffer from an object with Delta support,
- * for the purpose of writing the Delta to a persistent log.
- * @param arg1 a pointer to the buffer
- * @param arg2 the buffer's size
- */
-using DeltaFinalizer = std::function<void(uint8_t const* const, std::size_t)>;
 
 template <typename DeltaObjectType>
 class IDeltaObjectFactory {
@@ -366,8 +357,26 @@ public:
 template <typename ObjectType>
 class IDeltaSupport : public IDeltaObjectFactory<ObjectType> {
 public:
-    virtual void finalizeCurrentDelta(const DeltaFinalizer&) = 0;
-    virtual void applyDelta(uint8_t const* const) = 0;
+    /**
+     * @fn size_t currentDeltaToBytes(uint8_t* const)
+     * @brief   serialize the current delta to buffer.
+     * @param[in]   buf         buffer
+     * @param[in]   buf_size    size of the given buffer
+     * @return number of size used.
+     */
+    virtual size_t currentDeltaToBytes(uint8_t* const buf, size_t buf_size) = 0;
+    /**
+     * @fn size_t currentDeltaSize()
+     * @brief   get the serialized size of the current delta.
+     * @return size.
+     */
+    virtual size_t currentDeltaSize() = 0;
+    /**
+     * @fn applyDelta(uint8_t const* const)
+     * @brief apply the delta to current state.
+     * @param[in]   buf         The buffer for serialized data.
+     */
+    virtual void applyDelta(uint8_t const* const buf) = 0;
 };
 
 // _NameMaker is a tool makeing the name for the log corresponding to a

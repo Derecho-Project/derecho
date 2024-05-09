@@ -24,16 +24,23 @@ public:
     }
     // Unlike the one in test.cpp, this finalizeCurrentDelta only writes any data if delta is nonzero
     // This simulates a more advanced object like CascadeStoreCore
-    virtual void finalizeCurrentDelta(const persistent::DeltaFinalizer& finalizer) {
-        if(delta != 0) {
-            finalizer(reinterpret_cast<const uint8_t*>(&delta), sizeof(delta));
+    virtual size_t currentDeltaToBytes(uint8_t * const buf, size_t buf_size) override {
+        if (delta == 0) {
+            return 0;
         } else {
-            finalizer(nullptr, 0);
+            if (buf_size < sizeof(delta)) {
+                dbg_default_error("{} failed because buffer ({}) is smaller than needed ({}).\n",
+                    __func__,buf_size,sizeof(delta));
+                return 0;
+            }
+            memcpy(static_cast<void*>(buf),static_cast<void*>(&delta),sizeof(delta));
+            return sizeof(delta);
         }
-        // clear delta after writing
-        this->delta = 0;
     }
-    virtual void applyDelta(uint8_t const* const pdat) {
+    virtual size_t currentDeltaSize() override {
+        return delta==0?0:sizeof(delta);
+    }
+    virtual void applyDelta(uint8_t const* const pdat) override {
         this->value += *reinterpret_cast<const int*>(pdat);
     }
     static std::unique_ptr<IntegerWithDelta> create(mutils::DeserializationManager* dm) {
