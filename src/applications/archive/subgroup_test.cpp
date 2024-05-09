@@ -10,6 +10,7 @@
 #include <derecho/core/derecho.hpp>
 
 using derecho::RawObject;
+using derecho::node_id_t;
 using std::cin;
 using std::cout;
 using std::endl;

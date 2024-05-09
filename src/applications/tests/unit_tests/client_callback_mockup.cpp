@@ -125,10 +125,10 @@ InternalClientNode::~InternalClientNode() {
 std::pair<persistent::version_t, uint64_t> InternalClientNode::submit_update(uint32_t update_counter,
                                                                              const Blob& new_data) const {
     derecho::PeerCaller<StorageNode>& storage_subgroup = group->template get_nonmember_subgroup<StorageNode>();
-    std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<StorageNode>();
+    std::vector<std::vector<derecho::node_id_t>> storage_members = group->get_subgroup_members<StorageNode>();
 
-    const node_id_t storage_node_to_contact = storage_members[0][0];
-    node_id_t my_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
+    const derecho::node_id_t storage_node_to_contact = storage_members[0][0];
+    derecho::node_id_t my_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
 
     //Submit the update to the chosen storage node
     dbg_default_debug("Submitting update number {} to node {}", update_counter, storage_node_to_contact);
@@ -199,7 +199,7 @@ StorageNode::~StorageNode() {
     request_queue_nonempty.notify_all();
 }
 
-std::pair<persistent::version_t, uint64_t> StorageNode::update(node_id_t sender_id,
+std::pair<persistent::version_t, uint64_t> StorageNode::update(derecho::node_id_t sender_id,
                                                                uint32_t update_counter,
                                                                const Blob& new_data) const {
     dbg_default_debug("Received an update call from node {} for update {}", sender_id, update_counter);
@@ -223,7 +223,7 @@ Blob StorageNode::get(const persistent::version_t& version) const {
     return *object_log[version];
 }
 
-void StorageNode::register_callback(node_id_t client_node_id,
+void StorageNode::register_callback(derecho::node_id_t client_node_id,
                                     const ClientCallbackType& callback_type,
                                     persistent::version_t version) const {
     dbg_default_debug("Received a call to register_callback from node {} for version {}", client_node_id, version);
@@ -362,7 +362,7 @@ void StorageNode::callback_thread_function() {
 }
 
 //Determines whether a node ID is a member of any shard in a list of shards
-bool member_of_shards(node_id_t node_id, const std::vector<std::vector<node_id_t>>& shard_member_lists) {
+bool member_of_shards(derecho::node_id_t node_id, const std::vector<std::vector<derecho::node_id_t>>& shard_member_lists) {
     for(const auto& shard_members : shard_member_lists) {
         if(std::find(shard_members.begin(), shard_members.end(), node_id) != shard_members.end()) {
             return true;
@@ -393,7 +393,7 @@ int main(int argc, char** argv) {
                                         + derecho::remote_invocation_utilities::header_space();
     //An update plus the two other parameters must fit in the available payload size
     const std::size_t update_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE)
-                                    - rpc_header_size - sizeof(node_id_t) - sizeof(uint32_t);
+                                    - rpc_header_size - sizeof(derecho::node_id_t) - sizeof(uint32_t);
     //For generating random updates
     const std::string characters("abcdefghijklmnopqrstuvwxyz");
     std::mt19937 random_generator(getpid());
@@ -429,8 +429,8 @@ int main(int argc, char** argv) {
 
     //Figure out which subgroup this node got assigned to
     uint32_t my_id = derecho::getConfUInt32(derecho::Conf::DERECHO_LOCAL_ID);
-    std::vector<node_id_t> storage_members = group.get_subgroup_members<StorageNode>(0)[0];
-    std::vector<std::vector<node_id_t>> client_tier_shards = group.get_subgroup_members<InternalClientNode>(0);
+    std::vector<derecho::node_id_t> storage_members = group.get_subgroup_members<StorageNode>(0)[0];
+    std::vector<std::vector<derecho::node_id_t>> client_tier_shards = group.get_subgroup_members<InternalClientNode>(0);
     if(member_of_shards(my_id, client_tier_shards)) {
         std::cout << "Assigned the ClientNode role" << std::endl;
         //Send some updates to the storage nodes and request callbacks when they have globally persisted

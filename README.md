@@ -395,7 +395,7 @@ Here is an example of a JSON layout string that uses "reserved_node_ids_by_shard
             if(curr_view.num_members < 3) {
                 throw derecho::subgroup_provisioning_exception();
             }
-            std::vector<node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
+            std::vector<derecho::node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
             //Put the desired SubView at subgroup_layout[0][0] since there's one subgroup with one shard
             subgroup_layout[0].emplace_back(curr_view.make_subview(first_3_nodes));
             //Advance next_unassigned_rank by 3, unless it was already beyond 3, since we assigned the first 3 nodes
@@ -405,7 +405,7 @@ Here is an example of a JSON layout string that uses "reserved_node_ids_by_shard
             if(curr_view.num_members < 6) {
                 throw derecho::subgroup_provisioning_exception();
             }
-            std::vector<node_id_t> next_3_nodes(&curr_view.members[3], &curr_view.members[3] + 3);
+            std::vector<derecho::node_id_t> next_3_nodes(&curr_view.members[3], &curr_view.members[3] + 3);
             subgroup_layout[0].emplace_back(curr_view.make_subview(next_3_nodes));
             curr_view.next_unassigned_rank += 3;
         }
@@ -453,7 +453,7 @@ PeerCaller<Cache>& p2p_cache_handle = group->get_nonmember_subgroup<Cache>(1);
 When invoking a P2P send, the caller must specify, as the first argument, the ID of the node to communicate with. The caller must ensure that this node is actually a member of the subgroup that the PeerCaller targets (though it can be in any shard of that subgroup). Nodes can find out the current membership of a subgroup by calling the `get_subgroup_members` method on the Group, which uses the same template parameter and argument as `get_subgroup` to select a subgroup by type and index. For example, assuming Cache subgroups are not sharded, this is how a non-member process could make a call to `get`, targeting the first node in the second subgroup of type Cache:
 
 ```cpp
-std::vector<node_id_t> cache_members = group.get_subgroup_members<Cache>(1)[0];
+std::vector<derecho::node_id_t> cache_members = group.get_subgroup_members<Cache>(1)[0];
 derecho::rpc::QueryResults<std::string> results = p2p_cache_handle.p2p_send<RPC_NAME(get)>(cache_members[0], "Foo");
 ```
 

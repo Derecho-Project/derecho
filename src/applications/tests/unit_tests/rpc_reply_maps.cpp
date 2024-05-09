@@ -15,6 +15,8 @@
 #define RPC_NAME(...) 0ULL
 #endif
 
+using derecho::node_id_t;
+
 class StringObject : public mutils::ByteRepresentable {
     std::string log;
 

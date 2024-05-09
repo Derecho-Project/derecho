@@ -9,6 +9,7 @@ using std::cout;
 using std::endl;
 using std::string;
 using std::chrono::duration_cast;
+using derecho::node_id_t;
 
 class TestObject : public mutils::ByteRepresentable {
     int state;

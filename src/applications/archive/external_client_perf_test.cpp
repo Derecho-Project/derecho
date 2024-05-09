@@ -8,6 +8,7 @@
 
 using derecho::ExternalClientCaller;
 using derecho::Replicated;
+using derecho::node_id_t;
 using std::cout;
 using std::endl;
 using derecho::Bytes;

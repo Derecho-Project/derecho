@@ -28,6 +28,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <thread>
 #include <unistd.h>
 
@@ -84,7 +85,7 @@ static bool shutdown = false;
  * Initializes the resources. Registers write_addr and read_addr as the read
  * and write buffers and connects a queue pair with the specified remote node.
  *
- * @param r_index The node rank of the remote node to connect to.
+ * @param r_id The node rank of the remote node to connect to.
  * @param write_addr A pointer to the memory to use as the write buffer. This
  * is where data should be written locally in order to send it in an RDMA write
  * to the remote node.
@@ -93,10 +94,10 @@ static bool shutdown = false;
  * @param size_w The size of the write buffer (in bytes).
  * @param size_r The size of the read buffer (in bytes).
  */
-_resources::_resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
+_resources::_resources(int r_id, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                        int size_r)
         : remote_failed(false),
-          remote_index(r_index),
+          remote_id(r_id),
           write_buf(write_addr),
           read_buf(read_addr) {
     if(!write_buf) {
@@ -154,7 +155,7 @@ _resources::_resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int
     without_completion_sender_ctxt.type = verbs_sender_ctxt::INTERNAL_FLOW_CONTROL;
     without_completion_sender_ctxt.ctxt.res = this;
 
-    cout << "Established RDMA connection with node " << r_index << endl;
+    cout << "Established RDMA connection with node " << r_id << endl;
 }
 
 /**
@@ -287,7 +288,7 @@ void _resources::connect_qp() {
     local_con_data.lid = htons(g_res->port_attr.lid);
     memcpy(local_con_data.gid, &my_gid, 16);
     try {
-        sst_connections->exchange(remote_index, local_con_data, tmp_con_data);
+        sst_connections->exchange(remote_id, local_con_data, tmp_con_data);
     } catch(tcp::socket_error&) {
         cout << "Could not exchange qp data in connect_qp" << endl;
     }
@@ -311,7 +312,7 @@ void _resources::connect_qp() {
     // sync to make sure that both sides are in states that they can connect to
     // prevent packet loss
     // just send a dummy char back and forth
-    bool success = sync(remote_index);
+    bool success = sync(remote_id);
     if(!success) {
         cout << "Could not sync in connect_qp after qp transition to RTS state" << endl;
     }
@@ -388,8 +389,44 @@ int _resources::post_remote_send(verbs_sender_ctxt* sctxt, const long long int o
     return ret;
 }
 
-resources::resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
-                     int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
+void _resources::register_oob_memory_ex(void* addr, size_t size, const memory_attribute_t& attr) {
+    throw unsupported_operation_exception("register_oob_memory_ex");
+}
+
+void _resources::deregister_oob_memory(void* addr) {
+    throw unsupported_operation_exception("deregister_oob_memory");
+}
+
+void* _resources::get_oob_mr_desc(void* addr) {
+    throw unsupported_operation_exception("get_oob_mr_desc");
+}
+
+uint64_t _resources::get_oob_mr_key(void* addr) {
+    throw unsupported_operation_exception("get_oob_mr_key");
+}
+
+void _resources::oob_remote_write(const struct iovec* iov, int iovcnt, void* remote_dest_addr, uint64_t rkey, size_t size) {
+    throw unsupported_operation_exception("oob_remote_write");
+}
+
+void _resources::oob_remote_read(const struct iovec* iov, int iovcnt, void* remote_src_addr, uint64_t rkey, size_t size) {
+    throw unsupported_operation_exception("oob_remote_read");
+}
+
+void _resources::oob_send(const struct iovec* iov, int iovcnt) {
+    throw unsupported_operation_exception("oob_send");
+}
+
+void _resources::oob_recv(const struct iovec* iov, int iovcnt) {
+    throw unsupported_operation_exception("oob_recv");
+}
+
+void _resources::wait_for_oob_op(uint32_t op, uint64_t timeout_us) {
+    throw unsupported_operation_exception("wait_for_oob_op");
+}
+
+resources::resources(int r_id, uint8_t* write_addr, uint8_t* read_addr, int size_w,
+                     int size_r) : _resources(r_id, write_addr, read_addr, size_w, size_r) {
 }
 
 void resources::report_failure() {
@@ -402,7 +439,7 @@ void resources::report_failure() {
 void resources::post_remote_read(const long long int size) {
     int rc = post_remote_send(nullptr, 0, size, 0, false);
     if(rc) {
-        cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA read, error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 /**
@@ -413,7 +450,7 @@ void resources::post_remote_read(const long long int size) {
 void resources::post_remote_read(const long long int offset, const long long int size) {
     int rc = post_remote_send(nullptr, offset, size, 0, false);
     if(rc) {
-        cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA read, error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 /**
@@ -423,7 +460,7 @@ void resources::post_remote_read(const long long int offset, const long long int
 void resources::post_remote_write(const long long int size) {
     int rc = post_remote_send(nullptr, 0, size, 1, false);
     if(rc) {
-        cout << "Could not post RDMA write (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA write (with no offset), error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
@@ -436,26 +473,26 @@ void resources::post_remote_write(const long long int size) {
 void resources::post_remote_write(const long long int offset, const long long int size) {
     int rc = post_remote_send(nullptr, offset, size, 1, false);
     if(rc) {
-        cout << "Could not post RDMA write with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA write with offset, error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
 void resources::post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int size) {
     int rc = post_remote_send(sctxt, 0, size, 1, true);
     if(rc) {
-        cout << "Could not post RDMA write (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA write (with no offset) with completion, error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
 void resources::post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(sctxt, offset, size, 1, true);
     if(rc) {
-        cout << "Could not post RDMA write with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA write with offset and completion, error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
-resources_two_sided::resources_two_sided(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
-                                         int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
+resources_two_sided::resources_two_sided(int r_id, uint8_t* write_addr, uint8_t* read_addr, int size_w,
+                                         int size_r) : _resources(r_id, write_addr, read_addr, size_w, size_r) {
 }
 
 void resources_two_sided::report_failure() {
@@ -469,7 +506,7 @@ void resources_two_sided::report_failure() {
 void resources_two_sided::post_two_sided_send(const long long int size) {
     int rc = post_remote_send(nullptr, 0, size, 2, false);
     if(rc) {
-        cout << "Could not post RDMA two sided send (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA two sided send (with no offset), error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
@@ -482,21 +519,21 @@ void resources_two_sided::post_two_sided_send(const long long int size) {
 void resources_two_sided::post_two_sided_send(const long long int offset, const long long int size) {
     int rc = post_remote_send(nullptr, offset, size, 2, false);
     if(rc) {
-        cout << "Could not post RDMA two sided send with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA two sided send with offset, error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
 void resources_two_sided::post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int size) {
     int rc = post_remote_send(sctxt, 0, size, 2, true);
     if(rc) {
-        cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
 void resources_two_sided::post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(sctxt, offset, size, 2, true);
     if(rc) {
-        cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
@@ -525,14 +562,14 @@ int resources_two_sided::post_receive(verbs_sender_ctxt* sctxt, const long long 
 void resources_two_sided::post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int size) {
     int rc = post_receive(sctxt, 0, size);
     if(rc) {
-        cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
 void resources_two_sided::post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     int rc = post_receive(sctxt, offset, size);
     if(rc) {
-        cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_id is " << remote_id << endl;
     }
 }
 
@@ -711,7 +748,7 @@ bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& ne
 bool remove_node(uint32_t node_id) {
     if(sst_connections->contains_node(node_id)) {
         return sst_connections->delete_node(node_id);
-    } else if {
+    } else {
         return external_client_connections->delete_node(node_id);
     }
 }

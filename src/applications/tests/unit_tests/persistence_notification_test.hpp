@@ -16,7 +16,7 @@ enum NotificationMessageType : uint64_t {
 
 struct NotificationRequest {
     NotificationMessageType notification_type;
-    node_id_t client_id;
+    derecho::node_id_t client_id;
     persistent::version_t version;
 };
 
@@ -67,7 +67,7 @@ public:
      * update (identified by its version) has reached a particular state (locally/globally
      * persisted, signed)
      */
-    void request_notification(node_id_t client_node_id, NotificationMessageType notification_type,
+    void request_notification(derecho::node_id_t client_node_id, NotificationMessageType notification_type,
                               persistent::version_t version) const;
     /**
      * Function that implements the notification-checking thread. This thread waits for
