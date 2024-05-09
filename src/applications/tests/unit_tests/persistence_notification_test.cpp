@@ -46,7 +46,7 @@ derecho::Bytes StorageNode::get(const persistent::version_t& version) const {
     return *object_log[version];
 }
 
-void StorageNode::request_notification(node_id_t client_node_id,
+void StorageNode::request_notification(derecho::node_id_t client_node_id,
                                        NotificationMessageType notification_type,
                                        persistent::version_t version) const {
     dbg_default_debug("Received a call to request_notification from node {} for version {}", client_node_id, version);
@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
                                         + derecho::remote_invocation_utilities::header_space();
     //An update plus the two other parameters must fit in the available payload size
     const std::size_t update_size = derecho::getConfUInt64(derecho::Conf::SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE)
-                                    - rpc_header_size - sizeof(node_id_t) - sizeof(uint32_t);
+                                    - rpc_header_size - sizeof(derecho::node_id_t) - sizeof(uint32_t);
     //For generating random updates
     const std::string characters("abcdefghijklmnopqrstuvwxyz");
     std::mt19937 random_generator(getpid());
@@ -255,12 +255,12 @@ int main(int argc, char** argv) {
         derecho::ExternalGroupClient<StorageNode> client(dummy_storage_factory);
         derecho::ExternalClientCaller<StorageNode, decltype(client)>& storage_caller = client.get_subgroup_caller<StorageNode>(0);
         //Since we know there is only 1 subgroup and 1 shard of StorageNode, getting the node IDs is easy
-        std::vector<node_id_t> storage_node_ids = client.get_shard_members<StorageNode>(0, 0);
+        std::vector<derecho::node_id_t> storage_node_ids = client.get_shard_members<StorageNode>(0, 0);
         //Pick a node to contact to send updates
-        node_id_t update_node = storage_node_ids[0];
+        derecho::node_id_t update_node = storage_node_ids[0];
         //Right now, we must request notifications from that same node, because only the P2P
         //update method can record QueryResults; other replicas have no way of tracking their updates
-        node_id_t notification_node = update_node;
+        derecho::node_id_t notification_node = update_node;
         //Register the client callback handler
         storage_caller.add_p2p_connection(notification_node);
         storage_caller.register_notification_handler(client_callback_function);

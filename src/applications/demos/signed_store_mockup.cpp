@@ -110,13 +110,13 @@ ClientTier::ClientTier(){};
 std::tuple<persistent::version_t, uint64_t, std::vector<uint8_t>> ClientTier::submit_update(const Blob& data) const {
     derecho::PeerCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
     derecho::PeerCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
-    std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
-    std::vector<std::vector<node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
+    std::vector<std::vector<derecho::node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
+    std::vector<std::vector<derecho::node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
     std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size() - 1);
     std::uniform_int_distribution<> signature_distribution(0, signature_members[0].size() - 1);
     //Choose a random member of each subgroup to contact with the P2P message
-    const node_id_t storage_member_to_contact = storage_members[0][storage_distribution(random_engine)];
-    const node_id_t signature_member_to_contact = signature_members[0][signature_distribution(random_engine)];
+    const derecho::node_id_t storage_member_to_contact = storage_members[0][storage_distribution(random_engine)];
+    const derecho::node_id_t signature_member_to_contact = signature_members[0][signature_distribution(random_engine)];
     //Send the new data to the storage subgroup
     dbg_default_debug("Sending update data to node {}", storage_member_to_contact);
     auto storage_query_results = storage_subgroup.p2p_send<RPC_NAME(update)>(storage_member_to_contact, data);
@@ -213,7 +213,7 @@ Blob ObjectStore::get_latest() const {
 /* -------------------------------------------------------------------- */
 
 //Determines whether a node ID is a member of any shard in a list of shards
-bool member_of_shards(node_id_t node_id, const std::vector<std::vector<node_id_t>>& shard_member_lists) {
+bool member_of_shards(derecho::node_id_t node_id, const std::vector<std::vector<derecho::node_id_t>>& shard_member_lists) {
     for(const auto& shard_members : shard_member_lists) {
         if(std::find(shard_members.begin(), shard_members.end(), node_id) != shard_members.end()) {
             return true;

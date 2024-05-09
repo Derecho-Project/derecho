@@ -73,6 +73,7 @@ public:
 
 using derecho::flexible_even_shards;
 using derecho::one_subgroup_policy;
+using derecho::node_id_t;
 
 int main(int argc, char** argv) {
     // Read configurations from the command line options as well as the default config file

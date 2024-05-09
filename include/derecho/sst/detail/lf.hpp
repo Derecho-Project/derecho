@@ -30,6 +30,7 @@ namespace sst {
 
 using memory_attribute_t    =   derecho::memory_attribute_t;
 using ip_addr_t             =   derecho::ip_addr_t;
+using node_id_t             =   derecho::node_id_t;
 
 class lf_completion_entry_ctxt {
 private:

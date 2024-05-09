@@ -21,6 +21,8 @@
 #define RPC_NAME(...) 0ULL
 #endif
 
+using derecho::node_id_t;
+
 class Cache : public mutils::ByteRepresentable {
     std::map<std::string, std::string> cache_map;
 

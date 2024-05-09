@@ -6,6 +6,7 @@
 #else
 #include <derecho/sst/detail/lf.hpp>
 #endif
+#include <derecho/utils/logger.hpp>
 
 #include <atomic>
 #include <iostream>

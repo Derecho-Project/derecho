@@ -15,6 +15,7 @@
 using std::endl;
 using test::Bytes;
 using namespace std::chrono;
+using derecho::node_id_t;
 
 /**
  * RPC Object with a single function that returns a byte array over P2P
