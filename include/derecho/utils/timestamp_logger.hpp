@@ -1,5 +1,7 @@
 #pragma once
 
+#include <derecho/config.h>
+
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -105,7 +107,7 @@ public:
 
 // Macro wrappers for the static functions so they can be completely disabled with a #define
 
-#ifdef TIMESTAMPS
+#ifdef ENABLE_TIMESTAMPS
 
 #define TIMESTAMP_LOG(...) derecho::TimestampLogger::log(__VA_ARGS__)
 #define TIMESTAMP_INIT() derecho::TimestampLogger::initialize()

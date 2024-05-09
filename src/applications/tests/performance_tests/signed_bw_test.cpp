@@ -225,7 +225,7 @@ int main(int argc, char* argv[]) {
 
     while(!shared_test_state.experiment_done) {
     }
-#ifdef TIMESTAMPS
+#ifdef ENABLE_TIMESTAMPS
     // Dump timestamps
     std::ofstream timestamp_file("signed_bw_timestamps.log");
     derecho::TimestampLogger::dump(timestamp_file);

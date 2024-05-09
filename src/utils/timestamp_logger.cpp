@@ -1,5 +1,5 @@
-#include "derecho/utils/timestamp_logger.hpp"
-#include "derecho/conf/conf.hpp"
+#include <derecho/utils/timestamp_logger.hpp>
+#include <derecho/conf/conf.hpp>
 
 #include <atomic>
 #include <chrono>

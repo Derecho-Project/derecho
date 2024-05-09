@@ -1,3 +1,4 @@
 #pragma once
 #cmakedefine    USE_VERBS_API
 #cmakedefine    ENABLE_HMEM
+#cmakedefine    ENABLE_TIMESTAMPS

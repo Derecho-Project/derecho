@@ -212,7 +212,7 @@ int main(int argc, char* argv[]) {
     }
     delete[] bbuf;
 
-#ifdef TIMESTAMPS
+#ifdef ENABLE_TIMESTAMPS
     // Dump timestamps
     std::ofstream timestamps_file("persistent_bw_timestamps.log");
     derecho::TimestampLogger::dump(timestamps_file);

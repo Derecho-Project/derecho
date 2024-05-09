@@ -6,15 +6,15 @@
  * local repository's .git/hooks/ directory.
  */
 
-#include <derecho/core/git_version.hpp>
+#include "derecho/core/git_version.hpp"
 
 namespace derecho {
 
 const int MAJOR_VERSION = 2;
 const int MINOR_VERSION = 4;
 const int PATCH_VERSION = 0;
-const int COMMITS_AHEAD_OF_VERSION = 6;
+const int COMMITS_AHEAD_OF_VERSION = 8;
 const char* VERSION_STRING = "2.4.0";
-const char* VERSION_STRING_PLUS_COMMITS = "2.4.0+6";
+const char* VERSION_STRING_PLUS_COMMITS = "2.4.0+8";
 
 }
