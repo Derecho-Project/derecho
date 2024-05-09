@@ -1,12 +1,13 @@
 #pragma once
 
+#include <derecho/config.h>
 #include "p2p_connection.hpp"
 #ifdef USE_VERBS_API
-#include "derecho/sst/detail/verbs.hpp"
+#include <derecho/sst/detail/verbs.hpp>
 #else
-#include "derecho/sst/detail/lf.hpp"
+#include <derecho/sst/detail/lf.hpp>
 #endif
-#include "derecho/utils/logger.hpp"
+#include <derecho/utils/logger.hpp>
 
 #include <atomic>
 #include <functional>

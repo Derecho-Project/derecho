@@ -4,8 +4,8 @@
  * @date Feb 7, 2017
  */
 
-#include "derecho/core/detail/rpc_manager.hpp"
-#include "derecho/core/detail/view_manager.hpp"
+#include <derecho/core/detail/rpc_manager.hpp>
+#include <derecho/core/detail/view_manager.hpp>
 
 #include <cassert>
 #include <exception>

@@ -1,6 +1,8 @@
+#pragma once
 #ifndef SCHEDULE_HPP
 #define SCHEDULE_HPP
 
+#include <derecho/config.h>
 #include <cmath>
 #include <cstdint>
 #include <optional>

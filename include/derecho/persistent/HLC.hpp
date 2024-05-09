@@ -1,5 +1,7 @@
+#pragma once
 #ifndef HLC_HPP
 #define HLC_HPP
+#include <derecho/config.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <sys/types.h>

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "derecho/utils/logger.hpp"
+#include <derecho/config.h>
+#include <derecho/utils/logger.hpp>
 
 #include <memory>
 #include <atomic>

@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <derecho/config.h>
 #include <memory>
 #include <openssl/evp.h>
 #include <openssl/bio.h>

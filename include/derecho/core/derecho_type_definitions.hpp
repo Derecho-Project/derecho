@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cstdint>
+#include <derecho/config.h>
 
 namespace derecho {
 

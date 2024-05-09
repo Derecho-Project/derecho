@@ -1,7 +1,8 @@
 #pragma once
 
+#include <derecho/config.h>
 #include "../derecho_type_definitions.hpp"
-#include "derecho/tcp/tcp.hpp"
+#include <derecho/tcp/tcp.hpp>
 #include "locked_reference.hpp"
 
 #include <cassert>

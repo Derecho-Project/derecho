@@ -1,4 +1,4 @@
-#include "derecho/core/notification.hpp"
+#include <derecho/core/notification.hpp>
 
 #include <cstring>
 #include <memory>

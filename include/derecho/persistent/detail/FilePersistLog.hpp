@@ -1,9 +1,11 @@
+#pragma once
 #ifndef FILE_PERSIST_LOG_HPP
 #define FILE_PERSIST_LOG_HPP
 
+#include <derecho/config.h>
 #include "PersistLog.hpp"
 #include "util.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/utils/logger.hpp>
 #include <pthread.h>
 #include <string>
 

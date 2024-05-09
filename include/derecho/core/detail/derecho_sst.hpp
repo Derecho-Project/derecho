@@ -1,7 +1,8 @@
 #pragma once
 
+#include <derecho/config.h>
 #include "../derecho_type_definitions.hpp"
-#include "derecho/sst/sst.hpp"
+#include <derecho/sst/sst.hpp>
 #include "derecho_internal.hpp"
 
 #include <atomic>

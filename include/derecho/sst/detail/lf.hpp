@@ -6,10 +6,10 @@
  * Contains declarations needed for working with RDMA using LibFabric libraries,
  * including the Resources class and global setup functions.
  */
-
-#include "derecho/core/derecho_type_definitions.hpp"
-#include "derecho/core/detail/connection_manager.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/config.h>
+#include <derecho/core/derecho_type_definitions.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
+#include <derecho/utils/logger.hpp>
 
 #include <iostream>
 #include <map>
