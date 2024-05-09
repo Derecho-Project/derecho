@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include <derecho/config.h>
 #include <algorithm>
 #include <list>
 #include <map>

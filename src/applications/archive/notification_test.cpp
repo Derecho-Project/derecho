@@ -7,6 +7,7 @@
 #include <derecho/persistent/Persistent.hpp>
 
 using derecho::ExternalClientCaller;
+using derecho::node_id_t;
 using std::cout;
 using std::endl;
 

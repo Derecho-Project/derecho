@@ -1,4 +1,4 @@
-#include "derecho/rdmc/detail/util.hpp"
+#include <derecho/rdmc/detail/util.hpp>
 
 #include <cassert>
 #include <cinttypes>

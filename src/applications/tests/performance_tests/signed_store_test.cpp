@@ -113,13 +113,13 @@ ClientTier::ClientTier(std::size_t test_data_size)
 std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTier::submit_update(const Blob& data) const {
     derecho::PeerCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
     derecho::PeerCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
-    std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
-    std::vector<std::vector<node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
+    std::vector<std::vector<derecho::node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
+    std::vector<std::vector<derecho::node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
     std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size() - 1);
     std::uniform_int_distribution<> signature_distribution(0, signature_members[0].size() - 1);
     //Choose a random member of each subgroup to contact with the P2P message
-    const node_id_t storage_member_to_contact = storage_members[0][storage_distribution(random_engine)];
-    const node_id_t signature_member_to_contact = signature_members[0][signature_distribution(random_engine)];
+    const derecho::node_id_t storage_member_to_contact = storage_members[0][storage_distribution(random_engine)];
+    const derecho::node_id_t signature_member_to_contact = signature_members[0][signature_distribution(random_engine)];
     //Send the new data to the storage subgroup
     auto storage_query_results = storage_subgroup.p2p_send<RPC_NAME(update)>(storage_member_to_contact, data);
     //Meanwhile, start hashing the update (this might take a long time)
@@ -152,13 +152,13 @@ bool ClientTier::update_batch_test(const int& num_updates) const {
     using namespace std::chrono;
     derecho::PeerCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
     derecho::PeerCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
-    const std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
-    const std::vector<std::vector<node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
+    const std::vector<std::vector<derecho::node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
+    const std::vector<std::vector<derecho::node_id_t>> signature_members = group->get_subgroup_members<SignatureStore>();
     std::uniform_int_distribution<> storage_distribution(0, storage_members[0].size() - 1);
     std::uniform_int_distribution<> signature_distribution(0, signature_members[0].size() - 1);
     //Choose a random member of each subgroup to contact with the P2P message
-    const node_id_t storage_member_to_contact = storage_members[0][storage_distribution(random_engine)];
-    const node_id_t signature_member_to_contact = signature_members[0][signature_distribution(random_engine)];
+    const derecho::node_id_t storage_member_to_contact = storage_members[0][storage_distribution(random_engine)];
+    const derecho::node_id_t signature_member_to_contact = signature_members[0][signature_distribution(random_engine)];
     /* Note: This currently doesn't work. It gets "stuck" waiting for completion of the
      * await-persistence RPC calls, even though the storage subgroup nodes have in fact
      * finished persisting all of the updates. I think this is because of the P2P message
@@ -320,7 +320,7 @@ std::unique_ptr<ObjectStore> ObjectStore::from_bytes(mutils::DeserializationMana
 /* -------------------------------------------------------------------- */
 
 //Determines whether a node ID is a member of any shard in a list of shards
-bool member_of_shards(node_id_t node_id, const std::vector<std::vector<node_id_t>>& shard_member_lists) {
+bool member_of_shards(derecho::node_id_t node_id, const std::vector<std::vector<derecho::node_id_t>>& shard_member_lists) {
     for(const auto& shard_members : shard_member_lists) {
         if(std::find(shard_members.begin(), shard_members.end(), node_id) != shard_members.end()) {
             return true;
@@ -432,13 +432,13 @@ int main(int argc, char** argv) {
                     "data_signed_store_test");
         //One node in the client tier should send the "end test" message to all the storage members,
         //which will signal the main thread to call group.leave() and exit
-        std::vector<node_id_t> storage_members = group.get_subgroup_members<ObjectStore>(0)[0];
-        std::vector<node_id_t> signature_members = group.get_subgroup_members<SignatureStore>(0)[0];
+        std::vector<derecho::node_id_t> storage_members = group.get_subgroup_members<ObjectStore>(0)[0];
+        std::vector<derecho::node_id_t> signature_members = group.get_subgroup_members<SignatureStore>(0)[0];
         if(group.get_subgroup_members<ClientTier>()[0][0] == my_id) {
-            for(node_id_t nid : storage_members) {
+            for(derecho::node_id_t nid : storage_members) {
                 object_store_subgroup.p2p_send<RPC_NAME(end_test)>(nid);
             }
-            for(node_id_t nid : signature_members) {
+            for(derecho::node_id_t nid : signature_members) {
                 signature_store_subgroup.p2p_send<RPC_NAME(end_test)>(nid);
             }
         }

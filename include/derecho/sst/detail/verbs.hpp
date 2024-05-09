@@ -6,14 +6,25 @@
  * Contains declarations needed for working with RDMA using InfiniBand Verbs,
  * including the Resources class and global setup functions.
  */
-
-#include "derecho/core/derecho_type_definitions.hpp"
+#include <derecho/config.h>
+#include <derecho/core/derecho_type_definitions.hpp>
 
 #include <atomic>
 #include <infiniband/verbs.h>
 #include <map>
+#include <stdexcept>
+#include <sys/uio.h>
+#include <vector>
 
 namespace sst {
+
+using memory_attribute_t    =   derecho::memory_attribute_t;
+using ip_addr_t             =   derecho::ip_addr_t;
+using node_id_t             =   derecho::node_id_t;
+
+struct unsupported_operation_exception : public std::logic_error {
+    unsupported_operation_exception(const std::string& message) : logic_error(message) {}
+};
 
 /** Structure to exchange the data needed to connect the Queue Pairs */
 struct cm_con_data_t {
@@ -81,8 +92,8 @@ protected:
     int post_remote_send(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size, const int op, const bool completion);
 
 public:
-    /** Index of the remote node. */
-    int remote_index;
+    /** ID of the remote node. */
+    int remote_id;
     /** Handle for the IB Verbs Queue Pair object. */
     struct ibv_qp* qp;
     /** Memory Region handle for the write buffer. */
@@ -107,15 +118,131 @@ public:
 
     /** Constructor; initializes Queue Pair, Memory Regions, and `remote_props`.
      */
-    _resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
+    _resources(int r_id, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                int size_r);
     /** Destroys the resources. */
     virtual ~_resources();
+    /**
+     * Out-of-Band memory and send management
+     * These are not currently supported when using the Verbs interface, but are
+     * declared here to allow compilation to succeed. Attempting to use any of
+     * them will throw an exception.
+     */
+
+    /**
+     * get the descriptor of the corresponding oob memory region
+     * Important: it assumes shared lock on oob_mrs_mutex.
+     * If iov does not fall into an oob memory region, it fails with nullptr.
+     *
+     * @param addr
+     *
+     * @return the descriptor of type void*, or nullptr in case of failure.
+     * @throw   derecho::derecho_exception if not found.
+     */
+    static void* get_oob_mr_desc(void* addr);
+
+    /**
+     * Get the key of the corresponding oob memory region for remote access.
+     *
+     * @param addr      The address of registered oob memory
+     *
+     * @return  the remote access key,
+     * @throw   derecho::derecho_exception if not found.
+     */
+    static uint64_t get_oob_mr_key(void* addr);
+
+    /**
+     * Register oob memory
+     * @param addr  the address of the OOB memory
+     * @param size  the size of the OOB memory
+     * @param attr  the memory attribute
+     *
+     * @throws derecho_exception on failure.
+     */
+    static void register_oob_memory_ex(void* addr, size_t size, const memory_attribute_t& attr);
+
+    /**
+     * Deregister oob memory
+     * @param addr the address of OOB memory
+     *
+     * @throws derecho_exception on failure.
+     */
+    static void deregister_oob_memory(void* addr);
+
+    /**
+     * Wait for a completion entries
+     * @param num_entries   The number of entries to wait for
+     * @param timeout_us    The number of microseconds to wait before throwing timeout
+     *
+     * @throws derecho_exception on failure.
+     */
+    void wait_for_thread_local_completion_entries(size_t num_entries, uint64_t timeout_us);
+
+    /*
+     * oob write
+     * @param iov               The gather memory vector, the total size of the source should not go beyond 'size'.
+     * @param iovcnt            The length of the vector.
+     * @param remote_dest_addr  The remote address for receiving this message
+     * @param rkey              The access key for the remote memory.
+     * @param size              The size of the remote buffer
+     *
+     * @throws derecho_exception at failure.
+     */
+    void oob_remote_write(const struct iovec* iov, int iovcnt,
+                          void* remote_dest_addr, uint64_t rkey, size_t size);
+
+    /*
+     * oob read
+     * @param iov               The scatter memory vector, the total size of the source should not go beyond 'size'.
+     * @param iovcnt            The length of the vector.
+     * @param remote_src_addr   The remote address for receiving this message
+     * @param rkey              The access key for the remote memory.
+     * @param size              The size of the remote buffer
+     *
+     * @throws derecho_exception at failure.
+     */
+    void oob_remote_read(const struct iovec* iov, int iovcnt,
+                         void* remote_src_addr, uint64_t rkey, size_t size);
+
+    /*
+     * oob send
+     * @param iov               The gather memory vector.
+     * @param iovcnt            The length of the vector.
+     *
+     * @throws derecho_exception at failure.
+     */
+    void oob_send(const struct iovec* iov, int iovcnt);
+
+    /*
+     * oob recv
+     * @param iov               The gather memory vector.
+     * @param iovcnt            The length of the vector.
+     *
+     * @throws derecho_exception at failure.
+     */
+    void oob_recv(const struct iovec* iov, int iovcnt);
+
+#define OOB_OP_READ     0x0
+#define OOB_OP_WRITE    0x1
+#define OOB_OP_SEND     0x2
+#define OOB_OP_RECV     0x3
+    /*
+     * Public callable wrapper around wait_for_thread_local_completion_entries()
+     * @param op                The OOB operations, one of the following:
+     *                          - OOB_OP_READ
+     *                          - OOB_OP_WRITE
+     *                          - OOB_OP_SEND
+     *                          - OOB_OP_RECV
+     *                          For most of the cases, we wait for only one completion. To allow an operation like
+     *                          "exchange", which is to be implemented, we might need to write for two completions.
+     * @param timeout_us        Timeout settings in microseconds.
+     */
+    void wait_for_oob_op(uint32_t op, uint64_t timeout_us);
 };
 
 class resources : public _resources {
 public:
-    resources(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
+    resources(int r_id, uint8_t* write_addr, uint8_t* read_addr, int size_w,
               int size_r);
     /**
      * Report that the remote node this object is connected to has failed.
@@ -144,7 +271,7 @@ class resources_two_sided : public _resources {
     int post_receive(verbs_sender_ctxt* ce_ctxt, const long long int offset, const long long int size);
 
 public:
-    resources_two_sided(int r_index, uint8_t* write_addr, uint8_t* read_addr, int size_w,
+    resources_two_sided(int r_id, uint8_t* write_addr, uint8_t* read_addr, int size_w,
                         int size_r);
     /**
      * Report that the remote node this object is connected to has failed.
@@ -181,7 +308,7 @@ bool sync(uint32_t r_index);
  * @param live_nodes_list A list of node IDs whose connections should be retained;
  *        all other connections will be deleted.
  */
-void filter_external_to(const std::vector<node_id_t>& live_nodes_list);
+void filter_external_to(const std::vector<derecho::node_id_t>& live_nodes_list);
 
 /** Initializes the global verbs resources. */
 void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_sst_ports,

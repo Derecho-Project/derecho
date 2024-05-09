@@ -1,6 +1,8 @@
+#pragma once
 #ifndef LF_HELPER_HPP
 #define LF_HELPER_HPP
 
+#include <derecho/config.h>
 #include <cstdint>
 #include <functional>
 #include <iostream>
@@ -32,6 +34,7 @@ struct fid_cq;
  */
 namespace rdma {
 using ip_addr_t = derecho::ip_addr_t;
+using node_id_t = derecho::node_id_t;
 
 class exception {};
 class invalid_args : public exception {};

@@ -1,6 +1,8 @@
+#pragma once
 #ifndef VERBS_HELPER_HPP
 #define VERBS_HELPER_HPP
 
+#include <derecho/config.h>
 #include <cstdint>
 #include <optional>
 #include <functional>
@@ -22,6 +24,9 @@ struct ibv_cq;
  * to the IB Verbs library.
  */
 namespace rdma {
+using ip_addr_t = derecho::ip_addr_t;
+using node_id_t = derecho::node_id_t;
+
 // Various classes of exceptions
 class exception {};
 class invalid_args : public exception {};

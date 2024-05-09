@@ -6,9 +6,10 @@
 
 #pragma once
 
-#include "derecho/conf/conf.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/config.h>
+#include <derecho/conf/conf.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/utils/logger.hpp>
 #include "rpc_utils.hpp"
 
 #include <mutils/FunctionalMap.hpp>

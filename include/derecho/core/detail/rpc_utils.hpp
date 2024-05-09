@@ -6,10 +6,11 @@
 
 #pragma once
 
+#include <derecho/config.h>
 #include "../derecho_exception.hpp"
 #include "../derecho_type_definitions.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/utils/logger.hpp>
 #include "derecho_internal.hpp"
 
 #include <mutils/macro_utils.hpp>

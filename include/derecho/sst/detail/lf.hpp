@@ -6,10 +6,10 @@
  * Contains declarations needed for working with RDMA using LibFabric libraries,
  * including the Resources class and global setup functions.
  */
-
-#include "derecho/core/derecho_type_definitions.hpp"
-#include "derecho/core/detail/connection_manager.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/config.h>
+#include <derecho/core/derecho_type_definitions.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
+#include <derecho/utils/logger.hpp>
 
 #include <iostream>
 #include <map>
@@ -30,6 +30,7 @@ namespace sst {
 
 using memory_attribute_t    =   derecho::memory_attribute_t;
 using ip_addr_t             =   derecho::ip_addr_t;
+using node_id_t             =   derecho::node_id_t;
 
 class lf_completion_entry_ctxt {
 private:

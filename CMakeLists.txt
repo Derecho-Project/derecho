@@ -8,9 +8,6 @@ set(derecho_VERSION 2.4)
 set(derecho_build_VERSION 2.4.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-if (${USE_VERBS_API})
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_VERBS_API")
-endif()
 if(${ENABLE_TIMESTAMPS})
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTIMESTAMPS")
 endif()
@@ -65,6 +62,25 @@ find_package(nlohmann_json 3.9.0 REQUIRED)
 # Target: Doxygen
 find_package(Doxygen)
 
+
+# Source code configurations go to config.h
+# Shift to verbs API. We use libfabric by default.
+if (${USE_VERBS_API})
+set(USE_VERBS_API 1)
+else()
+set(USE_VERBS_API 0)
+endif()
+# Enable High memory registration (for device memory like GPU memory.)
+# Important: this does not work with libfabric provider like tcp and socket because they cannot
+# RDMA to device memory.
+if (${ENABLE_HMEM})
+set(ENABLE_HMEM 1)
+else()
+set(ENABLE_HMEM 0)
+endif()
+CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/include/derecho/config.h)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
+
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
 add_subdirectory(src/utils)
@@ -115,14 +131,14 @@ add_dependencies(derecho
 
 # Setup for make install
 # Declare that we will install the targets built by "derecho"
-install(TARGETS derecho
-        EXPORT derechoTargets
+install(TARGETS derecho EXPORT derechoTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 # Declare that we will install the "include/" directory as a standard include directory
 install(DIRECTORY
-        include/
-        TYPE INCLUDE)
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/derecho
+        ${CMAKE_CURRENT_BINARY_DIR}/include/derecho
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # Use CMakePackageConfigHelpers to create a package version file and config file
 include(CMakePackageConfigHelpers)

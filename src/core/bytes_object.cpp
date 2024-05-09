@@ -1,4 +1,4 @@
-#include "derecho/core/bytes_object.hpp"
+#include <derecho/core/bytes_object.hpp>
 
 #include <cstring>
 

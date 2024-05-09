@@ -2,12 +2,12 @@
  * @file group_impl.hpp
  * @date Apr 22, 2016
  */
-
+#include <derecho/config.h>
 #include "../group.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
-#include "derecho/utils/container_template_functions.hpp"
-#include "derecho/utils/logger.hpp"
-#include "derecho/utils/timestamp_logger.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/utils/container_template_functions.hpp>
+#include <derecho/utils/logger.hpp>
+#include <derecho/utils/timestamp_logger.hpp>
 #include "derecho_internal.hpp"
 #include "make_kind_map.hpp"
 

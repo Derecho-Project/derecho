@@ -5,9 +5,10 @@
  */
 #pragma once
 
-#include "derecho/openssl/signature.hpp"
-#include "derecho/persistent/PersistentInterface.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/config.h>
+#include <derecho/openssl/signature.hpp>
+#include <derecho/persistent/PersistentInterface.hpp>
+#include <derecho/utils/logger.hpp>
 #include "derecho_internal.hpp"
 #include "replicated_interface.hpp"
 

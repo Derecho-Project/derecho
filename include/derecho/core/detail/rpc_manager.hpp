@@ -6,11 +6,12 @@
 
 #pragma once
 
+#include <derecho/config.h>
 #include "../derecho_type_definitions.hpp"
 #include "../view.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
-#include "derecho/persistent/Persistent.hpp"
-#include "derecho/utils/logger.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/persistent/Persistent.hpp>
+#include <derecho/utils/logger.hpp>
 #include "derecho_internal.hpp"
 #include "p2p_connection_manager.hpp"
 #include "remote_invocable.hpp"

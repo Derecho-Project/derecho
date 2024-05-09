@@ -1,7 +1,8 @@
 #pragma once
 
-#include "derecho/openssl/signature.hpp"
-#include "derecho/tcp/tcp.hpp"
+#include <derecho/config.h>
+#include <derecho/openssl/signature.hpp>
+#include <derecho/tcp/tcp.hpp>
 #include "derecho_internal.hpp"
 
 #include <optional>

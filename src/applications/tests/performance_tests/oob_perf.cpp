@@ -155,7 +155,7 @@ bool OOBRDMA::get(const uint64_t& callee_addr, const uint64_t& caller_addr, cons
 template <typename P2PCaller>
 void perf_test (
         P2PCaller& p2p_caller,
-        node_id_t nid,
+        derecho::node_id_t nid,
         uint64_t rkey,
         void* put_buffer_laddr,
         void* get_buffer_laddr,

@@ -1,6 +1,8 @@
+#pragma once
 #ifndef LOGGER_HPP
 #define LOGGER_HPP
 
+#include <derecho/config.h>
 #include "container_ostreams.hpp"
 
 #include <string>

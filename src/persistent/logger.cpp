@@ -1,5 +1,5 @@
-#include "derecho/persistent/detail/logger.hpp"
-#include "derecho/conf/conf.hpp"
+#include <derecho/persistent/detail/logger.hpp>
+#include <derecho/conf/conf.hpp>
 
 #include <atomic>
 #include <cstdint>

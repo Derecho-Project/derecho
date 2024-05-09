@@ -1,6 +1,6 @@
-#include "derecho/utils/logger.hpp"
+#include <derecho/utils/logger.hpp>
 
-#include "derecho/conf/conf.hpp"
+#include <derecho/conf/conf.hpp>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>

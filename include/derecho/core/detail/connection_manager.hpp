@@ -1,17 +1,18 @@
 #pragma once
 
+#include <derecho/config.h>
 #include "../derecho_type_definitions.hpp"
-#include "derecho/tcp/tcp.hpp"
+#include <derecho/tcp/tcp.hpp>
 #include "locked_reference.hpp"
 
 #include <cassert>
 #include <map>
 #include <mutex>
 
-using node_id_t = derecho::node_id_t;
 
 namespace tcp {
 
+using node_id_t = derecho::node_id_t;
 using ip_addr_t = derecho::ip_addr_t;
 
 class tcp_connections {

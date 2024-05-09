@@ -1,14 +1,15 @@
 #pragma once
 
+#include <derecho/config.h>
 #include "../derecho_modes.hpp"
 #include "../subgroup_info.hpp"
 #include "connection_manager.hpp"
 #include "derecho/conf/conf.hpp"
-#include "derecho/mutils-serialization/SerializationMacros.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
-#include "derecho/rdmc/rdmc.hpp"
-#include "derecho/sst/multicast.hpp"
-#include "derecho/sst/sst.hpp"
+#include <derecho/mutils-serialization/SerializationMacros.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/rdmc/rdmc.hpp>
+#include <derecho/sst/multicast.hpp>
+#include <derecho/sst/sst.hpp>
 #include "derecho_internal.hpp"
 #include "derecho_sst.hpp"
 #include "persistence_manager.hpp"

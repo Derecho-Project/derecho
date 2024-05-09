@@ -5,10 +5,11 @@
  */
 #pragma once
 
+#include <derecho/config.h>
 #include "../subgroup_info.hpp"
 #include "../view.hpp"
-#include "derecho/conf/conf.hpp"
-#include "derecho/mutils-serialization/SerializationSupport.hpp"
+#include <derecho/conf/conf.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include "derecho_internal.hpp"
 #include "locked_reference.hpp"
 #include "multicast_group.hpp"

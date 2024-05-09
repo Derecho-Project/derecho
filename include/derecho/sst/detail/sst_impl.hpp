@@ -6,10 +6,11 @@
 
 #pragma once
 
+#include <derecho/config.h>
 #include "../sst.hpp"
 
 #include "../predicates.hpp"
-#include "derecho/utils/time.h"
+#include <derecho/utils/time.h>
 #include "poll_utils.hpp"
 #include <chrono>
 #include <condition_variable>
