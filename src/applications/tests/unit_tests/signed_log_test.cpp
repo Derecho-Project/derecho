@@ -77,14 +77,18 @@ std::string StringWithDelta::get_current_state() const {
 }
 
 size_t StringWithDelta::currentDeltaSize() {
-    return delta.size();
+    if (delta.size()==0) {
+        return 0;
+    } else {
+        return mutils::bytes_size(delta);
+    }
 }
 
 size_t StringWithDelta::currentDeltaToBytes(uint8_t * const buf, size_t buf_size) {
     if (delta.size() == 0) {
         dbg_default_trace("StringWithDelta: Calling currentDeltaToBytes with null buffer\n");
         return 0;
-    } else if (buf_size < delta.size()) {
+    } else if (buf_size < mutils::bytes_size(delta)) {
         dbg_default_error("{} failed because the buffer({}) given is smaller than needed({}).\n",
                 __func__,buf_size,delta.size());
         return 0;
