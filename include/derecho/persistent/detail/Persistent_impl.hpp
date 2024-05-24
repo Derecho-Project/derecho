@@ -599,12 +599,12 @@ void Persistent<ObjectType, storageType>::version(const version_t ver) {
 template <typename ObjectType,
           StorageType storageType>
 std::size_t Persistent<ObjectType, storageType>::updateSignature(version_t ver, openssl::Signer& signer) {
-    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_UPDATE_SIGNATURE_BEGIN, 0, ver);
     dbg_trace(m_logger, "In Persistent<T>: update signature (ver={})", ver);
     if(this->m_pLog->signature_size == 0) {
         dbg_trace(m_logger, "Returning 0 because signatures are disabled for this object");
         return 0;
     }
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_UPDATE_SIGNATURE_BEGIN, 0, ver);
     std::size_t bytes_added = 0;
     this->m_pLog->processEntryAtVersion(ver, [&signer, &bytes_added](const void* data, std::size_t size) {
         if(size > 0) {
@@ -666,8 +666,10 @@ version_t Persistent<ObjectType, storageType>::persist(std::optional<version_t> 
     ns_in_persist += ((t2.tv_sec - t1.tv_sec) * 1000000000ul + t2.tv_nsec - t1.tv_nsec);
     return ret;
 #else
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_PERSIST_BEGIN, 0, ver ? *ver : 0);
     version_t persisted_ver = this->m_pLog->persist(ver);
     dbg_debug(m_logger, "{} persist({}), actually persisted version {}", this->m_pLog->m_sName, ver ? *ver : 0, persisted_ver);
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_PERSIST_END, 0, ver ? *ver : 0);
     return persisted_ver;
 #endif  //_PERFORMANCE_DEBUG
 }

@@ -28,10 +28,11 @@ PersistentRegistry::~PersistentRegistry() {
 };
 
 void PersistentRegistry::makeVersion(version_t ver, const HLC& mhlc) {
-
+    TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_MAKE_VERSION_BEGIN, 0, ver);
     for(auto& entry : m_registry) {
         entry.second->version(ver, mhlc);
     }
+    TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_MAKE_VERSION_END, 0, ver);
 };
 
 version_t PersistentRegistry::getCurrentVersion() const {

@@ -294,6 +294,7 @@ void PersistenceManager::post_verify_request(const subgroup_id_t& subgroup_id, c
     verify_request_queue.push({subgroup_id, version});
     vrq_lock.clear(std::memory_order_release);  // release lock
     sem_post(&verification_request_sem);
+    TIMESTAMP_LOG(TimestampLogger::VERIFY_REQUEST_POSTED, 0, version);
 }
 
 /** make a version */
