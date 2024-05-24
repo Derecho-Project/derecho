@@ -37,11 +37,11 @@ struct TestState : public derecho::DeserializationContext {
 
 /**
  * A simple Delta-supporting object that stores a string and has a method that
- * appends to the string. All data appended since the last call to finalizeCurrentDelta
+ * appends to the string. All data appended since the last call to currentDeltaToBytes
  * is stored in the delta, and applyDelta appends the delta to the current string.
  * (There's no way to delete or truncate the string since this is just for test
  * purposes). Note that if append() has not been called since the last call to
- * finalizeCurrentDelta, the delta entry will be empty.
+ * currentDeltaToBytes, the delta entry will be empty.
  */
 class StringWithDelta : public mutils::ByteRepresentable,
                         public persistent::IDeltaSupport<StringWithDelta> {
@@ -53,8 +53,9 @@ public:
     StringWithDelta(const std::string& init_string);
     void append(const std::string& str_val);
     std::string get_current_state() const;
-    virtual void finalizeCurrentDelta(const persistent::DeltaFinalizer& finalizer);
-    virtual void applyDelta(uint8_t const* const data);
+    virtual size_t currentDeltaSize() override;
+    virtual size_t currentDeltaToBytes(uint8_t * const buf, size_t buf_size) override;
+    virtual void applyDelta(uint8_t const* const data) override;
     static std::unique_ptr<StringWithDelta> create(mutils::DeserializationManager* dm);
     DEFAULT_SERIALIZATION_SUPPORT(StringWithDelta, current_state);
 };

@@ -3,6 +3,7 @@
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/openssl/signature.hpp>
 #include <derecho/persistent/detail/util.hpp>
+#include <derecho/core/derecho_exception.hpp>
 #include <iostream>
 #include <signal.h>
 #include <spdlog/spdlog.h>
@@ -102,11 +103,18 @@ public:
         this->delta -= op;
         return this->value;
     }
-    virtual void finalizeCurrentDelta(const DeltaFinalizer& dp) {
-        // finalize current delta
-        dp((uint8_t const* const) & (this->delta), sizeof(this->delta));
-        // clear delta
+    virtual size_t currentDeltaToBytes(uint8_t* const buf, size_t buf_size) override {
+        if (buf_size < sizeof(delta)) {
+            dbg_default_warn("currentDeltaToBytes received a buffer {} smaller than needed: {}.\n",
+                buf_size,sizeof(delta));
+            return 0;
+        }
+        memcpy(static_cast<void*>(buf),static_cast<void*>(&delta),sizeof(delta));
         this->delta = 0;
+        return sizeof(delta);
+    }
+    virtual size_t currentDeltaSize() override {
+        return (this->delta == 0)?0:sizeof(delta);
     }
     virtual void applyDelta(uint8_t const* const pdat) {
         // apply delta

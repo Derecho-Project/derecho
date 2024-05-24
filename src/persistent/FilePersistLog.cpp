@@ -246,6 +246,13 @@ inline void FilePersistLog::do_append_validation(const uint64_t size, const int6
 }
 
 void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, const HLC& mhlc) {
+    this->append([pdat,size](void* buf,uint64_t bfsz) {
+                    memcpy(buf,pdat,std::min(size,bfsz));
+                 },size,ver,mhlc);
+}
+
+void FilePersistLog::append(const std::function<void(void*,uint64_t)>& blob_generator,
+                            uint64_t size, version_t ver, const HLC& mhlc) {
     dbg_trace(m_logger, "{0} append event ({1},{2})", this->m_sName, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_RDLOCK;
 
@@ -258,9 +265,9 @@ void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, cons
     do_append_validation(size, ver);
     dbg_trace(m_logger, "{0} append:validate check2 Finished.", this->m_sName);
 
-    // copy data
+    // generate data.
     // we reserve the first 'signature_size' bytes at the beginning of NEXT_DATA.
-    memcpy(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(NEXT_DATA) + signature_size), pdat, size);
+    blob_generator(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(NEXT_DATA) + signature_size), size);
     dbg_trace(m_logger, "{0} append:data ({1} bytes) is copied to log.", this->m_sName, size);
 
     // fill the log entry

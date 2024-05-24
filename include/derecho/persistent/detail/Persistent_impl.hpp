@@ -541,23 +541,20 @@ template <typename ObjectType,
 void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, const HLC& mhlc) {
     dbg_trace(m_logger, "append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-        v.finalizeCurrentDelta([&](uint8_t const* const buf, size_t len) {
-            // Don't create a log entry for versions without data change.
-            if (len > 0) {
-                this->m_pLog->append((const void* const)buf, len, ver, mhlc);
-            } else {
-                // Advance the log's version so it still reports the correct "current version"
-                this->m_pLog->advanceVersion(ver);
-            }
-        });
+        if (v.currentDeltaSize() > 0) {
+            this->m_pLog->append([&v](void* buf, uint64_t buf_size){
+                    v.currentDeltaToBytes(static_cast<uint8_t*>(buf),static_cast<size_t>(buf_size));
+                },v.currentDeltaSize(),ver,mhlc);
+        } else {
+            this->m_pLog->advanceVersion(ver);
+        }
     } else {
         // ObjectType does not support Delta, logging the whole current state.
-        auto size = mutils::bytes_size(v);
-        uint8_t* buf = new uint8_t[size];
-        memset(buf, 0, size);
-        mutils::to_bytes(v, buf);
-        this->m_pLog->append((void*)buf, size, ver, mhlc);
-        delete[] buf;
+        this->m_pLog->append([&v](void* buf,uint64_t buf_size){
+                if (mutils::bytes_size(v) <= buf_size) { 
+                    mutils::to_bytes(v,static_cast<uint8_t*>(buf));
+                }
+            },mutils::bytes_size(v),ver,mhlc);
     }
 }
 
