@@ -108,25 +108,31 @@ version_t PersistentRegistry::sign(openssl::Signer& signer, uint8_t* signature_b
         TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_SIGN_BEGIN, 0, cur_signable_version);
         dbg_trace(m_logger, "PersistentRegistry: Attempting to sign version {} out of {}", cur_signable_version, current_version);
         signer.init();
+        TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_UPDATE_SIGNATURE_BEGIN, 0, cur_signable_version);
         std::size_t bytes_signed = 0;
         for(auto& field : m_registry) {
             dbg_trace(m_logger, "PersistentRegistry: Signing persistent field at {}", fmt::ptr(field.second));
             bytes_signed += field.second->updateSignature(cur_signable_version, signer);
         }
+        TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_UPDATE_SIGNATURE_END, 0, cur_signable_version);
         if(bytes_signed == 0) {
             // That version did not exist in any field, so there was nothing to sign. This should not happen with getNextSignedVersion().
             dbg_warn(m_logger, "Logic error in PersistentRegistry: Version {} was returned by getNextSignedVersion(), but no field signed any data for it", cur_signable_version);
             cur_signable_version = getNextSignedVersion(cur_signable_version);
             continue;
         }
+        TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_FINALIZE_SIGNATURE_BEGIN, 0, cur_signable_version);
         signer.add_bytes(m_lastSignature.data(), m_lastSignature.size());
         signer.finalize(signature_buffer);
+        TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_FINALIZE_SIGNATURE_END, 0, cur_signable_version);
         // After computing a signature over all fields of the object, go back and
         // tell each field to add that signature to its log.
         dbg_debug(m_logger, "PersistentRegistry: Adding signature to log in version {}, setting its previous signed version to {}", cur_signable_version, m_lastSignedVersion);
+        TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_ADD_SIGNATURE_BEGIN, 0, cur_signable_version);
         for(auto& field : m_registry) {
             field.second->addSignature(cur_signable_version, signature_buffer, m_lastSignedVersion);
         }
+        TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_ADD_SIGNATURE_END, 0, cur_signable_version);
         memcpy(m_lastSignature.data(), signature_buffer, m_lastSignature.size());
         TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_SIGN_END, 0, cur_signable_version);
         m_lastSignedVersion = cur_signable_version;
@@ -186,7 +192,7 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
 }
 
 version_t PersistentRegistry::persist(std::optional<version_t> latest_version) {
-    TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_PERSIST_BEGIN, 0, latest_version ? *latest_version : 0);
+    TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_PERSIST_BEGIN, 0, latest_version ? *latest_version : -1);
     version_t min = INVALID_VERSION;
     for(auto& entry : m_registry) {
         version_t ver = entry.second->persist(latest_version);
@@ -195,7 +201,7 @@ version_t PersistentRegistry::persist(std::optional<version_t> latest_version) {
             min = ver;
         }
     }
-    TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_PERSIST_END, 0, latest_version ? *latest_version : 0);
+    TIMESTAMP_LOG(derecho::TimestampLogger::REGISTRY_PERSIST_END, 0, latest_version ? *latest_version : -1);
     return min;
 };
 

@@ -94,6 +94,12 @@ public:
     static constexpr uint64_t REGISTRY_MAKE_VERSION_END = 6004;
     static constexpr uint64_t REGISTRY_SIGN_BEGIN = 6012;
     static constexpr uint64_t REGISTRY_SIGN_END = 6013;
+    static constexpr uint64_t REGISTRY_UPDATE_SIGNATURE_BEGIN = 6112;
+    static constexpr uint64_t REGISTRY_UPDATE_SIGNATURE_END = 6113;
+    static constexpr uint64_t REGISTRY_FINALIZE_SIGNATURE_BEGIN = 6114;
+    static constexpr uint64_t REGISTRY_FINALIZE_SIGNATURE_END = 6115;
+    static constexpr uint64_t REGISTRY_ADD_SIGNATURE_BEGIN = 6116;
+    static constexpr uint64_t REGISTRY_ADD_SIGNATURE_END = 6117;
     static constexpr uint64_t REGISTRY_PERSIST_BEGIN = 6014;
     static constexpr uint64_t REGISTRY_PERSIST_END = 6015;
     // Persistent<T> events
@@ -101,8 +107,8 @@ public:
     static constexpr uint64_t PERSISTENT_MAKE_VERSION_END = 7004;
     static constexpr uint64_t PERSISTENT_UPDATE_SIGNATURE_BEGIN = 7012;
     static constexpr uint64_t PERSISTENT_UPDATE_SIGNATURE_END = 7013;
-    static constexpr uint64_t PERSISTENT_PERSIST_BEGIN = 7012;
-    static constexpr uint64_t PERSISTENT_PERSIST_END = 7013;
+    static constexpr uint64_t PERSISTENT_PERSIST_BEGIN = 7014;
+    static constexpr uint64_t PERSISTENT_PERSIST_END = 7015;
 };
 
 // Macro wrappers for the static functions so they can be completely disabled with a #define

@@ -551,7 +551,7 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, cons
     } else {
         // ObjectType does not support Delta, logging the whole current state.
         this->m_pLog->append([&v](void* buf,uint64_t buf_size){
-                if (mutils::bytes_size(v) <= buf_size) { 
+                if (mutils::bytes_size(v) <= buf_size) {
                     mutils::to_bytes(v,static_cast<uint8_t*>(buf));
                 }
             },mutils::bytes_size(v),ver,mhlc);
@@ -663,10 +663,10 @@ version_t Persistent<ObjectType, storageType>::persist(std::optional<version_t> 
     ns_in_persist += ((t2.tv_sec - t1.tv_sec) * 1000000000ul + t2.tv_nsec - t1.tv_nsec);
     return ret;
 #else
-    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_PERSIST_BEGIN, 0, ver ? *ver : 0);
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_PERSIST_BEGIN, 0, ver ? *ver : -1);
     version_t persisted_ver = this->m_pLog->persist(ver);
     dbg_debug(m_logger, "{} persist({}), actually persisted version {}", this->m_pLog->m_sName, ver ? *ver : 0, persisted_ver);
-    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_PERSIST_END, 0, ver ? *ver : 0);
+    TIMESTAMP_LOG(derecho::TimestampLogger::PERSISTENT_PERSIST_END, 0, ver ? *ver : -1);
     return persisted_ver;
 #endif  //_PERFORMANCE_DEBUG
 }
