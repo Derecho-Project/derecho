@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 #endif//NOLOG
         // Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         dbg_default_crit("Here is FOO {}!", rank_in_foo);
-        dbg_default_crit("I see members of my shard: {}", foo_members);
+        dbg_default_crit("I see members of my shard: {}", fmt::join(foo_members,"|"));
     }
     auto find_in_bar_results = std::find(bar_members.begin(), bar_members.end(), my_id);
     if(find_in_bar_results != bar_members.end()) {
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
 #endif//NOLOG
         // Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         dbg_default_crit("Here is BAR {}!", rank_in_bar);
-        dbg_default_crit("I see members of my shard: {}", bar_members);
+        dbg_default_crit("I see members of my shard: {}", fmt::join(bar_members,"|"));
     }
 
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

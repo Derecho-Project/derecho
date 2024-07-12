@@ -199,7 +199,7 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
                     surviving_member_set.begin(), surviving_member_set.end(),
                     active_reserved_node_id_set.begin(), active_reserved_node_id_set.end(),
                     std::inserter(curr_members, curr_members.end()));
-            dbg_default_trace("With inherent nodes, curr_members is: {}", curr_members);
+            dbg_default_trace("With inherent nodes, curr_members is: {}", fmt::join(curr_members,"|"));
 
             curr_view.next_unassigned_rank = curr_members.size();
             dbg_default_trace("After rearranging inherent node_ids, curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
@@ -208,7 +208,7 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
                     added_member_set.begin(), added_member_set.end(),
                     all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
                     std::inserter(curr_members, curr_members.end()));
-            dbg_default_trace("Adding newly added non-reserved nodes, curr_members is: {}", curr_members);
+            dbg_default_trace("Adding newly added non-reserved nodes, curr_members is: {}", fmt::join(curr_members,"|"));
         }
 
         for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size();
@@ -247,7 +247,7 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                 all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
                 std::inserter(all_active_reserved_node_id_set, all_active_reserved_node_id_set.begin()));
 
-        dbg_default_trace("Parsing all_active_reserved_node_id_set: {}", all_active_reserved_node_id_set);
+        dbg_default_trace("Parsing all_active_reserved_node_id_set: {}", fmt::join(all_active_reserved_node_id_set,","));
 
         nodes_needed = all_active_reserved_node_id_set.size();
         dbg_default_trace("After counting all_active_reserved_node_id_set, nodes_needed is {}", nodes_needed);
@@ -312,7 +312,8 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                     dbg_default_trace("There is no reserved node_id configured.");
                 }
 
-                dbg_default_trace("The active_reserved_node_id_set for current shard is: {}", active_reserved_node_id_set);
+                dbg_default_trace("The active_reserved_node_id_set for current shard is: {}",
+                                  fmt::join(active_reserved_node_id_set,","));
 
                 /* The inherent_node_id_set holds node_ids that are "inherent" or "intrinsic"
                  * to the this shard, for the node_ids are either surviving nodes from "the same shard"
@@ -323,7 +324,8 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                         survived_node_set.begin(), survived_node_set.end(),
                         active_reserved_node_id_set.begin(), active_reserved_node_id_set.end(),
                         std::inserter(inherent_node_id_set, inherent_node_id_set.end()));
-                dbg_default_trace("The inherent_node_id_set for current shard is: {}", inherent_node_id_set);
+                dbg_default_trace("The inherent_node_id_set for current shard is: {}",
+                                  fmt::join(inherent_node_id_set,","));
                 // All active reserved nodes just count once.
                 nodes_needed += inherent_node_id_set.size() - active_reserved_node_id_set.size();
 
@@ -426,7 +428,8 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
                             curr_member_set.begin(), curr_member_set.end(),
                             std::inserter(desired_nodes, desired_nodes.end()));
                     shard_size -= desired_nodes.size();
-                    dbg_default_trace("Assigning shard {} active reserved nodes: {}", desired_nodes.size(), desired_nodes);
+                    dbg_default_trace("Assigning shard {} active reserved nodes: {}", desired_nodes.size(), 
+                                      fmt::join(desired_nodes,"|"));
                 }
             } else {
                 dbg_default_trace("There is no reserved node_id configured.");
@@ -440,7 +443,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
             // unassigned normal nodes, which I (Lichen) think is just OK and not in conflict with its definition.
             curr_view.next_unassigned_rank += shard_size;
 
-            dbg_default_trace("Assigning shard {} nodes in total, with curr_view.next_unassigned_rank {}: {}", desired_nodes.size(), curr_view.next_unassigned_rank, desired_nodes);
+            dbg_default_trace("Assigning shard {} nodes in total, with curr_view.next_unassigned_rank {}: {}",
+                              desired_nodes.size(),
+                              curr_view.next_unassigned_rank, fmt::join(desired_nodes,"|"));
 
             // Figure out the sender list
             std::vector<int> is_sender;
@@ -489,8 +494,8 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
     const subgroup_id_t previous_assignment_offset = prev_view->subgroup_ids_by_type_id.at(subgroup_type_id)[0];
     subgroup_shard_layout_t next_assignment(shard_sizes.at(subgroup_type).size());
 
-    dbg_default_trace("The surviving_member_set is: {}", surviving_member_set);
-    dbg_default_trace("The added_member_set is: {}", added_member_set);
+    dbg_default_trace("The surviving_member_set is: {}", fmt::join(surviving_member_set,","));
+    dbg_default_trace("The added_member_set is: {}", fmt::join(added_member_set,","));
 
     const SubgroupAllocationPolicy& subgroup_type_policy
             = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
@@ -515,7 +520,8 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
                 next_shard_members.push_back(previous_shard_assignment.members[rank]);
                 next_is_sender.push_back(previous_shard_assignment.is_sender[rank]);
             }
-            dbg_default_trace("After assigning surviving nodes, next_shard_members is: {}", next_shard_members);
+            dbg_default_trace("After assigning surviving nodes, next_shard_members is: {}",
+                              fmt::join(next_shard_members,"|"));
 
             const ShardAllocationPolicy& sharding_policy
                     = subgroup_type_policy.identical_subgroups
@@ -531,7 +537,8 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
                         sharding_policy.reserved_node_ids_by_shard[shard_num].end(),
                         std::inserter(added_reserved_node_id_set, added_reserved_node_id_set.end()));
                 if(added_reserved_node_id_set.size() > 0) {
-                    dbg_default_trace("The added_reserved_node_id_set is not empty: {}", added_reserved_node_id_set);
+                    dbg_default_trace("The added_reserved_node_id_set is not empty: {}",
+                                      fmt::join(added_reserved_node_id_set,"|"));
 
                     for(auto node_id : added_reserved_node_id_set) {
                         next_shard_members.push_back(node_id);
@@ -547,7 +554,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
                         }
                     }
                 }
-                dbg_default_trace("After assigning newly added reserved nodes, we get {} inherent node_id(s) assigned, next_shard_members is: {}", next_shard_members.size(), next_shard_members);
+                dbg_default_trace("After assigning newly added reserved nodes, we get {} inherent node_id(s) assigned, next_shard_members is: {}", next_shard_members.size(), fmt::join(next_shard_members,"|"));
             } else {
                 dbg_default_trace("There is no reserved node_id configured.");
             }
@@ -561,7 +568,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
                 //If senders are not specified, all nodes are senders; otherwise, additional members are not senders.
                 next_is_sender.push_back(sharding_policy.reserved_sender_ids_by_shard.empty() ? true : sharding_policy.reserved_sender_ids_by_shard[shard_num].empty());
             }
-            dbg_default_trace("Assigned shard {} nodes in total, with curr_view.next_unassigned_rank {}: {}", next_shard_members.size(), curr_view.next_unassigned_rank, next_shard_members);
+            dbg_default_trace("Assigned shard {} nodes in total, with curr_view.next_unassigned_rank {}: {}",
+                              next_shard_members.size(),
+                              curr_view.next_unassigned_rank, fmt::join(next_shard_members,"|"));
 
             next_assignment[subgroup_num].emplace_back(curr_view.make_subview(next_shard_members,
                                                                               previous_shard_assignment.mode,

@@ -70,14 +70,15 @@ void test_fixed_allocation_functions() {
     derecho::test_provision_subgroups(test_fixed_subgroups, nullptr, *curr_view);
 
     std::set<int> ranks_to_fail{1, 3, 17, 38, 40};
-    rls_default_info("TEST 2: Failing some nodes that are in subgroups: {}", ranks_to_fail);
+    rls_default_info("TEST 2: Failing some nodes that are in subgroups: {}", fmt::join(ranks_to_fail,","));
     std::unique_ptr<derecho::View> prev_view(std::move(curr_view));
     curr_view = derecho::make_next_view(*prev_view, ranks_to_fail, {}, {});
 
     derecho::test_provision_subgroups(test_fixed_subgroups, prev_view, *curr_view);
 
     std::set<int> more_ranks_to_fail{13, 20, 59, 78, 89};
-    rls_default_info("TEST 3: Failing nodes both before and after the pointer. Ranks are {}", more_ranks_to_fail);
+    rls_default_info("TEST 3: Failing nodes both before and after the pointer. Ranks are {}",
+                     fmt::join(more_ranks_to_fail,","));
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, more_ranks_to_fail, {}, {});
 
@@ -144,13 +145,14 @@ void test_flexible_allocation_functions() {
     derecho::test_provision_subgroups(test_flexible_subgroups, nullptr, *curr_view);
 
     std::set<int> flexible_ranks_to_fail{3, 6, 31, 45, 57};
-    rls_default_info("TEST 7: Failing some nodes that are in subgroups: {}", flexible_ranks_to_fail);
+    rls_default_info("TEST 7: Failing some nodes that are in subgroups: {}", fmt::join(flexible_ranks_to_fail,","));
     std::unique_ptr<derecho::View> prev_view(std::move(curr_view));
     curr_view = derecho::make_next_view(*prev_view, flexible_ranks_to_fail, {}, {});
     derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
 
     std::set<int> flexible_ranks_to_fail_2{7, 8, 17, 18, 40, 41, 51, 61, 62};
-    rls_default_info("TEST 8: Failing more nodes so that shards must shrink. Ranks are: {}", flexible_ranks_to_fail_2);
+    rls_default_info("TEST 8: Failing more nodes so that shards must shrink. Ranks are: {}",
+                     fmt::join(flexible_ranks_to_fail_2,","));
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, flexible_ranks_to_fail_2, {}, {});
     derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
@@ -227,7 +229,7 @@ void test_json_layout() {
     rls_default_info("TEST 12: Nodes 0 and 2 fail; 2 is in both reserved node lists");
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, ranks_to_fail, {}, {});
-    dbg_default_debug("New view has members: {}", curr_view->members);
+    dbg_default_debug("New view has members: {}", fmt::join(curr_view->members,"|"));
     derecho::test_provision_subgroups(test_json_overlapping, prev_view, *curr_view);
 
     std::vector<node_id_t> new_members_outside_reservation{5, 6};
@@ -236,7 +238,7 @@ void test_json_layout() {
     rls_default_info("TEST 13: Nodes 5 and 6 join");
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, {}, new_members_outside_reservation, ips_and_ports_2);
-    dbg_default_debug("New view has members: {}", curr_view->members);
+    dbg_default_debug("New view has members: {}", fmt::join(curr_view->members,"|"));
     derecho::test_provision_subgroups(test_json_overlapping, prev_view, *curr_view);
 
     std::set<int> ranks_to_fail_2{1, 3};
@@ -245,7 +247,7 @@ void test_json_layout() {
     rls_default_info("TEST 14: Nodes 3 and 5 fail, node 2 rejoins");
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, ranks_to_fail_2, node_rejoined, node_2_ip);
-    dbg_default_debug("New view has members: {}", curr_view->members);
+    dbg_default_debug("New view has members: {}", fmt::join(curr_view->members,"|"));
     derecho::test_provision_subgroups(test_json_overlapping, prev_view, *curr_view);
 }
 
@@ -288,7 +290,7 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
     curr_view.subgroup_shard_views.clear();
     curr_view.subgroup_ids_by_type_id.clear();
-    rls_default_info("View has there members: {}", curr_view.members);
+    rls_default_info("View has there members: {}", fmt::join(curr_view.members,"|"));
     std::map<std::type_index, subgroup_shard_layout_t> subgroup_allocations;
     try {
         auto temp = subgroup_info.subgroup_membership_function(curr_view.subgroup_type_order,

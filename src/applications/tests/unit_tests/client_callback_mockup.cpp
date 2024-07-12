@@ -147,7 +147,7 @@ std::pair<persistent::version_t, uint64_t> InternalClientNode::submit_update(uin
 }
 
 void InternalClientNode::receive_callback(const ClientCallbackType& callback_type, persistent::version_t version, derecho::subgroup_id_t sending_subgroup) const {
-    dbg_default_debug("Got a callback of type {} for version {}", callback_type, version);
+    dbg_default_debug("Got a callback of type {} for version {}", static_cast<int>(callback_type), version);
     //Send the callback event to the callback thread then return, so the P2P receive thread doesn't block for too long
     std::unique_lock<std::mutex> lock(event_queue_mutex);
     callback_event_queue.emplace(CallbackEvent{callback_type, version, sending_subgroup});
@@ -263,7 +263,8 @@ void StorageNode::callback_thread_function() {
         for(auto requests_iter = requests_by_version.begin();
             requests_iter != requests_by_version.end();) {
             persistent::version_t requested_version = requests_iter->first;
-            dbg_default_debug("Callback thread checking a callback of type {} for version {}", requests_iter->second.callback_type, requested_version);
+            dbg_default_debug("Callback thread checking a callback of type {} for version {}",
+                              static_cast<int>(requests_iter->second.callback_type), requested_version);
             bool requested_event_happened = false;
             {
                 std::unique_lock<std::mutex> query_results_lock(callback_thread_mutex);
