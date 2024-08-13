@@ -9,6 +9,10 @@
 #include <mutils/type_utils.hpp>
 #include <tuple>
 #include <vector>
+#include <set>
+#include <unordered_set>
+#include <map>
+#include <unordered_map>
 
 // BEGIN DECLARATIONS AND USAGE INFORMATION
 
@@ -274,6 +278,42 @@ std::size_t bytes_size(const std::set<T>& s) {
 }
 
 /**
+ * All the elements of the hashset, plus one int for the number of elements.
+ */
+template <typename T>
+std::size_t bytes_size(const std::unordered_set<T>& s) {
+    int size = sizeof(int);
+    for(auto& a : s) {
+        size += bytes_size(a);
+    }
+    return size;
+}
+
+/**
+ * All the elements of the hashset, plus one int for the number of elements.
+ */
+template <typename T>
+std::size_t bytes_size(const std::multiset<T>& s) {
+    int size = sizeof(int);
+    for(auto& a : s) {
+        size += bytes_size(a);
+    }
+    return size;
+}
+
+/**
+ * All the elements of the hashset, plus one int for the number of elements.
+ */
+template <typename T>
+std::size_t bytes_size(const std::unordered_multiset<T>& s) {
+    int size = sizeof(int);
+    for(auto& a : s) {
+        size += bytes_size(a);
+    }
+    return size;
+}
+
+/**
  * Sums the size of each key and value in the map, plus one int for the
  * number of entries
  */
@@ -293,6 +333,34 @@ std::size_t bytes_size(const std::map<K, V>& m) {
  */
 template <typename K, typename V>
 std::size_t bytes_size(const std::unordered_map<K, V>& m) {
+    int size = sizeof(int);
+    for(const auto& p : m) {
+        size += bytes_size(p.first);
+        size += bytes_size(p.second);
+    }
+    return size;
+}
+
+/**
+ * Sums the size of each key and value in the multimap, plus one int for the
+ * number of entries
+ */
+template <typename K, typename V>
+std::size_t bytes_size(const std::multimap<K, V>& m) {
+    int size = sizeof(int);
+    for(const auto& p : m) {
+        size += bytes_size(p.first);
+        size += bytes_size(p.second);
+    }
+    return size;
+}
+
+/**
+ * Sums the size of each key and value in the multimap, plus one int for the
+ * number of entries
+ */
+template <typename K, typename V>
+std::size_t bytes_size(const std::unordered_multimap<K, V>& m) {
     int size = sizeof(int);
     for(const auto& p : m) {
         size += bytes_size(p.first);
@@ -510,6 +578,15 @@ struct is_list<std::list<T>> : std::true_type {};
 template <typename T>
 struct is_list<const std::list<T>> : std::true_type {};
 
+template <typename T>
+struct is_set<std::unordered_set<T>> : std::true_type {};
+
+template <typename T>
+struct is_set<std::multiset<T>> : std::true_type {};
+
+template <typename T>
+struct is_set<std::unordered_multiset<T>> : std::true_type {};
+
 template <typename>
 struct is_map : std::false_type {};
 
@@ -519,6 +596,12 @@ struct is_map<std::map<K, V>> : std::true_type {};
 template <typename K, typename V>
 struct is_map<const std::map<K, V>> : std::true_type {};
 
+template <typename K, typename V>
+struct is_map<std::multimap<K, V>> : std::true_type {};
+
+template <typename K, typename V>
+struct is_map<const std::multimap<K, V>> : std::true_type {};
+
 template <typename>
 struct is_unordered_map : std::false_type {};
 
@@ -527,6 +610,12 @@ struct is_unordered_map<std::unordered_map<K, V>> : std::true_type {};
 
 template <typename K, typename V>
 struct is_unordered_map<const std::unordered_map<K, V>> : std::true_type {};
+
+template <typename K, typename V>
+struct is_unordered_map<std::unordered_multimap<K, V>> : std::true_type {};
+
+template <typename K, typename V>
+struct is_unordered_map<const std::unordered_multimap<K, V>> : std::true_type {};
 
 template <typename>
 struct is_string : std::false_type {};
@@ -578,13 +667,33 @@ template <typename T>
 void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
                  const std::set<T>& s);
 
+template <typename T>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::unordered_set<T>& s);
+
+template <typename T>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::multiset<T>& s);
+
+template <typename T>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::unordered_multiset<T>& s);
+
 template <typename K, typename V>
 void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
                  const std::map<K, V>& map);
 
 template <typename K, typename V>
 void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::multimap<K, V>& map);
+
+template <typename K, typename V>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
                  const std::unordered_map<K, V>& map);
+
+template <typename K, typename V>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::unordered_multimap<K, V>& map);
 
 // Forward declarations of to_bytes functions for STL types
 
@@ -608,11 +717,26 @@ std::size_t to_bytes(const std::tuple<T...>& tuple, uint8_t* buffer);
 template <typename T>
 std::size_t to_bytes(const std::set<T>& s, uint8_t* buffer);
 
+template <typename T>
+std::size_t to_bytes(const std::unordered_set<T>& s, uint8_t* buffer);
+
+template <typename T>
+std::size_t to_bytes(const std::multiset<T>& s, uint8_t* buffer);
+
+template <typename T>
+std::size_t to_bytes(const std::unordered_multiset<T>& s, uint8_t* buffer);
+
 template <typename K, typename V>
 std::size_t to_bytes(const std::map<K, V>& m, uint8_t* buffer);
 
 template <typename K, typename V>
+std::size_t to_bytes(const std::multimap<K, V>& m, uint8_t* buffer);
+
+template <typename K, typename V>
 std::size_t to_bytes(const std::unordered_map<K, V>& m, uint8_t* buffer);
+
+template <typename K, typename V>
+std::size_t to_bytes(const std::unordered_multimap<K, V>& m, uint8_t* buffer);
 
 // Forward declarations of from_bytes functions for STL types
 
@@ -778,6 +902,36 @@ void post_object(const std::function<void(uint8_t const* const, std::size_t)>& c
     }
 }
 
+template <typename T>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::unordered_set<T>& s) {
+    int size = s.size();
+    consumer((uint8_t*)&size, sizeof(size));
+    for(const auto& a : s) {
+        post_object(consumer, a);
+    }
+}
+
+template <typename T>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::multiset<T>& s) {
+    int size = s.size();
+    consumer((uint8_t*)&size, sizeof(size));
+    for(const auto& a : s) {
+        post_object(consumer, a);
+    }
+}
+
+template <typename T>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::unordered_multiset<T>& s) {
+    int size = s.size();
+    consumer((uint8_t*)&size, sizeof(size));
+    for(const auto& a : s) {
+        post_object(consumer, a);
+    }
+}
+
 template <typename K, typename V>
 void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
                  const std::map<K, V>& map) {
@@ -791,7 +945,29 @@ void post_object(const std::function<void(uint8_t const* const, std::size_t)>& c
 
 template <typename K, typename V>
 void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::multimap<K, V>& map) {
+    int size = map.size();
+    consumer((uint8_t*)&size, sizeof(size));
+    for(const auto& pair : map) {
+        post_object(consumer, pair.first);
+        post_object(consumer, pair.second);
+    }
+}
+
+template <typename K, typename V>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
                  const std::unordered_map<K, V>& map) {
+    int size = map.size();
+    consumer((uint8_t*)&size, sizeof(size));
+    for(const auto& pair : map) {
+        post_object(consumer, pair.first);
+        post_object(consumer, pair.second);
+    }
+}
+
+template <typename K, typename V>
+void post_object(const std::function<void(uint8_t const* const, std::size_t)>& consumer,
+                 const std::unordered_multimap<K, V>& map) {
     int size = map.size();
     consumer((uint8_t*)&size, sizeof(size));
     for(const auto& pair : map) {
@@ -881,6 +1057,36 @@ std::size_t to_bytes(const std::set<T>& s, uint8_t* buffer) {
     return bsize;
 }
 
+template <typename T>
+std::size_t to_bytes(const std::unordered_set<T>& s, uint8_t* buffer) {
+    int set_size = s.size();
+    std::size_t bsize = to_bytes(set_size,buffer);
+    for (const auto& e: s) {
+        bsize += to_bytes(e, buffer+bsize);
+    }
+    return bsize;
+}
+
+template <typename T>
+std::size_t to_bytes(const std::multiset<T>& s, uint8_t* buffer) {
+    int set_size = s.size();
+    std::size_t bsize = to_bytes(set_size,buffer);
+    for (const auto& e: s) {
+        bsize += to_bytes(e, buffer+bsize);
+    }
+    return bsize;
+}
+
+template <typename T>
+std::size_t to_bytes(const std::unordered_multiset<T>& s, uint8_t* buffer) {
+    int set_size = s.size();
+    std::size_t bsize = to_bytes(set_size,buffer);
+    for (const auto& e: s) {
+        bsize += to_bytes(e, buffer+bsize);
+    }
+    return bsize;
+}
+
 template <typename K, typename V>
 std::size_t to_bytes(const std::map<K, V>& m, uint8_t* buffer) {
     int map_size = m.size();
@@ -893,7 +1099,29 @@ std::size_t to_bytes(const std::map<K, V>& m, uint8_t* buffer) {
 }
 
 template <typename K, typename V>
+std::size_t to_bytes(const std::multimap<K, V>& m, uint8_t* buffer) {
+    int map_size = m.size();
+    std::size_t bsize = to_bytes(map_size,buffer);
+    for (const auto& e: m) {
+        bsize += to_bytes(e.first,buffer+bsize);
+        bsize += to_bytes(e.second,buffer+bsize);
+    }
+    return bsize;
+}
+
+template <typename K, typename V>
 std::size_t to_bytes(const std::unordered_map<K, V>& m, uint8_t* buffer) {
+    int map_size = m.size();
+    std::size_t bsize = to_bytes(map_size,buffer);
+    for (const auto& e: m) {
+        bsize += to_bytes(e.first,buffer+bsize);
+        bsize += to_bytes(e.second,buffer+bsize);
+    }
+    return bsize;
+}
+
+template <typename K, typename V>
+std::size_t to_bytes(const std::unordered_multimap<K, V>& m, uint8_t* buffer) {
     int map_size = m.size();
     std::size_t bsize = to_bytes(map_size,buffer);
     for (const auto& e: m) {
@@ -929,6 +1157,24 @@ void ensure_registered(const std::pair<L, R>& v, DeserializationManager& dm) {
 
 template <typename T>
 void ensure_registered(const std::set<T>& v, DeserializationManager& dm) {
+    for(auto& e : v)
+        ensure_registered(e, dm);
+}
+
+template <typename T>
+void ensure_registered(const std::unordered_set<T>& v, DeserializationManager& dm) {
+    for(auto& e : v)
+        ensure_registered(e, dm);
+}
+
+template <typename T>
+void ensure_registered(const std::multiset<T>& v, DeserializationManager& dm) {
+    for(auto& e : v)
+        ensure_registered(e, dm);
+}
+
+template <typename T>
+void ensure_registered(const std::unordered_multiset<T>& v, DeserializationManager& dm) {
     for(auto& e : v)
         ensure_registered(e, dm);
 }
@@ -1030,7 +1276,7 @@ std::enable_if_t<is_set<std::remove_cv_t<T>>::value, std::unique_ptr<T>>
 from_bytes(DeserializationManager* ctx, const uint8_t* _buffer) {
     int size = ((int*)_buffer)[0];
     const uint8_t* buffer = _buffer + sizeof(int);
-    auto r = std::make_unique<std::set<typename T::key_type>>();
+    auto r = std::make_unique<std::remove_cv_t<T>>();
     for(int i = 0; i < size; ++i) {
         auto e = from_bytes<typename T::key_type>(ctx, buffer);
         buffer += bytes_size(*e);
