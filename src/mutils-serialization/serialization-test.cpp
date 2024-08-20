@@ -10,6 +10,7 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 /**
  * @cond DoxygenSuppressed
@@ -26,31 +27,51 @@ struct TestObject : public mutils::ByteRepresentable {
     std::pair<std::uint32_t, std::uint64_t> test_pair;
     std::tuple<int, std::string, std::uint64_t> test_tuple;
     std::set<int> test_set;
+    std::unordered_set<int> test_hashset;
+    std::multiset<int> test_multiset;
+    std::unordered_multiset<int> test_hashmultiset;
     std::list<int> test_list;
     std::vector<int> test_vector;
     std::map<int, std::string> test_map;
+    std::multimap<int, std::string> test_multimap;
     std::unordered_map<int, std::string> test_hashmap;
+    std::unordered_multimap<int, std::string> test_hashmultimap;
     PODStruct test_pod;
     TestObject(int i, const std::string& str, const std::pair<std::uint32_t, std::uint64_t> p,
                const std::tuple<int, std::string, std::uint64_t>& t, const std::set<int>& s,
+               const std::unordered_set<int>& hs,
+               const std::multiset<int>& ms,
+               const std::unordered_multiset<int>& hms,
                const std::list<int>& l, const std::vector<int>& v, const std::map<int, std::string>& m,
-               const std::unordered_map<int, std::string>& u, const PODStruct& pod)
+               const std::multimap<int, std::string>& mm,
+               const std::unordered_map<int, std::string>& u, 
+               const std::unordered_multimap<int, std::string>& hmm,
+               const PODStruct& pod)
         : test_int(i),
           test_string(str),
           test_pair(p),
           test_tuple(t),
           test_set(s),
+          test_hashset(hs),
+          test_multiset(ms),
+          test_hashmultiset(hms),
           test_list(l),
           test_vector(v),
           test_map(m),
+          test_multimap(mm),
           test_hashmap(u),
+          test_hashmultimap(hmm),
           test_pod(pod) {}
 
     // Mostly use DEFAULT_SERIALIZATION_SUPPORT, but don't use the default from_bytes_noalloc
     DEFAULT_SERIALIZE(test_int, test_string, test_pair, test_tuple,
-                      test_set, test_list, test_vector, test_map, test_hashmap, test_pod);
+                      test_set, test_hashset, test_multiset, test_hashmultiset,
+                      test_list, test_vector, test_map, test_multimap, test_hashmap,
+                      test_hashmultimap, test_pod);
     DEFAULT_DESERIALIZE(TestObject, test_int, test_string, test_pair, test_tuple,
-                        test_set, test_list, test_vector, test_map, test_hashmap, test_pod);
+                        test_set, test_hashset, test_multiset, test_hashmultiset,
+                        test_list, test_vector, test_map, test_multimap, test_hashmap,
+                        test_hashmultimap, test_pod);
     // Provide a from_bytes_noalloc that recursively calls from_bytes_noalloc so we actually test from_bytes_noalloc
     static mutils::context_ptr<TestObject> from_bytes_noalloc(mutils::DeserializationManager* dsm, uint8_t const* buf) {
         auto int_ptr = mutils::from_bytes_noalloc<int>(dsm, buf);
@@ -63,18 +84,30 @@ struct TestObject : public mutils::ByteRepresentable {
         bytes_read += mutils::bytes_size(*tuple_ptr);
         auto set_ptr = mutils::from_bytes_noalloc<std::set<int>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*set_ptr);
+        auto hashset_ptr = mutils::from_bytes_noalloc<std::unordered_set<int>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*hashset_ptr);
+        auto multiset_ptr = mutils::from_bytes_noalloc<std::multiset<int>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*multiset_ptr);
+        auto hashmultiset_ptr = mutils::from_bytes_noalloc<std::unordered_multiset<int>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*hashmultiset_ptr);
         auto list_ptr = mutils::from_bytes_noalloc<std::list<int>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*list_ptr);
         auto vec_ptr = mutils::from_bytes_noalloc<std::vector<int>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*vec_ptr);
         auto map_ptr = mutils::from_bytes_noalloc<std::map<int, std::string>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*map_ptr);
+        auto multimap_ptr = mutils::from_bytes_noalloc<std::multimap<int, std::string>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*multimap_ptr);
         auto hashmap_ptr = mutils::from_bytes_noalloc<std::unordered_map<int, std::string>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*hashmap_ptr);
+        auto hashmultimap_ptr = mutils::from_bytes_noalloc<std::unordered_multimap<int, std::string>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*hashmultimap_ptr);
         auto pod_ptr = mutils::from_bytes_noalloc<PODStruct>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*pod_ptr);
         return mutils::context_ptr<TestObject>(new TestObject(*int_ptr, *string_ptr, *pair_ptr, *tuple_ptr, *set_ptr,
-                                                              *list_ptr, *vec_ptr, *map_ptr, *hashmap_ptr, *pod_ptr));
+                                                              *hashset_ptr, *multiset_ptr, *hashmultiset_ptr,
+                                                              *list_ptr, *vec_ptr, *map_ptr, *multimap_ptr, *hashmap_ptr,
+                                                              *hashmultimap_ptr, *pod_ptr));
     };
     static mutils::context_ptr<const TestObject> from_bytes_noalloc_const(mutils::DeserializationManager* dsm, uint8_t const* buf) {
         auto int_ptr = mutils::from_bytes_noalloc<const int>(dsm, buf);
@@ -87,18 +120,30 @@ struct TestObject : public mutils::ByteRepresentable {
         bytes_read += mutils::bytes_size(*tuple_ptr);
         auto set_ptr = mutils::from_bytes_noalloc<const std::set<int>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*set_ptr);
+        auto hashset_ptr = mutils::from_bytes_noalloc<std::unordered_set<int>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*hashset_ptr);
+        auto multiset_ptr = mutils::from_bytes_noalloc<std::multiset<int>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*multiset_ptr);
+        auto hashmultiset_ptr = mutils::from_bytes_noalloc<std::unordered_multiset<int>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*hashmultiset_ptr);
         auto list_ptr = mutils::from_bytes_noalloc<const std::list<int>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*list_ptr);
         auto vec_ptr = mutils::from_bytes_noalloc<const std::vector<int>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*vec_ptr);
         auto map_ptr = mutils::from_bytes_noalloc<const std::map<int, std::string>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*map_ptr);
+        auto multimap_ptr = mutils::from_bytes_noalloc<std::multimap<int, std::string>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*multimap_ptr);
         auto hashmap_ptr = mutils::from_bytes_noalloc<const std::unordered_map<int, std::string>>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*hashmap_ptr);
+        auto hashmultimap_ptr = mutils::from_bytes_noalloc<std::unordered_multimap<int, std::string>>(dsm, buf + bytes_read);
+        bytes_read += mutils::bytes_size(*hashmultimap_ptr);
         auto pod_ptr = mutils::from_bytes_noalloc<const PODStruct>(dsm, buf + bytes_read);
         bytes_read += mutils::bytes_size(*pod_ptr);
         return mutils::context_ptr<const TestObject>(new TestObject(*int_ptr, *string_ptr, *pair_ptr, *tuple_ptr, *set_ptr,
-                                                                    *list_ptr, *vec_ptr, *map_ptr, *hashmap_ptr, *pod_ptr));
+                                                                    *hashset_ptr, *multiset_ptr, *hashmultiset_ptr,
+                                                                    *list_ptr, *vec_ptr, *map_ptr, *multimap_ptr, *hashmap_ptr,
+                                                                    *hashmultimap_ptr, *pod_ptr));
     }
 
     void ensure_registered(mutils::DeserializationManager&){};
@@ -110,10 +155,15 @@ bool operator==(const TestObject& lhs, const TestObject& rhs) {
            lhs.test_pair == rhs.test_pair &&
            lhs.test_tuple == rhs.test_tuple &&
            lhs.test_set == rhs.test_set &&
+           lhs.test_hashset == rhs.test_hashset &&
+           lhs.test_multiset == rhs.test_multiset &&
+           lhs.test_hashmultiset == rhs.test_hashmultiset &&
            lhs.test_list == rhs.test_list &&
            lhs.test_vector == rhs.test_vector &&
            lhs.test_map == rhs.test_map &&
+           lhs.test_multimap == rhs.test_multimap &&
            lhs.test_hashmap == rhs.test_hashmap &&
+           lhs.test_hashmultimap == rhs.test_hashmultimap &&
            lhs.test_pod.field_one == rhs.test_pod.field_one &&
            lhs.test_pod.field_two == rhs.test_pod.field_two &&
            lhs.test_pod.a_bool == rhs.test_pod.a_bool;
@@ -129,6 +179,18 @@ int test_object_function(const TestObject& arg) {
         std::cout << i << ",";
     }
     std::cout << "}, {";
+    for(const auto& i : arg.test_hashset) {
+        std::cout << i << ",";
+    }
+    std::cout << "}, {";
+    for(const auto& i : arg.test_multiset) {
+        std::cout << i << ",";
+    }
+    std::cout << "}, {";
+    for(const auto& i : arg.test_hashmultiset) {
+        std::cout << i << ",";
+    }
+    std::cout << "}, {";
     for(const auto& i : arg.test_list) {
         std::cout << i << ",";
     }
@@ -141,7 +203,15 @@ int test_object_function(const TestObject& arg) {
         std::cout << "{" << entry.first << " => " << entry.second << "}, ";
     }
     std::cout << "}, {";
+    for(const auto& entry : arg.test_multimap) {
+        std::cout << "{" << entry.first << " => " << entry.second << "}, ";
+    }
+    std::cout << "}, {";
     for(const auto& entry : arg.test_hashmap) {
+        std::cout << "{" << entry.first << " => " << entry.second << "}, ";
+    }
+    std::cout << "}, {";
+    for(const auto& entry : arg.test_hashmultimap) {
         std::cout << "{" << entry.first << " => " << entry.second << "}, ";
     }
     std::cout << "}, PODStruct{" << arg.test_pod.field_one << ", " << arg.test_pod.field_two << ", " << arg.test_pod.a_bool << "} }" << std::endl;
@@ -152,9 +222,12 @@ int main(int argc, char** argv) {
     mutils::DeserializationManager dsm{{}};
     TestObject obj(123456789, "Foo", {666666, 88888888},
                    {-987654321, "Bar", 12345678909876543210ull},
-                   {5, 6, 7, 8}, {1, 2, 3, 4}, {9, 9, 9, 9, 9},
+                   {5, 6, 7, 8}, {9, 10, 11, 12}, {5, 5, 6, 6}, {7, 7, 8, 8},
+                   {1, 2, 3, 4}, {9, 9, 9, 9, 9},
                    {{1, "One"}, {2, "Two"}, {3, "Three"}},
+                   {{10,"TEN"}, {10,"Ten"}, {10, "ten"}},
                    {{4, "Four"}, {5, "Five"}, {6, "Six"}, {7, "Seven"}},
+                   {{11,"ELEVEN"},{11,"Eleven"},{11,"eleven"}},
                    PODStruct{-1, -2, false});
     std::unique_ptr<TestObject> deserialized_obj;
     std::size_t buffer_size = mutils::bytes_size(obj);

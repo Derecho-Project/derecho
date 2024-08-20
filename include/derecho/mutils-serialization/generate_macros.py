@@ -96,7 +96,7 @@ args = argparser.parse_args()
 
 with open(OUTPUT_FILENAME, 'w') as output:
     output.write(pragma_once)
-    output.write(include_header.format(path='"../mutils/macro_utils.hpp"'))
+    output.write(include_header.format(path='<mutils/macro_utils.hpp>'))
     output.write(header_comments)
     # First, generate the serializers
     for curr_num_fields in range(1,args.num_fields+1):
