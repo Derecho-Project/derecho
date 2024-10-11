@@ -48,7 +48,7 @@ find_package(mutils REQUIRED)
 find_package(mutils-containers REQUIRED)
 
 # Target: spdlog::spdlog
-find_package(spdlog 1.3.1 REQUIRED)
+find_package(spdlog 1.3.1...1.9.2 REQUIRED)
 
 # Target: OpenSSL::Crypto and OpenSSL::ssl
 find_package(OpenSSL 1.1.1 REQUIRED)
