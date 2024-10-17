@@ -76,6 +76,9 @@ enum class ClientCallbackType {
 
 std::ostream& operator<<(std::ostream& os, const ClientCallbackType& cb_type);
 
+template <>
+struct fmt::formatter<ClientCallbackType> : fmt::ostream_formatter {};
+
 /**
  * Structure used by StorageNode to pass callback requests from the
  * register_callback RPC function to the callback-sending thread.
