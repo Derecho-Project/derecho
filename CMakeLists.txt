@@ -5,7 +5,7 @@ project(derecho CXX)
 
 # Version
 set(derecho_VERSION 2.4)
-set(derecho_build_VERSION 2.4.0)
+set(derecho_build_VERSION 2.4.1)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDERECHO_DEBUG -O0 -Wall -ggdb -gdwarf-3")
