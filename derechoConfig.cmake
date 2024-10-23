@@ -5,7 +5,7 @@ include(CMakeFindDependencyMacro)
 # we need to ensure these targets are forwarded to downstream projects that depend on Derecho
 find_dependency(mutils)
 find_dependency(mutils-containers)
-find_dependency(spdlog 1.3.1)
+find_dependency(spdlog 1.12.0)
 find_dependency(OpenSSL 1.1.1)
 find_dependency(nlohmann_json 3.9.0)
 
