@@ -91,10 +91,10 @@ Above, we noted that we hope to support Derecho on DPDK.  DPDK, like LibFabrics,
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
-* CMake 2.8.1 or newer
+* CMake 3.15.4 or newer
 * The OpenSSL SSL/TLS Library. On Ubuntu and other Debian-like systems, you can install package `libssl-dev`. We tested with v1.1.1f. But it should work for any version >= 1.1.1.
 * The "rdmacm" and "ibverbs" system libraries for Linux, at version 17.1 or higher. On Ubuntu and other Debian-like systems, these are in the packages `librdmacm-dev` and `libibverbs-dev`.
-* [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.3.1 or newer. On Ubuntu 19.04 and later this can be installed with the package `libspdlog-dev`. The version of spdlog in Ubuntu 18.04's repositories is too old, but if you are running Ubuntu 18.04 you can download the `libspdlog-dev` package [here](http://old-releases.ubuntu.com/ubuntu/pool/universe/s/spdlog/libspdlog-dev_1.3.1-1_amd64.deb) and install it manually with no other dependencies needed.
+* [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.12 or newer. On Ubuntu 24.04 and later this can be installed with the package `libspdlog-dev`.
 * The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). Since this library's interface changes significantly between versions, please install `v1.12.1` from source rather than any packaged version. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
 * Lohmann's [JSON for Modern C++](https://github.com/nlohmann/json) library, v3.9 or newer. This library is not packaged for Ubuntu, but can easily be installed with our [installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-json.sh).
 * \@mpmilano's C++ utilities, which are all CMake libraries that can be installed with "make install":
@@ -123,24 +123,30 @@ By default, Derecho will be installed into `/usr/local/`. Please make sure you h
 Successful installation will set up the followings in `$DESTDIR`:
 * `include/derecho` - the header files
 * `lib/libderecho.so` - the main shared library
-* `lib/libdpods.so` - the derecho Old-Plain-Data storage library
-* `lib/cmake/derecho` and `lib/cmake/dpods` - cmake support for `find_package(derecho)`/`find_package(dpods)`
+* `lib/cmake/derecho` - cmake support for `find_package(derecho)`
 * `share/derecho` - sample derecho configuration files.
 
 To uninstall, run:
 * ``rm -rf `cat install_manifest.txt` ``
 
-To build your own derecho executable, simple run:
+To build your own Derecho-based executable, you can simply run:
+
 * `g++ -std=c++1z -o myapp myapp.cpp -lderecho -pthread`
 
-To use Derecho in your code, you simply need to
-- include the header `derecho/core/derecho.hpp` in your \*.h \*.hpp or \*.cpp files, and
-- specify a configuration file, either by setting environment variable `DERECHO_CONF_FILE` or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along with an explanation can be found in `<installation-prefix>/share/derecho/derecho-sample.cfg`.
+Alternatively, if you build your application using CMake, you can declare a dependency on Derecho in your CMakeLists.txt by using `find_package(derecho)` and `target_link_libraries(myapp derecho::derecho)`, in the same way as other CMake-packaged C++ libraries.
 
-The configuration file consists of three sections: **DERECHO**, **RDMA**, and **PERS**. The **DERECHO** section includes core configuration options for a Derecho instance, which every application will need to customize. The **RDMA** section includes options for RDMA hardware specifications. The **PERS** section allows you to customize the persistent layer's behavior.
+To use Derecho in your code, you simply need to
+
+* include the header `derecho/core/derecho.hpp` in your \*.h \*.hpp or \*.cpp files, and
+* provide a Derecho configuration file on each node running your application.
+
+The Derecho configuration file can be specified in several ways. In fact, Derecho allows you to provide up to two configuration files: the "main" configuration file, named `derecho.cfg` by default, and the "per-node" configuration file, named `derecho_node.cfg` by default. Both files have the same format and can contain the same options, so only one is necessary, but the intention is that `derecho.cfg` contains the options that have the same values on every node (such as message sizes), while `derecho_node.cfg` contains the options that are unique to a specific node (such as its node ID). If files with these names are in the working directory of the Derecho application when it starts up, they will both be loaded, and `derecho_node.cfg` will be applied after `derecho.cfg`. You can also change the name or location of either file by setting the environment variables `DERECHO_CONF_FILE` and `DERECHO_NODE_CONF_FILE`. Samples of each configuration file, along with an explanation of each option, can be found in `<installation-prefix>/share/derecho/` as `derecho-sample.cfg` and `derecho_node-sample.cfg`.
+
+The configuration file(s) are divided into five sections: **DERECHO**, **RDMA**, **PERS**, **LOGGER**, and **LAYOUT**. The **DERECHO** section includes core configuration options for a Derecho instance, which every application will need to customize. The **RDMA** section includes options for RDMA hardware specifications. The **PERS** section allows you to customize the persistent layer's behavior, and the **LOGGER** section allows you to customize the output of the debugging log. Finally, the optional **LAYOUT** section allows you to specify the layout of your Derecho group using a JSON string instead of in code, as described in the section ["Defining Subgroup Membership"](#defining-subgroup-membership) below.
 
 #### Configuring Core Derecho
-Applications need to tell the Derecho library which node is the initial leader with the options **leader_ip** and **leader_gms_port**. Each node then specifies its own ID (**local_id**) and the IP address and ports it will use for Derecho component services (**local_ip**, **gms_port**, **state_transfer_port**, **sst_port**, and **rdmc_port**). Also, if using external clients, applications need to specify the ports serving external clients (**external_port**);
+
+Applications need to tell the Derecho library which node to contact to request to join the group with the options **contact_ip** and **contact_port**; a node that is configured with its own IP address and GMS port as the contact address will consider itself to be the initial leader of the group. Each node then specifies its own ID (**local_id**) and the IP address and ports it will use for Derecho component services (**local_ip**, **gms_port**, **state_transfer_port**, **sst_port**, and **rdmc_port**). Also, if using external clients, applications need to specify the ports serving external clients (**external_port**).
 
 The other important parameters are the message sizes. Since Derecho pre-allocates buffers for RDMA communication, each application should decide on an optimal buffer size based on the amount of data it expects to send at once. If the buffer size is much larger than the messages an application actually sends, Derecho will pin a lot of memory and leave it underutilized. If the buffer size is smaller than the application's actual message size, it will have to split messages into segments before sending them, causing unnecessary overhead.
 

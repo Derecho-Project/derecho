@@ -11,5 +11,5 @@ target_include_directories(conftst PRIVATE
 )
 target_link_libraries(conftst pthread nlohmann_json::nlohmann_json)
 
-install(FILES derecho-sample.cfg
+install(FILES derecho-sample.cfg derecho_node-sample.cfg
     DESTINATION share/derecho/)
