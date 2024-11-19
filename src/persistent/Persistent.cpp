@@ -27,6 +27,7 @@ PersistentRegistry::~PersistentRegistry() {
 };
 
 void PersistentRegistry::makeVersion(version_t ver, const HLC& mhlc) {
+    dbg_trace(m_logger, "PersistentRegistry: makeVersion({}, hlc({},{}))", ver, mhlc.m_rtc_us, mhlc.m_logic);
     for(auto& entry : m_registry) {
         entry.second->version(ver, mhlc);
     }

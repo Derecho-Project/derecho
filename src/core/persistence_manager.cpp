@@ -159,7 +159,6 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
                     persisted_version = search->second->persist();
                     dbg_trace(persistence_logger, "PersistenceManager: Asked Replicated to persist latest version, version actually persisted = {}", persisted_version);
                 }
-                assert(persisted_version >= version);
             }
         }
         // Call the local persistence callbacks before updating the SST
@@ -293,6 +292,7 @@ void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
                                       const persistent::version_t& version, const HLC& mhlc) {
     auto search = objects_by_subgroup_id.find(subgroup_id);
     if(search != objects_by_subgroup_id.end()) {
+        dbg_debug(persistence_logger, "PersistenceManager: Making version {} in subgroup {}", version, subgroup_id);
         search->second->make_version(version, mhlc);
     }
 }

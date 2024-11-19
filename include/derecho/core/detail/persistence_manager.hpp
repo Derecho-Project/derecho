@@ -102,9 +102,35 @@ private:
      * also needs a reference to PersistenceManager.
      */
     ViewManager* view_manager;
-    /** Helper function that handles a single persistence request */
+    /**
+     * Handles a single persistence request that was previously enqueued by
+     * post_persist_request. Ensures the specified subgroup persists its
+     * persistent fields, if any, up through the current version, and adds
+     * signatures to each persisted version if signatures are enabled. Then
+     * calls local persistence callbacks and updates the relevant SST columns
+     * for this subgroup. Note that the parameter version is only a hint as to
+     * what the subgroup's latest version was at the time of the request; this
+     * method may actually persist a later version due to Persistent<T>'s
+     * batching, or a slightly earlier version if the latest version has no
+     * persistent state (i.e. corresponds to a null message).
+     *
+     * @param subgroup_id The subgroup in which to persist data.
+     * @param version The current version in this subgroup at the time the
+     * request was posted.
+     */
     void handle_persist_request(subgroup_id_t subgroup_id, persistent::version_t version);
-    /** Helper function that handles a single verification request */
+    /**
+     * Handles a single verification request that was previously enqueued by
+     * post_verification_request. Checks that other replicas have the same
+     * signature for the current version, then updates the relevant SST columns.
+     * Note that the version parameter has no effect on which version is
+     * verified; it is only used to determine if the request is already obsolete
+     * because a later version has already been verified.
+     *
+     * @param subgroup_id The subgroup in which to verify signatures.
+     * @param version The current version in this subgroup at the time the
+     * request was posted.
+     */
     void handle_verify_request(subgroup_id_t subgroup_id, persistent::version_t version);
 
 public:
@@ -140,7 +166,15 @@ public:
     /** Start the persistence and verification threads. */
     void start();
 
-    /** post a persistence request */
+    /**
+     * Ask the persistence manager to persist any unpersisted log entries in
+     * a particular subgroup. Called by MulticastGroup when at least one non-null
+     * message has been delivered in that subgroup.
+     *
+     * @param subgroup_id The subgroup in which to persist persistent state.
+     * @param version The subgroup's latest version number at the time the
+     * request was posted.
+     */
     void post_persist_request(const subgroup_id_t& subgroup_id, const persistent::version_t& version);
 
     /**
