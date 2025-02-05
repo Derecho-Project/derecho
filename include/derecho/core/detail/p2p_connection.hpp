@@ -185,3 +185,11 @@ public:
 
 };
 }  // namespace sst
+
+/**
+ * Formatter template specialization specifying that sst::MESSAGE_TYPE should
+ * be converted to a string using its ostream operator. Boilerplate needed by
+ * the spdlog library.
+ */
+template <>
+struct fmt::formatter<sst::MESSAGE_TYPE> : fmt::ostream_formatter {};

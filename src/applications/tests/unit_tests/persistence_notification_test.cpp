@@ -86,7 +86,7 @@ void StorageNode::notification_thread_function() {
         for(auto requests_iter = requests_by_version.begin();
             requests_iter != requests_by_version.end();) {
             persistent::version_t requested_version = requests_iter->first;
-            dbg_default_debug("Notification thread checking a notification of type {} for version {}", requests_iter->second.notification_type, requested_version);
+            dbg_default_debug("Notification thread checking a notification of type {} for version {}", static_cast<uint64_t>(requests_iter->second.notification_type), requested_version);
             bool requested_event_happened = false;
             {
                 std::unique_lock<std::mutex> query_results_lock(notification_thread_mutex);
