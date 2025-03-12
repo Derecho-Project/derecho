@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdexcept>
+#include <sstream>
 
 namespace derecho {
 
@@ -31,7 +32,6 @@ struct option Conf::long_options[] = {
         // [DERECHO]
         MAKE_LONG_OPT_ENTRY(DERECHO_CONTACT_IP),
         MAKE_LONG_OPT_ENTRY(DERECHO_CONTACT_PORT),
-        MAKE_LONG_OPT_ENTRY(DERECHO_LEADER_EXTERNAL_PORT),
         MAKE_LONG_OPT_ENTRY(DERECHO_RESTART_LEADERS),
         MAKE_LONG_OPT_ENTRY(DERECHO_RESTART_LEADER_PORTS),
         MAKE_LONG_OPT_ENTRY(DERECHO_LOCAL_ID),
@@ -182,6 +182,7 @@ Conf::Conf(int argc, char* argv[], std::optional<std::string> group_conf_file,
         loadFromFile(node_conf_file.value());
     }
     // 2 - load configuration from the command line
+    bool command_options_present = false;
     int c;
     while(1) {
         int option_index = 0;
@@ -194,6 +195,7 @@ Conf::Conf(int argc, char* argv[], std::optional<std::string> group_conf_file,
         switch(c) {
             case 0:
                 this->config[long_options[option_index].name] = optarg;
+                command_options_present = true;
                 break;
 
             case '?':
@@ -202,6 +204,10 @@ Conf::Conf(int argc, char* argv[], std::optional<std::string> group_conf_file,
             default:
                 std::cerr << "ignore unknown commandline code:" << c << std::endl;
         }
+    }
+    // 3 - warn the user if no options were loaded, since this probably indicates an error
+    if(!group_conf_file && !node_conf_file && !command_options_present) {
+        std::cerr << "Warning: derecho.cfg and derecho_node.cfg not found, and no command-line options specified. Falling back to all default configuration options." << std::endl;
     }
 }
 
@@ -247,6 +253,13 @@ void Conf::loadExtraFile(const std::string& default_file_name, const char* env_v
     singleton->loadFromFile(real_file_name);
 }
 
+std::string Conf::getDebugString() const {
+    std::stringstream debug_str;
+    for(const auto& kv_pair : config) {
+        debug_str << "\t" << kv_pair.first << " = " << kv_pair.second << std::endl;
+    }
+    return debug_str.str();
+}
 
 const std::string& getConfString(const std::string& key) {
     return Conf::get()->getString(key);

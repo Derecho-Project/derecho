@@ -27,7 +27,6 @@ public:
     //String constants for config options
     static constexpr const char* DERECHO_CONTACT_IP = "DERECHO/contact_ip";
     static constexpr const char* DERECHO_CONTACT_PORT = "DERECHO/contact_port";
-    static constexpr const char* DERECHO_LEADER_EXTERNAL_PORT = "DERECHO/leader_external_port";
     static constexpr const char* DERECHO_RESTART_LEADERS = "DERECHO/restart_leaders";
     static constexpr const char* DERECHO_RESTART_LEADER_PORTS = "DERECHO/restart_leader_ports";
     static constexpr const char* DERECHO_LOCAL_ID = "DERECHO/local_id";
@@ -85,7 +84,6 @@ private:
             // [DERECHO]
             {DERECHO_CONTACT_IP, "127.0.0.1"},
             {DERECHO_CONTACT_PORT, "23580"},
-            {DERECHO_LEADER_EXTERNAL_PORT, "32645"},
             {DERECHO_RESTART_LEADERS, "127.0.0.1"},
             {DERECHO_RESTART_LEADER_PORTS, "23580"},
             {DERECHO_LOCAL_ID, "0"},
@@ -126,7 +124,7 @@ private:
             {PERS_PRIVATE_KEY_FILE, "private_key.pem"},
             // [LOGGER]
             {LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
-            {LOGGER_DEFAULT_LOG_LEVEL, "info"},
+            {LOGGER_DEFAULT_LOG_LEVEL, "debug"},
             {LOGGER_LOG_TO_TERMINAL, "true"},
             {LOGGER_LOG_FILE_DEPTH, "3"}};
 
@@ -206,6 +204,8 @@ public:
     const bool hasCustomizedKey(const std::string& key) const {
         return (this->config.find(key) != this->config.end());
     }
+    /** Returns a string representation of all configuration options in the table, for debugging purposes. */
+    std::string getDebugString() const;
     /**
      * Initialize the singleton from the command line and the configuration files.
      * The command line has higher priority than the configuration files, and the
