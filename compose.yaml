@@ -1,0 +1,94 @@
+services:
+  node0:
+    build:
+      context: .
+      target: derecho-dev
+    tty: true
+    stdin_open: true
+    develop:
+      watch:
+        - path: .
+          target: /derecho
+          action: sync
+    networks:
+      derecho:
+        ipv4_address: 172.16.0.10
+  node1:
+    build:
+      context: .
+      target: derecho-dev
+    tty: true
+    stdin_open: true
+    develop:
+      watch:
+        - path: .
+          target: /derecho
+          action: sync
+    networks:
+      derecho:
+        ipv4_address: 172.16.0.11
+  node2:
+    build:
+      context: .
+      target: derecho-dev
+    tty: true
+    stdin_open: true
+    develop:
+      watch:
+        - path: .
+          target: /derecho
+          action: sync
+    networks:
+      derecho:
+        ipv4_address: 172.16.0.12
+  node3:
+    build:
+      context: .
+      target: derecho-dev
+    tty: true
+    stdin_open: true
+    develop:
+      watch:
+        - path: .
+          target: /derecho
+          action: sync
+    networks:
+      derecho:
+        ipv4_address: 172.16.0.13
+  node4:
+    build:
+      context: .
+      target: derecho-dev
+    tty: true
+    stdin_open: true
+    develop:
+      watch:
+        - path: .
+          target: /derecho
+          action: sync
+    networks:
+      derecho:
+        ipv4_address: 172.16.0.14
+  node5:
+    build:
+      context: .
+      target: derecho-dev
+    tty: true
+    stdin_open: true
+    develop:
+      watch:
+        - path: .
+          target: /derecho
+          action: sync
+    networks:
+      derecho:
+        ipv4_address: 172.16.0.15
+
+
+networks:
+  derecho:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.0.0/16
+          gateway: 172.16.0.1
