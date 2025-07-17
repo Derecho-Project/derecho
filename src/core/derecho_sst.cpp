@@ -93,20 +93,39 @@ std::string DerechoSST::to_string() const {
     for(uint row = 0; row < num_rows; ++row) {
         s << "row=" << row << " ";
         s << "vid=" << vid[row] << " ";
-        s << "suspected={ ";
+        s << "seq_num={ ";
+        for(unsigned int n = 0; n < seq_num.size(); n++) {
+            s << seq_num[row][n] << " ";
+        }
+        s << "}"
+          << ", delivered_num={ ";
+        for(unsigned int n = 0; n < delivered_num.size(); n++) {
+            s << delivered_num[row][n] << " ";
+        }
+        s << "}"
+          << ", persisted_num={ ";
+        for(unsigned int n = 0; n < persisted_num.size(); n++) {
+            s << persisted_num[row][n] << " ";
+        }
+        s << "}"
+          << ", signed_num={ ";
+        for(unsigned int n = 0; n < signed_num.size(); n++) {
+            s << signed_num[row][n] << " ";
+        }
+        s << "}"
+          << ", verified_num={ ";
+        for(unsigned int n = 0; n < verified_num.size(); n++) {
+            s << verified_num[row][n] << " ";
+        }
+        s << "}"
+          << ", suspected={ ";
         for(unsigned int n = 0; n < suspected.size(); n++) {
             s << (suspected[row][n] ? "T" : "F") << " ";
         }
-
-        s << "}, num_changes=" << num_changes[row] << ", num_committed="
-          << num_committed[row] << ", num_installed=" << num_installed[row];
-        s << ", changes={ ";
+        s << "}"
+          << ", changes={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
             s << "(" << changes[row][n].change_id << "," << changes[row][n].leader_id << ") ";
-        }
-        s << "}, num_acked= " << num_acked[row] << ", num_received={ ";
-        for(unsigned int n = 0; n < num_received.size(); n++) {
-            s << num_received[row][n] << " ";
         }
         s << "}, joiner_ips={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
@@ -132,27 +151,31 @@ std::string DerechoSST::to_string() const {
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
             s << joiner_external_ports[row][n] << " ";
         }
-        s << "}, seq_num={ ";
-        for(unsigned int n = 0; n < seq_num.size(); n++) {
-            s << seq_num[row][n] << " ";
+        s << "}, num_changes=" << num_changes[row]
+          << ", num_committed=" << num_committed[row]
+          << ", num_acked=" << num_acked[row]
+          << ", num_installed=" << num_installed[row];
+        s << ", num_received={ ";
+        for(unsigned int n = 0; n < num_received.size(); n++) {
+            s << num_received[row][n] << " ";
         }
         s << "}"
-          << ", delivered_num={ ";
-        for(unsigned int n = 0; n < delivered_num.size(); n++) {
-            s << delivered_num[row][n] << " ";
-        }
-        s << "}"
-          << ", wedged = " << (wedged[row] ? "T" : "F") << ", global_min = { ";
+          << ", wedged = " << (wedged[row] ? "T" : "F")
+          << ", global_min = { ";
         for(unsigned int n = 0; n < global_min.size(); n++) {
             s << global_min[row][n] << " ";
         }
-
         s << "}, global_min_ready= { ";
         for(uint n = 0; n < global_min_ready.size(); n++) {
-            s << global_min_ready[row] << " ";
+            s << (global_min_ready[row] ? "T" : "F") << " ";
         }
         s << "}"
-          << ", rip = " << rip[row] << std::endl;
+          << "local_stability_frontier={";
+        for(unsigned int n = 0; n < local_stability_frontier.size(); n++) {
+            s << local_stability_frontier[row][n] << " ";
+        }
+        s << "}"
+          << ", rip = " << (rip[row] ? "T" : "F") << std::endl;
     }
     return s.str();
 }

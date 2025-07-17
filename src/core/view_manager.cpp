@@ -520,6 +520,7 @@ void ViewManager::finish_setup() {
         curr_view->gmsSST->push_row_except_slots();
         dbg_debug(vm_logger, "Joining node initialized its SST row from the leader");
     }
+    dbg_trace(vm_logger, "Initial SST state: {}", curr_view->gmsSST->to_string());
 
     // Handle any external-client requests that were waiting for the group to start
     for(auto& external_socket : startup_pending_external_sockets) {
@@ -1595,6 +1596,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     gmsSST.predicates.remove(leader_suspicion_handle);
     gmsSST.predicates.remove(follower_suspicion_handle);
 
+    dbg_trace(vm_logger, "Old SST state at end of view {}: {}", curr_view->vid, gmsSST.to_string());
     dbg_debug(vm_logger, "Starting creation of new SST and DerechoGroup for view {}", next_view->vid);
     for(const node_id_t failed_node_id : next_view->departed) {
         dbg_debug(vm_logger, "Removing global TCP connections for failed node {} from RDMC and SST", failed_node_id);
@@ -1637,6 +1639,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     // This will block until everyone responds to SST/RDMC initial handshakes
     transition_multicast_group(next_subgroup_settings, new_num_received_size, new_slot_size, new_index_field_size);
     dbg_debug(vm_logger, "Done setting up SST and MulticastGroup for view {}; about to do a sync_with_members()", next_view->vid);
+    dbg_trace(vm_logger, "My row in new SST initialized to: {}", next_view->gmsSST->to_string());
 
     // New members can now proceed to view_manager.finish_setup(), which will call put() and sync()
     next_view->gmsSST->push_row_except_slots();
