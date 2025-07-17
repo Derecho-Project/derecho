@@ -240,6 +240,11 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
                 dbg_debug(persistence_logger, "PersistenceManager: Skipping signature check on version {} from node {} because this node hasn't signed that version yet", other_signed_version, Vc.members[shard_member_rank]);
                 continue;
             }
+            // If the other node hasn't signed anything yet, its signed_num will still be at the initial value of -1, which is not a valid version
+            if(other_signed_version == -1) {
+                dbg_debug(persistence_logger, "PersistenceManager: Skipping signature check for node {} because it has not signed any versions yet", Vc.members[shard_member_rank]);
+                continue;
+            }
             //Copy out the signature so it can't change during verification
             std::vector<uint8_t> other_signature(signature_size);
             gmssst::set(other_signature.data(),
