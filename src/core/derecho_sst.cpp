@@ -1,5 +1,6 @@
 #include <derecho/core/detail/derecho_sst.hpp>
 
+#include <arpa/inet.h>
 #include <atomic>
 #include <cstring>
 
@@ -129,7 +130,7 @@ std::string DerechoSST::to_string() const {
         }
         s << "}, joiner_ips={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
-            s << joiner_ips[row][n] << " ";
+            s << inet_ntoa(in_addr{joiner_ips[row][n]}) << " ";
         }
         s << "}, joiner_gms_ports={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
@@ -170,7 +171,7 @@ std::string DerechoSST::to_string() const {
             s << (global_min_ready[row] ? "T" : "F") << " ";
         }
         s << "}"
-          << "local_stability_frontier={";
+          << ", local_stability_frontier={";
         for(unsigned int n = 0; n < local_stability_frontier.size(); n++) {
             s << local_stability_frontier[row][n] << " ";
         }
