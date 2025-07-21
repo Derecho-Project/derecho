@@ -20,6 +20,6 @@ git checkout e3dd51fdb6dcbe42532250b5d670b3e0f74f015c
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} ..
-make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
+make -j `nproc`
 make install
 rm -rf ${WORKPATH}

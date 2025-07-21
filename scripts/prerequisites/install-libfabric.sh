@@ -20,6 +20,6 @@ git apply ${SCRIPTPATH}/libfabric.patch
 libtoolize
 ./autogen.sh
 ./configure --prefix=${INSTALL_PREFIX} --disable-memhooks-monitor --disable-spinlock
-make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
+make -j `nproc`
 make install
 rm -rf ${WORKPATH}
