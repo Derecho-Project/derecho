@@ -1484,7 +1484,7 @@ void ViewManager::deliver_ragged_trim(DerechoSST& gmsSST) {
                               gmsSST.persisted_num[member_row][subgroup_id])
                                       .second
                               < last_delivered_seq_num) {
-                    dbg_debug(vm_logger, "Waiting for node {} to finish persisting update {}", shard_member, last_delivered_seq_num);
+                    dbg_trace(vm_logger, "Waiting for node {} to finish persisting update {}", shard_member, last_delivered_seq_num);
                     return false;
                 }
             }
@@ -1639,7 +1639,6 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     // This will block until everyone responds to SST/RDMC initial handshakes
     transition_multicast_group(next_subgroup_settings, new_num_received_size, new_slot_size, new_index_field_size);
     dbg_debug(vm_logger, "Done setting up SST and MulticastGroup for view {}; about to do a sync_with_members()", next_view->vid);
-    dbg_trace(vm_logger, "My row in new SST initialized to: {}", next_view->gmsSST->to_string());
 
     // New members can now proceed to view_manager.finish_setup(), which will call put() and sync()
     next_view->gmsSST->push_row_except_slots();
@@ -1650,6 +1649,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         old_views_cv.notify_all();
     }
     curr_view = std::move(next_view);
+    dbg_trace(vm_logger, "New SST in view {}: {}", curr_view->vid, curr_view->gmsSST->to_string());
 
     if(any_persistent_objects) {
         // Write the new view to disk before using it

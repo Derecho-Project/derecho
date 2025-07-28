@@ -33,7 +33,7 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     memcpy(const_cast<uint16_t*>(joiner_external_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_external_ports[row] + num_changes_installed),
            (old_sst.joiner_external_ports.size() - num_changes_installed) * sizeof(uint16_t));
-    //TODO: Copy over the last committed signature here? Or will the new view start with no signatures?
+    // Initialize these flags to false
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
     }
@@ -43,11 +43,20 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     for(size_t i = 0; i < global_min.size(); ++i) {
         global_min[local_row][i] = 0;
     }
+    // Initialize these counters with their previous values, except num_installed gets incremented
     num_changes[local_row] = old_sst.num_changes[row];
     num_committed[local_row] = old_sst.num_committed[row];
     num_acked[local_row] = old_sst.num_acked[row];
     num_installed[local_row] = old_sst.num_installed[row] + num_changes_installed;
     wedged[local_row] = false;
+    // Copy over the previous view's last known signature and signed_num array
+    // Unlike seq_num and persisted_num, these may get read by other nodes before they are updated in the new view
+    memcpy(const_cast<persistent::version_t*>(signed_num[local_row]),
+           const_cast<const persistent::version_t*>(old_sst.signed_num[row]),
+           old_sst.signed_num.size() * sizeof(persistent::version_t));
+    memcpy(const_cast<uint8_t*>(signatures[local_row]),
+           const_cast<const uint8_t*>(old_sst.signatures[row]),
+           old_sst.signatures.size() * sizeof(uint8_t));
 }
 
 void DerechoSST::init_local_change_proposals(const int other_row) {

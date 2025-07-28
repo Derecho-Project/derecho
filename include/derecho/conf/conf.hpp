@@ -83,16 +83,16 @@ private:
     std::map<const std::string, std::string> config = {
             // [DERECHO]
             {DERECHO_CONTACT_IP, "127.0.0.1"},
-            {DERECHO_CONTACT_PORT, "23580"},
+            {DERECHO_CONTACT_PORT, "14480"},
             {DERECHO_RESTART_LEADERS, "127.0.0.1"},
-            {DERECHO_RESTART_LEADER_PORTS, "23580"},
+            {DERECHO_RESTART_LEADER_PORTS, "14480"},
             {DERECHO_LOCAL_ID, "0"},
             {DERECHO_LOCAL_IP, "127.0.0.1"},
-            {DERECHO_GMS_PORT, "23580"},
-            {DERECHO_STATE_TRANSFER_PORT, "28366"},
-            {DERECHO_SST_PORT, "37683"},
-            {DERECHO_RDMC_PORT, "31675"},
-            {DERECHO_EXTERNAL_PORT, "32645"},
+            {DERECHO_GMS_PORT, "14480"},
+            {DERECHO_STATE_TRANSFER_PORT, "14560"},
+            {DERECHO_SST_PORT, "14660"},
+            {DERECHO_RDMC_PORT, "14720"},
+            {DERECHO_EXTERNAL_PORT, "14880"},
             {SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM, "binomial_send"},
             {DERECHO_P2P_LOOP_BUSY_WAIT_BEFORE_SLEEP_MS, "250"},
             {DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
@@ -126,7 +126,7 @@ private:
             {LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
             {LOGGER_DEFAULT_LOG_LEVEL, "debug"},
             {LOGGER_LOG_TO_TERMINAL, "true"},
-            {LOGGER_LOG_FILE_DEPTH, "3"}};
+            {LOGGER_LOG_FILE_DEPTH, "10"}};
 
 public:
     // the option for parsing command line with getopt(not GetPot!!!)

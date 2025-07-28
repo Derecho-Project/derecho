@@ -389,7 +389,7 @@ void set(volatile char* string_array, const std::string& value);
 
 void increment(volatile int& member);
 
-bool equals(const volatile char& string_array, const std::string& value);
+bool equals(const volatile char* string_array, const std::string& value);
 
 }  // namespace gmssst
 
