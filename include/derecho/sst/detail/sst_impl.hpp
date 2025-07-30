@@ -155,6 +155,7 @@ void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, size_t off
 
 template <typename DerivedSST>
 void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size) {
+    dbg_trace(sst_logger, "put_with_completion called with arguments receiver_ranks={}, offset={}, size={}", receiver_ranks, offset, size);
     assert(offset + size <= rowLen);
     unsigned int num_writes_posted = 0;
     std::vector<bool> posted_write_to(num_members, false);
@@ -267,7 +268,10 @@ void SST<DerivedSST>::sync_with_members() const {
         std::tie(node_id, sst_index) = id_index;
         if(sst_index != my_index && !row_is_frozen[sst_index]) {
             dbg_debug(sst_logger, "TCP sync with node {}, for row {}", node_id, sst_index);
-            sync(node_id);
+            bool success = sync(node_id);
+            if(!success) {
+                dbg_warn(sst_logger, "TCP sync with node {} was unsuccessful", node_id);
+            }
         }
     }
 }
@@ -283,7 +287,10 @@ void SST<DerivedSST>::sync_with_members(std::vector<uint32_t> row_indices) const
         }
         if(!row_is_frozen[row_index]) {
             dbg_debug(sst_logger, "TCP sync with node {}, for row {}", members[row_index], row_index);
-            sync(members[row_index]);
+            bool success = sync(members[row_index]);
+            if(!success) {
+                dbg_warn(sst_logger, "TCP sync with node {} was unsuccessful", members[row_index]);
+            }
         }
     }
 }

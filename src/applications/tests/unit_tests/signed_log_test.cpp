@@ -312,6 +312,8 @@ std::unique_ptr<UnsignedObject> UnsignedObject::from_bytes(mutils::Deserializati
     return std::make_unique<UnsignedObject>(*field_ptr, *counter_ptr, test_state_ptr);
 }
 
+const int TEST_COORDINATION_PORT = 16000;
+
 /**
  * Command-line arguments: <one_field_size> <two_field_size> <unsigned_size> <num_updates> <update_size>
  * one_field_size: Maximum size of the subgroup that replicates the one-field signed object
@@ -466,6 +468,37 @@ int main(int argc, char** argv) {
         test_state.subgroup_finished_condition.wait(lock, [&]() { return test_state.subgroup_finished; });
     }
     std::cout << "Done" << std::endl;
-    group.barrier_sync();
+    // If this node is the leader, open a socket and wait for all the other nodes to contact it
+    // Otherwise, open a socket to the leader and exchange IDs to signal that this node is finished
+    if(group.get_my_rank() == 0) {
+        tcp::connection_listener listener_socket(TEST_COORDINATION_PORT);
+        std::set<derecho::node_id_t> nodes_contacted;
+        nodes_contacted.emplace(group.get_my_id());
+        std::vector<derecho::node_id_t> members_vector = group.get_members();
+        std::set<derecho::node_id_t> all_member_ids(members_vector.begin(), members_vector.end());
+        std::vector<tcp::socket> member_connections;
+        std::cout << "Waiting for other nodes to signal they are finished (members = " << members_vector << ")" << std::endl;
+        while(nodes_contacted != all_member_ids) {
+            member_connections.emplace_back(listener_socket.accept());
+            derecho::node_id_t finished_member_id;
+            member_connections.back().read(finished_member_id);
+            nodes_contacted.emplace(finished_member_id);
+            std::cout << "Got a connection from node " << finished_member_id << std::endl;
+        }
+        std::cout << "All nodes are done with the test, acknowledging so they can exit" << std::endl;
+        for(auto& connection : member_connections) {
+            const int done_signal = 1;
+            connection.write(done_signal);
+        }
+        //member_connections sockets will close automatically at the end of this scope
+    } else {
+        derecho::ip_addr_t leader_address = group.get_member_addresses().front().ip_address;
+        std::cout << "Connecting to leader at " << leader_address << " to signal node " << group.get_my_id() << " is done" << std::endl;
+        tcp::socket leader_connection(leader_address, TEST_COORDINATION_PORT);
+        leader_connection.write(group.get_my_id());
+        std::cout << "Waiting for leader to signal the test is done" << std::endl;
+        int done;
+        leader_connection.read(done);
+    }
     group.leave(true);
 }
