@@ -1,5 +1,6 @@
 #include <derecho/core/detail/derecho_sst.hpp>
 
+#include <arpa/inet.h>
 #include <atomic>
 #include <cstring>
 
@@ -32,7 +33,7 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     memcpy(const_cast<uint16_t*>(joiner_external_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_external_ports[row] + num_changes_installed),
            (old_sst.joiner_external_ports.size() - num_changes_installed) * sizeof(uint16_t));
-    //TODO: Copy over the last committed signature here? Or will the new view start with no signatures?
+    // Initialize these flags to false
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
     }
@@ -42,11 +43,20 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     for(size_t i = 0; i < global_min.size(); ++i) {
         global_min[local_row][i] = 0;
     }
+    // Initialize these counters with their previous values, except num_installed gets incremented
     num_changes[local_row] = old_sst.num_changes[row];
     num_committed[local_row] = old_sst.num_committed[row];
     num_acked[local_row] = old_sst.num_acked[row];
     num_installed[local_row] = old_sst.num_installed[row] + num_changes_installed;
     wedged[local_row] = false;
+    // Copy over the previous view's last known signature and signed_num array
+    // Unlike seq_num and persisted_num, these may get read by other nodes before they are updated in the new view
+    memcpy(const_cast<persistent::version_t*>(signed_num[local_row]),
+           const_cast<const persistent::version_t*>(old_sst.signed_num[row]),
+           old_sst.signed_num.size() * sizeof(persistent::version_t));
+    memcpy(const_cast<uint8_t*>(signatures[local_row]),
+           const_cast<const uint8_t*>(old_sst.signatures[row]),
+           old_sst.signatures.size() * sizeof(uint8_t));
 }
 
 void DerechoSST::init_local_change_proposals(const int other_row) {
@@ -93,24 +103,43 @@ std::string DerechoSST::to_string() const {
     for(uint row = 0; row < num_rows; ++row) {
         s << "row=" << row << " ";
         s << "vid=" << vid[row] << " ";
-        s << "suspected={ ";
+        s << "seq_num={ ";
+        for(unsigned int n = 0; n < seq_num.size(); n++) {
+            s << seq_num[row][n] << " ";
+        }
+        s << "}"
+          << ", delivered_num={ ";
+        for(unsigned int n = 0; n < delivered_num.size(); n++) {
+            s << delivered_num[row][n] << " ";
+        }
+        s << "}"
+          << ", persisted_num={ ";
+        for(unsigned int n = 0; n < persisted_num.size(); n++) {
+            s << persisted_num[row][n] << " ";
+        }
+        s << "}"
+          << ", signed_num={ ";
+        for(unsigned int n = 0; n < signed_num.size(); n++) {
+            s << signed_num[row][n] << " ";
+        }
+        s << "}"
+          << ", verified_num={ ";
+        for(unsigned int n = 0; n < verified_num.size(); n++) {
+            s << verified_num[row][n] << " ";
+        }
+        s << "}"
+          << ", suspected={ ";
         for(unsigned int n = 0; n < suspected.size(); n++) {
             s << (suspected[row][n] ? "T" : "F") << " ";
         }
-
-        s << "}, num_changes=" << num_changes[row] << ", num_committed="
-          << num_committed[row] << ", num_installed=" << num_installed[row];
-        s << ", changes={ ";
+        s << "}"
+          << ", changes={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
             s << "(" << changes[row][n].change_id << "," << changes[row][n].leader_id << ") ";
         }
-        s << "}, num_acked= " << num_acked[row] << ", num_received={ ";
-        for(unsigned int n = 0; n < num_received.size(); n++) {
-            s << num_received[row][n] << " ";
-        }
         s << "}, joiner_ips={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
-            s << joiner_ips[row][n] << " ";
+            s << inet_ntoa(in_addr{joiner_ips[row][n]}) << " ";
         }
         s << "}, joiner_gms_ports={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
@@ -132,27 +161,31 @@ std::string DerechoSST::to_string() const {
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
             s << joiner_external_ports[row][n] << " ";
         }
-        s << "}, seq_num={ ";
-        for(unsigned int n = 0; n < seq_num.size(); n++) {
-            s << seq_num[row][n] << " ";
+        s << "}, num_changes=" << num_changes[row]
+          << ", num_committed=" << num_committed[row]
+          << ", num_acked=" << num_acked[row]
+          << ", num_installed=" << num_installed[row];
+        s << ", num_received={ ";
+        for(unsigned int n = 0; n < num_received.size(); n++) {
+            s << num_received[row][n] << " ";
         }
         s << "}"
-          << ", delivered_num={ ";
-        for(unsigned int n = 0; n < delivered_num.size(); n++) {
-            s << delivered_num[row][n] << " ";
-        }
-        s << "}"
-          << ", wedged = " << (wedged[row] ? "T" : "F") << ", global_min = { ";
+          << ", wedged = " << (wedged[row] ? "T" : "F")
+          << ", global_min = { ";
         for(unsigned int n = 0; n < global_min.size(); n++) {
             s << global_min[row][n] << " ";
         }
-
         s << "}, global_min_ready= { ";
         for(uint n = 0; n < global_min_ready.size(); n++) {
-            s << global_min_ready[row] << " ";
+            s << (global_min_ready[row] ? "T" : "F") << " ";
         }
         s << "}"
-          << ", rip = " << rip[row] << std::endl;
+          << ", local_stability_frontier={";
+        for(unsigned int n = 0; n < local_stability_frontier.size(); n++) {
+            s << local_stability_frontier[row][n] << " ";
+        }
+        s << "}"
+          << ", rip = " << (rip[row] ? "T" : "F") << std::endl;
     }
     return s.str();
 }

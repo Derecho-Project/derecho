@@ -289,7 +289,7 @@ public:
     void push_row_except_slots();
 
     /**
-     * Creates a string representation of the local row (not the whole table).
+     * Creates a string representation of the table for debugging purposes.
      * This should be converted to an ostream operator<< to follow standards.
      */
     std::string to_string() const;
@@ -389,7 +389,7 @@ void set(volatile char* string_array, const std::string& value);
 
 void increment(volatile int& member);
 
-bool equals(const volatile char& string_array, const std::string& value);
+bool equals(const volatile char* string_array, const std::string& value);
 
 }  // namespace gmssst
 

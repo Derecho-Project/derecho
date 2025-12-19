@@ -312,23 +312,26 @@ std::unique_ptr<UnsignedObject> UnsignedObject::from_bytes(mutils::Deserializati
     return std::make_unique<UnsignedObject>(*field_ptr, *counter_ptr, test_state_ptr);
 }
 
+const int TEST_COORDINATION_PORT = 16000;
+
 /**
- * Command-line arguments: <one_field_size> <two_field_size> <unsigned_size> <num_updates>
+ * Command-line arguments: <one_field_size> <two_field_size> <unsigned_size> <num_updates> <update_size>
  * one_field_size: Maximum size of the subgroup that replicates the one-field signed object
  * two_field_size: Maximum size of the subgroup that replicates the two-field signed object
  * mixed_field_size: Maximum size of the subgroup that replicates the mixed-signed-and-unsigned-field object
  * unsigned_size: Maximum size of the subgroup that replicates the persistent-but-not-signed object
- * num_updates: Number of randomly-generated 32-byte updates to send to each subgroup
+ * num_updates: Number of randomly-generated updates to send to each subgroup
+ * update_size: Size of the updates, in bytes
  */
 int main(int argc, char** argv) {
     pthread_setname_np(pthread_self(), "test_main");
     const std::string characters("abcdefghijklmnopqrstuvwxyz");
     std::mt19937 random_generator(getpid());
     std::uniform_int_distribution<std::size_t> char_distribution(0, characters.size() - 1);
-    const int num_args = 5;
+    const int num_args = 6;
     if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]) != 0)) {
         std::cout << "Invalid command line arguments." << std::endl;
-        std::cout << "Usage: " << argv[0] << " [derecho-config-options -- ] one_field_size two_field_size mixed_field_size unsigned_size num_updates" << std::endl;
+        std::cout << "Usage: " << argv[0] << " [derecho-config-options -- ] one_field_size two_field_size mixed_field_size unsigned_size num_updates update_size" << std::endl;
         return -1;
     }
 
@@ -336,7 +339,8 @@ int main(int argc, char** argv) {
     const unsigned int subgroup_2_size = std::stoi(argv[argc - num_args + 1]);
     const unsigned int subgroup_mixed_size = std::stoi(argv[argc - num_args + 2]);
     const unsigned int subgroup_unsigned_size = std::stoi(argv[argc - num_args + 3]);
-    const unsigned int num_updates = std::stoi(argv[argc - 1]);
+    const unsigned int num_updates = std::stoi(argv[argc - num_args + 4]);
+    const unsigned int update_size = std::stoi(argv[argc - 1]);
     derecho::Conf::initialize(argc, argv);
 
     derecho::SubgroupInfo subgroup_info(
@@ -401,7 +405,7 @@ int main(int argc, char** argv) {
         test_state.my_subgroup_is_unsigned = false;
         //Send random updates
         for(unsigned counter = 0; counter < num_updates; ++counter) {
-            std::string new_string('a', 32);
+            std::string new_string('a', update_size);
             std::generate(new_string.begin(), new_string.end(),
                           [&]() { return characters[char_distribution(random_generator)]; });
             object_handle.ordered_send<RPC_NAME(update_state)>(new_string);
@@ -414,8 +418,8 @@ int main(int argc, char** argv) {
         test_state.my_subgroup_is_unsigned = false;
         //Send random updates
         for(unsigned counter = 0; counter < num_updates; ++counter) {
-            std::string new_foo('a', 32);
-            std::string new_bar('a', 32);
+            std::string new_foo('a', update_size);
+            std::string new_bar('a', update_size);
             std::generate(new_foo.begin(), new_foo.end(),
                           [&]() { return characters[char_distribution(random_generator)]; });
             std::generate(new_bar.begin(), new_bar.end(),
@@ -430,7 +434,7 @@ int main(int argc, char** argv) {
         test_state.my_subgroup_is_unsigned = false;
         //Send random updates, alternating between the signed, unsigned, and nonpersistent fields
         for(unsigned counter = 0; counter < num_updates; ++counter) {
-            std::string new_string_value('a', 32);
+            std::string new_string_value('a', update_size);
             std::generate(new_string_value.begin(), new_string_value.end(),
                           [&]() { return characters[char_distribution(random_generator)]; });
             if(counter % 3 == 0) {
@@ -449,7 +453,7 @@ int main(int argc, char** argv) {
         test_state.my_subgroup_is_unsigned = true;
         //Send random updates
         for(unsigned counter = 0; counter < num_updates; ++counter) {
-            std::string new_string('a', 32);
+            std::string new_string('a', update_size);
             std::generate(new_string.begin(), new_string.end(),
                           [&]() { return characters[char_distribution(random_generator)]; });
             object_handle.ordered_send<RPC_NAME(update_state)>(new_string);
@@ -464,6 +468,37 @@ int main(int argc, char** argv) {
         test_state.subgroup_finished_condition.wait(lock, [&]() { return test_state.subgroup_finished; });
     }
     std::cout << "Done" << std::endl;
-    group.barrier_sync();
+    // If this node is the leader, open a socket and wait for all the other nodes to contact it
+    // Otherwise, open a socket to the leader and exchange IDs to signal that this node is finished
+    if(group.get_my_rank() == 0) {
+        tcp::connection_listener listener_socket(TEST_COORDINATION_PORT);
+        std::set<derecho::node_id_t> nodes_contacted;
+        nodes_contacted.emplace(group.get_my_id());
+        std::vector<derecho::node_id_t> members_vector = group.get_members();
+        std::set<derecho::node_id_t> all_member_ids(members_vector.begin(), members_vector.end());
+        std::vector<tcp::socket> member_connections;
+        std::cout << "Waiting for other nodes to signal they are finished (members = " << members_vector << ")" << std::endl;
+        while(nodes_contacted != all_member_ids) {
+            member_connections.emplace_back(listener_socket.accept());
+            derecho::node_id_t finished_member_id;
+            member_connections.back().read(finished_member_id);
+            nodes_contacted.emplace(finished_member_id);
+            std::cout << "Got a connection from node " << finished_member_id << std::endl;
+        }
+        std::cout << "All nodes are done with the test, acknowledging so they can exit" << std::endl;
+        for(auto& connection : member_connections) {
+            const int done_signal = 1;
+            connection.write(done_signal);
+        }
+        //member_connections sockets will close automatically at the end of this scope
+    } else {
+        derecho::ip_addr_t leader_address = group.get_member_addresses().front().ip_address;
+        std::cout << "Connecting to leader at " << leader_address << " to signal node " << group.get_my_id() << " is done" << std::endl;
+        tcp::socket leader_connection(leader_address, TEST_COORDINATION_PORT);
+        leader_connection.write(group.get_my_id());
+        std::cout << "Waiting for leader to signal the test is done" << std::endl;
+        int done;
+        leader_connection.read(done);
+    }
     group.leave(true);
 }

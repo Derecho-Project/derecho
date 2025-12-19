@@ -181,6 +181,9 @@ private:
 
     DerivedSST* derived_this;
 
+    /** Pointer to the logger for the SST module, which is created in sst::lf_initialize() */
+    std::shared_ptr<spdlog::logger> sst_logger;
+
     std::vector<std::thread> background_threads;
     std::atomic<bool> thread_shutdown;
 
@@ -236,6 +239,7 @@ private:
 public:
     SST(DerivedSST* derived_class_pointer, const SSTParams& params)
             : derived_this(derived_class_pointer),
+              sst_logger(spdlog::get(LoggerFactory::SST_LOGGER_NAME)),
               thread_shutdown(false),
               poll_cq_timeout_ms(derecho::getConfUInt32(derecho::Conf::DERECHO_SST_POLL_CQ_TIMEOUT_MS)),
               members(params.members),

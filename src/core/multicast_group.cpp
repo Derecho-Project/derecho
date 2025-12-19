@@ -484,6 +484,7 @@ void MulticastGroup::initialize_sst_row() {
         sst->seq_num[member_index][j] = -1;
         sst->delivered_num[member_index][j] = -1;
         sst->persisted_num[member_index][j] = -1;
+        sst->signed_num[member_index][j] = -1;
         sst->verified_num[member_index][j] = -1;
     }
     memset(const_cast<uint8_t*>(sst->signatures[member_index]), 0, sst->signatures.size());

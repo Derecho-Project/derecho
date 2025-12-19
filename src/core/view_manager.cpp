@@ -520,6 +520,7 @@ void ViewManager::finish_setup() {
         curr_view->gmsSST->push_row_except_slots();
         dbg_debug(vm_logger, "Joining node initialized its SST row from the leader");
     }
+    dbg_trace(vm_logger, "Initial SST state: {}", curr_view->gmsSST->to_string());
 
     // Handle any external-client requests that were waiting for the group to start
     for(auto& external_socket : startup_pending_external_sockets) {
@@ -1483,7 +1484,7 @@ void ViewManager::deliver_ragged_trim(DerechoSST& gmsSST) {
                               gmsSST.persisted_num[member_row][subgroup_id])
                                       .second
                               < last_delivered_seq_num) {
-                    dbg_debug(vm_logger, "Waiting for node {} to finish persisting update {}", shard_member, last_delivered_seq_num);
+                    dbg_trace(vm_logger, "Waiting for node {} to finish persisting update {}", shard_member, last_delivered_seq_num);
                     return false;
                 }
             }
@@ -1595,6 +1596,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     gmsSST.predicates.remove(leader_suspicion_handle);
     gmsSST.predicates.remove(follower_suspicion_handle);
 
+    dbg_trace(vm_logger, "Old SST state at end of view {}: {}", curr_view->vid, gmsSST.to_string());
     dbg_debug(vm_logger, "Starting creation of new SST and DerechoGroup for view {}", next_view->vid);
     for(const node_id_t failed_node_id : next_view->departed) {
         dbg_debug(vm_logger, "Removing global TCP connections for failed node {} from RDMC and SST", failed_node_id);
@@ -1647,6 +1649,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         old_views_cv.notify_all();
     }
     curr_view = std::move(next_view);
+    dbg_trace(vm_logger, "New SST in view {}: {}", curr_view->vid, curr_view->gmsSST->to_string());
 
     if(any_persistent_objects) {
         // Write the new view to disk before using it

@@ -936,9 +936,13 @@ bool sync(uint32_t r_id) {
     int s = 0, t = 0;
     try {
         if(sst_connections->contains_node(r_id)) {
+            dbg_trace(g_ctxt.sst_logger, "Sync: exchanging values with node {}", r_id);
             sst_connections->exchange(r_id, s, t);
+            dbg_trace(g_ctxt.sst_logger, "Sync: exchange successful with node {}", r_id);
         } else if(external_client_connections->contains_node(r_id)) {
+            dbg_trace(g_ctxt.sst_logger, "Sync: exchanging values with external client {}", r_id);
             external_client_connections->exchange(r_id, s, t);
+            dbg_trace(g_ctxt.sst_logger, "Sync: exchange successful with external client {}", r_id);
         } else {
             return false;
         }
