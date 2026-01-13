@@ -914,7 +914,8 @@ public:
      * issued in this call.
      */
     void send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-              const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send = false);
+              const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send = false,
+              std::optional<uint64_t> timestamp_ns = std::nullopt);
 
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
 

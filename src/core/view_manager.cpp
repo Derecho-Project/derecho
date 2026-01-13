@@ -2560,11 +2560,12 @@ void ViewManager::leave() {
 }
 
 void ViewManager::send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-                       const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send) {
+                       const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send,
+                       std::optional<uint64_t> timestamp_ns) {
     shared_lock_t lock(view_mutex);
     view_change_cv.wait(lock, [&]() {
         return curr_view->multicast_group->send(subgroup_num, payload_size,
-                                                msg_generator, cooked_send);
+                                                msg_generator, cooked_send, timestamp_ns);
     });
 }
 
