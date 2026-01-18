@@ -118,6 +118,8 @@ protected:
     const uint64_t m_iTemporalConsistencyDeltaUs;
     // server clock skew delta (in microseconds)
     const uint64_t m_iServerClockSkewDeltaUs;
+    // client-server epsilon (in microseconds)
+    const uint64_t m_iClientServerEpsilonUs;
     // pointer to the Persistence-module logger
     std::shared_ptr<spdlog::logger> m_logger;
 

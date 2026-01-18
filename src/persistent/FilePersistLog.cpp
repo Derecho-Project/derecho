@@ -45,6 +45,7 @@ FilePersistLog::FilePersistLog(const string& name, const string& dataPath, bool 
           m_iMaxDataSize(derecho::getConfUInt64(derecho::Conf::PERS_MAX_DATA_SIZE)),
           m_iTemporalConsistencyDeltaUs(derecho::getConfUInt64(derecho::Conf::PERS_TEMPORAL_CONSISTENCY_DELTA_US)),
           m_iServerClockSkewDeltaUs(derecho::getConfUInt64(derecho::Conf::PERS_SERVER_CLOCK_SKEW_DELTA_US)),
+          m_iClientServerEpsilonUs(derecho::getConfUInt64(derecho::Conf::PERS_CLIENT_SERVER_EPSILON_US)),
           m_logger(PersistLogger::get()),
           m_iLogFileDesc(-1),
           m_iDataFileDesc(-1),
@@ -627,8 +628,8 @@ int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) {
     }
     uint64_t now = (uint64_t)tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
     
-    uint64_t threshold1 = now - m_iTemporalConsistencyDeltaUs - 2 * m_iServerClockSkewDeltaUs;
-    uint64_t threshold2 = now - m_iTemporalConsistencyDeltaUs - 3 * m_iServerClockSkewDeltaUs;
+    uint64_t threshold1 = now - m_iTemporalConsistencyDeltaUs - m_iClientServerEpsilonUs - 2 * m_iServerClockSkewDeltaUs;
+    uint64_t threshold2 = now - m_iTemporalConsistencyDeltaUs - m_iClientServerEpsilonUs - 3 * m_iServerClockSkewDeltaUs;
     
     // Case 1: Reject if time is too recent (not temporally consistent yet)
     if (rhlc.m_rtc_us < threshold1) {

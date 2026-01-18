@@ -67,6 +67,7 @@ public:
     static constexpr const char* PERS_PRIVATE_KEY_FILE = "PERS/private_key_file";
     static constexpr const char* PERS_SERVER_CLOCK_SKEW_DELTA_US = "PERS/server_clock_skew_delta_us";
     static constexpr const char* PERS_TEMPORAL_CONSISTENCY_DELTA_US = "PERS/temporal_consistency_delta_us";
+    static constexpr const char* PERS_CLIENT_SERVER_EPSILON_US = "PERS/client_server_epsilon_us";
     static constexpr const char* LOGGER_DEFAULT_LOG_NAME = "LOGGER/default_log_name";
     static constexpr const char* LOGGER_DEFAULT_LOG_LEVEL = "LOGGER/default_log_level";
     static constexpr const char* LOGGER_SST_LOG_LEVEL = "LOGGER/sst_log_level";
@@ -126,6 +127,7 @@ private:
             {PERS_PRIVATE_KEY_FILE, "private_key.pem"},
             {PERS_SERVER_CLOCK_SKEW_DELTA_US, "1000000"},  // 1 second in microseconds (from PUT_BY_TIME_DELTA_NS)
             {PERS_TEMPORAL_CONSISTENCY_DELTA_US, "0"},
+            {PERS_CLIENT_SERVER_EPSILON_US, "0"},
             // [LOGGER]
             {LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
             {LOGGER_DEFAULT_LOG_LEVEL, "debug"},
