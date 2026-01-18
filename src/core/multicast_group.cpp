@@ -1,5 +1,6 @@
 #include <derecho/core/detail/multicast_group.hpp>
 
+#include <derecho/conf/conf.hpp>
 #include <derecho/core/detail/derecho_internal.hpp>
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/persistent/PersistentInterface.hpp>
@@ -1210,7 +1211,13 @@ const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgro
         uint64_t local_stability_frontier_copy = sst->local_stability_frontier[index][subgroup_num];
         global_stability_frontier = std::min(global_stability_frontier, local_stability_frontier_copy);
     }
-    return global_stability_frontier;
+
+    const uint64_t server_clock_skew_delta_ns = 2 * Conf::get()->getUInt64(Conf::PERS_SERVER_CLOCK_SKEW_DELTA_US) * 1000;
+    if(global_stability_frontier > server_clock_skew_delta_ns) {
+        return global_stability_frontier - server_clock_skew_delta_ns;
+    } else {
+        return 0;
+    }
 }
 
 const persistent::version_t MulticastGroup::get_global_persistence_frontier(uint32_t subgroup_num) const {

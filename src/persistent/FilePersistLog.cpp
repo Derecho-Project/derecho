@@ -615,24 +615,54 @@ const void* FilePersistLog::getEntry(version_t ver, bool exact) {
     return LOG_ENTRY_DATA(ple);
 }
 
+
 int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) {
-    FPL_RDLOCK;
     dbg_trace(m_logger, "getHLCIndex for hlc({0},{1})", rhlc.m_rtc_us, rhlc.m_logic);
-    struct hlc_index_entry skey(rhlc, 0);
-    auto key = this->hidx.upper_bound(skey);
-    FPL_UNLOCK;
-
-    if(key != this->hidx.begin() && this->hidx.size() > 0) {
-        key--;
-        dbg_trace(m_logger, "getHLCIndex returns: hlc:({0},{1}),idx:{2}", key->hlc.m_rtc_us, key->hlc.m_logic, key->log_idx);
-        return key->log_idx;
+    
+    struct timespec tp;
+    if(clock_gettime(CLOCK_REALTIME, &tp) != 0) {
+        dbg_trace(m_logger, "{0} getHLCIndex: failed to get current time, errno={1}", 
+                  this->m_sName, errno);
+        return INVALID_INDEX;
     }
-
-    // no object exists before the requested timestamp.
-
-    dbg_trace(m_logger, "{0} getHLCIndex found no entry at ({1},{2})", this->m_sName, rhlc.m_rtc_us, rhlc.m_logic);
-
-    return INVALID_INDEX;
+    uint64_t now = (uint64_t)tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
+    
+    uint64_t threshold1 = now - m_iTemporalConsistencyDeltaUs - 2 * m_iServerClockSkewDeltaUs;
+    uint64_t threshold2 = now - m_iTemporalConsistencyDeltaUs - 3 * m_iServerClockSkewDeltaUs;
+    
+    // Case 1: Reject if time is too recent (not temporally consistent yet)
+    if (rhlc.m_rtc_us < threshold1) {
+        dbg_trace(m_logger, "{0} getHLCIndex: requested time {1} is too recent (threshold: {2}), returning INVALID_INDEX", 
+                  this->m_sName, rhlc.m_rtc_us, threshold1);
+        return INVALID_INDEX;
+    }
+    
+    HLC max_hlc;
+    
+    if (rhlc.m_rtc_us < threshold2) {
+        // Case 2: rhlc < threshold2
+        // Get the index closest to rhlc, as long as it is < rhlc + PERS_SERVER_CLOCK_SKEW_DELTA_US
+        uint64_t max_time = rhlc.m_rtc_us + m_iServerClockSkewDeltaUs;
+        max_hlc = HLC(max_time, UINT64_MAX);
+    } else {
+        // Case 3: threshold2 <= rhlc < threshold1
+        // Get the index closest to rhlc but < threshold1
+        max_hlc = HLC(threshold1, 0);
+    }
+    
+    FPL_RDLOCK;
+    int64_t result = findClosestEntryInRange(this->hidx, rhlc, max_hlc);
+    FPL_UNLOCK;
+    
+    if (result == INVALID_INDEX) {
+        dbg_trace(m_logger, "{0} getHLCIndex: no valid entry found for hlc({1},{2})", 
+                  this->m_sName, rhlc.m_rtc_us, rhlc.m_logic);
+    } else {
+        dbg_trace(m_logger, "{0} getHLCIndex: found index {1} for hlc({2},{3})", 
+                  this->m_sName, result, rhlc.m_rtc_us, rhlc.m_logic);
+    }
+    
+    return result;
 }
 
 // Helper function to find the closest entry to target_hlc within max_hlc constraint
@@ -655,10 +685,8 @@ int64_t FilePersistLog::findClosestEntryInRange(
     if (upper_it != hidx.begin()) {
         auto before_it = upper_it;
         --before_it;
-        if (before_it->hlc <= max_hlc) {
-            entry_before = &(*before_it);
-            idx_before = before_it->log_idx;
-        }
+        entry_before = &(*before_it);
+        idx_before = before_it->log_idx;
     }
     
     // Find entry after target_hlc but <= max_hlc
@@ -688,58 +716,22 @@ int64_t FilePersistLog::findClosestEntryInRange(
 }
 
 version_t FilePersistLog::getHLCVersion(const HLC& rhlc) {
-    struct timespec tp;
-    if(clock_gettime(CLOCK_REALTIME, &tp) != 0) {
-        dbg_trace(m_logger, "{0} getHLCVersion: failed to get current time, errno={1}", 
-                  this->m_sName, errno);
-        return INVALID_VERSION;
-    }
-    uint64_t now = (uint64_t)tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
+    int64_t idx = getHLCIndex(rhlc);
     
-    uint64_t threshold1 = now - m_iTemporalConsistencyDeltaUs - 2 * m_iServerClockSkewDeltaUs;
-    uint64_t threshold2 = now - m_iTemporalConsistencyDeltaUs - 3 * m_iServerClockSkewDeltaUs;
-    
-    // Case 1: Reject if time is too recent (not temporally consistent yet)
-    if (rhlc.m_rtc_us < threshold1) {
-        dbg_trace(m_logger, "{0} getHLCVersion: requested time {1} is too recent (threshold: {2}), returning INVALID_VERSION", 
-                  this->m_sName, rhlc.m_rtc_us, threshold1);
+    if (idx == INVALID_INDEX) {
         return INVALID_VERSION;
     }
     
     FPL_RDLOCK;
-    
-    version_t result = INVALID_VERSION;
-    HLC max_hlc;
-    
-    if (rhlc.m_rtc_us < threshold2) {
-        // Case 2: rhlc < threshold2
-        // Get the version closest to rhlc, as long as it is < rhlc + PERS_SERVER_CLOCK_SKEW_DELTA_US
-        uint64_t max_time = rhlc.m_rtc_us + m_iServerClockSkewDeltaUs;
-        max_hlc = HLC(max_time, UINT64_MAX);
-    } else {
-        // Case 3: threshold2 <= rhlc < threshold1
-        // Get the version closest to rhlc but < threshold1
-        max_hlc = HLC(threshold1, 0);
-    }
-    
-    int64_t idx = findClosestEntryInRange(this->hidx, rhlc, max_hlc);
-    
-    if (idx != INVALID_INDEX) {
-        result = LOG_ENTRY_AT(idx)->fields.ver;
-    }
-    
+    version_t result = LOG_ENTRY_AT(idx)->fields.ver;
     FPL_UNLOCK;
     
-    if (result == INVALID_VERSION) {
-        dbg_trace(m_logger, "{0} getHLCVersion: no valid entry found for hlc({1},{2})", 
-                  this->m_sName, rhlc.m_rtc_us, rhlc.m_logic);
-    } else {
-        dbg_trace(m_logger, "{0} getHLCVersion: found version {1} for hlc({2},{3})", 
-                  this->m_sName, result, rhlc.m_rtc_us, rhlc.m_logic);
-    }
+    dbg_trace(m_logger, "{0} getHLCVersion: found version {1} for hlc({2},{3})", 
+              this->m_sName, result, rhlc.m_rtc_us, rhlc.m_logic);
     
     return result;
 }
+
 
 version_t FilePersistLog::getPreviousVersionOf(version_t ver) {
     int64_t idx = getVersionIndex(ver,false);
