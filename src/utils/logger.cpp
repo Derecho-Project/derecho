@@ -8,6 +8,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <atomic>
+#include <cassert>
 #include <memory>
 
 #define LOGGER_FACTORY_UNINITIALIZED	(0)
@@ -66,7 +67,7 @@ void LoggerFactory::_initialize() {
         _default_logger = _create_logger(default_logger_name,
             spdlog::level::from_str(default_log_level));
         // 3 - change state to initialized
-        _initialize_state.store(LOGGER_FACTORY_INITIALIZED,std::memory_order_acq_rel);
+        _initialize_state.store(LOGGER_FACTORY_INITIALIZED,std::memory_order_release);
         auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch());
         _default_logger->debug("Program start time (microseconds): {}", start_ms.count());

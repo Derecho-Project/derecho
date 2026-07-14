@@ -123,7 +123,7 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file, const char*
         Conf::singleton->config.try_emplace(LOGGER_PERSISTENCE_LOG_LEVEL, default_log_level);
 
         // 4 - set the flag to initialized
-        Conf::singleton_initialized_flag.store(CONF_INITIALIZED, std::memory_order_acq_rel);
+        Conf::singleton_initialized_flag.store(CONF_INITIALIZED, std::memory_order_release);
 
         // 5 - check the configuration for sanity
         if(hasCustomizedConfKey(LAYOUT_JSON_LAYOUT) && hasCustomizedConfKey(LAYOUT_JSON_LAYOUT_FILE)) {
