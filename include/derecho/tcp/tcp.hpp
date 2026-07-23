@@ -1,6 +1,7 @@
 #pragma once
 
 #include <derecho/config.h>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>

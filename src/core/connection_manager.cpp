@@ -1,5 +1,6 @@
 #include <derecho/core/detail/connection_manager.hpp>
 
+#include <algorithm>
 #include <cassert>
 #include <iostream>
 #include <set>
