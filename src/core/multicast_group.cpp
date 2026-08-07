@@ -1,5 +1,6 @@
 #include <derecho/core/detail/multicast_group.hpp>
 
+#include <derecho/conf/conf.hpp>
 #include <derecho/core/detail/derecho_internal.hpp>
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/persistent/PersistentInterface.hpp>
@@ -14,6 +15,7 @@
 #include <chrono>
 #include <limits>
 #include <thread>
+#include <optional>
 
 namespace derecho {
 
@@ -1209,7 +1211,13 @@ const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgro
         uint64_t local_stability_frontier_copy = sst->local_stability_frontier[index][subgroup_num];
         global_stability_frontier = std::min(global_stability_frontier, local_stability_frontier_copy);
     }
-    return global_stability_frontier;
+
+    const uint64_t server_clock_skew_delta_ns = 2 * Conf::get()->getUInt64(Conf::PERS_SERVER_CLOCK_SKEW_DELTA_US) * 1000;
+    if(global_stability_frontier > server_clock_skew_delta_ns) {
+        return global_stability_frontier - server_clock_skew_delta_ns;
+    } else {
+        return 0;
+    }
 }
 
 const persistent::version_t MulticastGroup::get_global_persistence_frontier(uint32_t subgroup_num) const {
@@ -1331,7 +1339,8 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
 
 uint8_t* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
                                             long long unsigned int payload_size,
-                                            bool cooked_send) {
+                                            bool cooked_send,
+                                            std::optional<uint64_t> timestamp_ns) {
     long long unsigned int msg_size = payload_size + sizeof(header);
     const SubgroupSettings& subgroup_settings = subgroup_settings_map.at(subgroup_num);
     if(msg_size > subgroup_settings.profile.max_msg_size) {
@@ -1387,7 +1396,7 @@ uint8_t* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
         free_message_buffers[subgroup_num].pop_back();
 
-        auto current_time = get_walltime();
+        uint64_t current_time = timestamp_ns.has_value() ? timestamp_ns.value() : get_walltime();
         pending_message_timestamps[subgroup_num].insert(current_time);
 
         // Fill header
@@ -1417,7 +1426,7 @@ uint8_t* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
             smc_send_in_progress[subgroup_num] = false;
             return nullptr;
         }
-        auto current_time = get_walltime();
+        uint64_t current_time = timestamp_ns.has_value() ? timestamp_ns.value() : get_walltime();
         pending_message_timestamps[subgroup_num].insert(current_time);
 
         ((header*)buf)->header_size = sizeof(header);
@@ -1435,12 +1444,13 @@ uint8_t* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
 }
 
 bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-                          const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send) {
+                          const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send,
+                          std::optional<uint64_t> timestamp_ns) {
     if(!rdmc_sst_groups_created) {
         return false;
     }
     std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
-    uint8_t* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
+    uint8_t* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send, timestamp_ns);
     while(!buf) {
         // Don't want any deadlocks. For example, this thread cannot get a buffer because delivery is lagging
         // but the SST detect thread cannot proceed (and deliver) because it requires the same lock
@@ -1451,7 +1461,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
             return false;
         }
         lock.lock();
-        buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
+        buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send, timestamp_ns);
     }
     // call to the user supplied message generator
     msg_generator(buf);

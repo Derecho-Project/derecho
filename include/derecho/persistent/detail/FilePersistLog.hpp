@@ -114,6 +114,12 @@ protected:
     const uint64_t m_iMaxLogEntry;
     // max data size
     const uint64_t m_iMaxDataSize;
+    // temporal consistency delta (in microseconds)
+    const uint64_t m_iTemporalConsistencyDeltaUs;
+    // server clock skew delta (in microseconds)
+    const uint64_t m_iServerClockSkewDeltaUs;
+    // client-server epsilon (in microseconds)
+    const uint64_t m_iClientServerEpsilonUs;
     // pointer to the Persistence-module logger
     std::shared_ptr<spdlog::logger> m_logger;
 
@@ -315,6 +321,12 @@ private:
      * @return - number of size read from the entry.
      */
     size_t mergeLogEntryFromByteArray(const uint8_t* ba);
+
+    /** Helper to find closest HLC entry within a maximum HLC constraint */
+    static int64_t findClosestEntryInRange(
+        const std::set<hlc_index_entry, hlc_index_entry_comp>& hidx,
+        const HLC& target_hlc,
+        const HLC& max_hlc);
 
     /**
      * binary search through the log, return the maximum index of the entries

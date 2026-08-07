@@ -169,6 +169,50 @@ auto Replicated<T>::ordered_send(Args&&... args) {
 }
 
 template <typename T>
+template <rpc::FunctionTag tag, typename... Args>
+auto Replicated<T>::ordered_send_with_timestamp(uint64_t timestamp_us, Args&&... args) {
+    if(is_valid()) {
+        size_t payload_size_for_multicast_send = wrapped_this->template get_size_for_ordered_send<rpc::to_internal_tag<false>(tag)>(std::forward<Args>(args)...);
+
+        using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<rpc::to_internal_tag<false>(tag)>(
+                std::forward<Args>(args)...))>::type;
+        // These pointers help "return" the PendingResults/QueryResults out of the lambda
+        std::unique_ptr<rpc::QueryResults<Ret>> results_ptr;
+        std::weak_ptr<rpc::PendingResults<Ret>> pending_ptr;
+        auto serializer = [&](uint8_t* buffer) {
+            // By the time this lambda runs, the current thread will be holding a read lock on view_mutex
+            const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
+            auto send_return_struct = wrapped_this->template send<rpc::to_internal_tag<false>(tag)>(
+                    // Invoke the sending function with a buffer-allocator that uses the buffer supplied as an argument to the serializer
+                    [&buffer, &max_payload_size](size_t size) -> uint8_t* {
+                        if(size <= max_payload_size) {
+                            return buffer;
+                        } else {
+                            throw buffer_overflow_exception("The size of an ordered_send message exceeds the maximum message size.");
+                        }
+                    },
+                    std::forward<Args>(args)...);
+            results_ptr = std::move(send_return_struct.results);
+            pending_ptr = send_return_struct.pending;
+        };
+
+        std::optional<uint64_t> timestamp_ns = std::make_optional(timestamp_us * 1000ULL);
+
+        std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
+        group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
+            return group_rpc_manager.view_manager.curr_view
+                    ->multicast_group->send(subgroup_id, payload_size_for_multicast_send, serializer, true, timestamp_ns);
+        });
+        group_rpc_manager.register_rpc_results(subgroup_id, pending_ptr);
+        return std::move(*results_ptr);
+    } else {
+        throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+    }
+}
+
+
+
+template <typename T>
 void Replicated<T>::send(unsigned long long int payload_size,
                          const std::function<void(uint8_t* buf)>& msg_generator) {
     group_rpc_manager.view_manager.send(subgroup_id, payload_size, msg_generator);

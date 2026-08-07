@@ -520,7 +520,8 @@ private:
     void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);
     /* Get a pointer into the current buffer, to write data into it before sending
      * Now this is a private function, called by send internally */
-    uint8_t* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send);
+    uint8_t* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send,
+                                std::optional<uint64_t> timestamp_ns = std::nullopt);
 
 public:
     /**
@@ -569,7 +570,8 @@ public:
     /** Send now internally calls get_sendbuffer_ptr.
 	The user function that generates the message is supplied to send */
     bool send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-              const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send);
+              const std::function<void(uint8_t* buf)>& msg_generator, bool cooked_send,
+              std::optional<uint64_t> timestamp_ns = std::nullopt);
 
     /** Compute the global real-time stability frontier in nano seconds.
      */
